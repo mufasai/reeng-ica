@@ -5,9 +5,10 @@ import { useAuth } from '../../context/AuthContext';
 
 interface ProgressWorkflowCardProps {
     currentStatus: TerminStatus;
+    onAction?: (actionId: string) => void;
 }
 
-export const ProgressWorkflowCard = ({ currentStatus }: ProgressWorkflowCardProps) => {
+export const ProgressWorkflowCard = ({ currentStatus, onAction }: ProgressWorkflowCardProps) => {
     const { currentUser } = useAuth();
     const role = currentUser?.role;
 
@@ -81,13 +82,37 @@ export const ProgressWorkflowCard = ({ currentStatus }: ProgressWorkflowCardProp
                                 </p>
                                 
                                 {isActive && isMatchingRole && (
-                                    <p className="text-xs text-blue-600 mt-1 font-medium bg-blue-50 py-1 px-2 rounded inline-block">
-                                        Anda sedang me-review
-                                    </p>
+                                    <div className="mt-3">
+                                        {step.id === 'submit' && (
+                                            <button onClick={() => onAction?.('submit')} className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs py-1.5 px-3 rounded shadow-sm transition-colors">
+                                                Submit Pengajuan
+                                            </button>
+                                        )}
+                                        {step.id === 'review_field_head' && (
+                                            <button onClick={() => onAction?.('review')} className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs py-1.5 px-3 rounded shadow-sm transition-colors">
+                                                Review Termin
+                                            </button>
+                                        )}
+                                        {step.id === 'director_approval' && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => onAction?.('approve')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs py-1.5 px-3 rounded shadow-sm transition-colors">
+                                                    Approve
+                                                </button>
+                                                <button onClick={() => onAction?.('reject')} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-medium text-xs py-1.5 px-3 rounded shadow-sm transition-colors">
+                                                    Reject
+                                                </button>
+                                            </div>
+                                        )}
+                                        {step.id === 'finance_payment' && (
+                                            <button onClick={() => onAction?.('pay')} className="bg-teal-600 hover:bg-teal-700 text-white font-medium text-xs py-1.5 px-3 rounded shadow-sm transition-colors">
+                                                Upload Evidence & Bayar
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                                 {isActive && !isMatchingRole && (
-                                    <p className="text-xs text-slate-500 mt-0.5">
-                                        Menunggu action dari {step.roles.join(', ').replace('_', ' ')}
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Menunggu action dari <span className="font-semibold">{step.roles.join(', ').replace('_', ' ')}</span>
                                     </p>
                                 )}
                             </div>

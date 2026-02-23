@@ -6,7 +6,7 @@ import { InfoTerminCard } from '../components/sections/InfoTerminCard';
 import { ProgressWorkflowCard } from '../components/sections/ProgressWorkflowCard';
 import { TerminFilesSection } from '../components/sections/TerminFilesSection';
 import { useAuth } from '../context/AuthContext';
-import { Eye, CheckCircle2, XCircle, CreditCard, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { UploadCloud, Eye, CheckCircle2, XCircle, CreditCard, ArrowLeft, AlertTriangle, FileText, X } from 'lucide-react';
 import clsx from 'clsx';
 
 
@@ -24,10 +24,33 @@ const TerminDetail = () => {
     const termin = filterTerms.find(t => t.id === terminId) || filterTerms[1]; // Fallback to Termin 2
 
     const [documents, setDocuments] = useState<TerminDocument[]>(termin.documents || mockDocs);
+    const [localStatus, setLocalStatus] = useState<string>(termin.status);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
     if (!site) return <div className="p-6">Site not found</div>;
 
     const expectedAmount = site.budget * (termin.percentage / 100);
+
+    const handleWorkflowAction = (actionId: string) => {
+        switch (actionId) {
+            case 'submit': setLocalStatus('pending_review'); break;
+            case 'review': setLocalStatus('pengajuan'); break; // Moving to Director
+            case 'approve': setLocalStatus('approved'); break;
+            case 'reject': setLocalStatus('pending'); break; // Roll back
+            case 'pay': setIsPaymentModalOpen(true); break;
+        }
+    };
+
+    const handleUploadPayment = () => {
+        // Mock successful upload and payment
+        setIsPaymentModalOpen(false);
+        setLocalStatus('paid');
+        const newDoc: TerminDocument = {
+            id: `d-${Date.now()}`, typeId: 'bukti_bayar', name: 'Bukti_Transfer_Termin.pdf', url: '#',
+            uploadedBy: currentUser?.name || 'Finance User', uploadedAt: new Date().toLocaleString('id-ID')
+        };
+        setDocuments([...documents, newDoc]);
+    };
 
     const handleUploadFile = (file: File) => {
         const newDoc: TerminDocument = {
@@ -41,11 +64,11 @@ const TerminDetail = () => {
         alert(`Baxckend parsing mock for ${file.name}`);
     };
 
-    // Derived Status Flags
-    const isPendingReview = termin.status === 'pending_review';
-    const isPengajuan = termin.status === 'pengajuan';
-    const isDiterima = termin.status === 'diterima';
-    const isDibayarkan = termin.status === 'dibayarkan' || termin.status === 'paid';
+    // Derived Status Flags based on localStatus
+    const isPendingReview = localStatus === 'pending_review';
+    const isPengajuan = localStatus === 'pengajuan' || localStatus === 'submitted';
+    const isDiterima = localStatus === 'diterima' || localStatus === 'approved';
+    const isDibayarkan = localStatus === 'dibayarkan' || localStatus === 'paid';
 
     // Role-based visibility
     const canReview = currentUser?.role === 'backoffice_admin';
@@ -107,10 +130,10 @@ const TerminDetail = () => {
                         </div>
                         {canApprove && (
                             <div className="flex-shrink-0 flex gap-2">
-                                <button className="px-4 py-2 bg-white text-red-600 font-medium rounded border border-red-200 shadow-sm hover:bg-red-50 transition-colors flex items-center gap-2">
+                                <button onClick={() => handleWorkflowAction('reject')} className="px-4 py-2 bg-white text-red-600 font-medium rounded border border-red-200 shadow-sm hover:bg-red-50 transition-colors flex items-center gap-2">
                                     <XCircle className="w-4 h-4" /> Tolak Termin
                                 </button>
-                                <button className="px-4 py-2 bg-emerald-600 text-white font-medium rounded shadow-sm hover:bg-emerald-700 transition-colors flex items-center gap-2">
+                                <button onClick={() => handleWorkflowAction('approve')} className="px-4 py-2 bg-emerald-600 text-white font-medium rounded shadow-sm hover:bg-emerald-700 transition-colors flex items-center gap-2">
                                     <CheckCircle2 className="w-4 h-4" /> Setujui Termin
                                 </button>
                             </div>
@@ -131,10 +154,10 @@ const TerminDetail = () => {
                         </div>
                         {canPay && (
                             <button 
-                                onClick={() => navigate(`/sites/${site.id}/termins/${termin.id}/payment`)}
+                                onClick={() => setIsPaymentModalOpen(true)}
                                 className="flex-shrink-0 px-4 py-2 bg-teal-600 text-white font-medium rounded shadow-sm hover:bg-teal-700 transition-colors flex items-center gap-2"
                             >
-                                <CreditCard className="w-4 h-4" /> Proses Pembayaran
+                                <UploadCloud className="w-4 h-4" /> Upload Bukti & Bayar
                             </button>
                         )}
                     </div>
@@ -155,7 +178,7 @@ const TerminDetail = () => {
                                     isDibayarkan ? "bg-emerald-100 text-emerald-700" :
                                     "bg-slate-100 text-slate-600"
                                 )}>
-                                    {termin.status.toUpperCase().replace('_', ' ')}
+                                    {localStatus.toUpperCase().replace('_', ' ')}
                                 </span>
                             </div>
                             
@@ -189,7 +212,7 @@ const TerminDetail = () => {
                             documents={documents}
                             onUploadFile={handleUploadFile}
                             onUploadExcel={handleUploadExcel}
-                            isLocked={!['pending', 'pending_review'].includes(termin.status)}
+                            isLocked={!['pending', 'pending_review'].includes(localStatus)}
                         />
 
                     </div>
@@ -204,10 +227,51 @@ const TerminDetail = () => {
                         />
 
                         <ProgressWorkflowCard 
-                            currentStatus={termin.status}
+                            currentStatus={localStatus as any}
+                            onAction={handleWorkflowAction}
                         />
                     </div>
                 </div>
+
+                {/* Mock Upload Payment Modal */}
+                {isPaymentModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                                <h3 className="text-lg font-bold text-slate-800">Upload Bukti Pembayaran</h3>
+                                <button onClick={() => setIsPaymentModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Nominal Pembayaran</label>
+                                    <div className="p-3 bg-slate-50 border border-slate-200 rounded font-mono font-bold text-slate-800">
+                                        Rp {expectedAmount.toLocaleString('id-ID')}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">File Bukti Transfer <span className="text-red-500">*</span></label>
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50 transition-colors">
+                                        <FileText className="w-8 h-8 text-slate-400 mb-2" />
+                                        <p className="text-sm font-medium text-slate-700">Klik untuk upload dokumen referensi bank</p>
+                                        <p className="text-xs text-slate-500 mt-1">PDF, JPG, PNG up to 10MB</p>
+                                    </div>
+                                </div>
+                                <div>
+                                     <label className="block text-sm font-semibold text-slate-700 mb-1">Catatan Tambahan</label>
+                                     <textarea className="w-full text-sm p-3 border border-slate-200 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none" rows={2} placeholder="Misal: Nomor Transaksi Bank..."></textarea>
+                                </div>
+                            </div>
+                            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                                <button onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded transition-colors">Batal</button>
+                                <button onClick={handleUploadPayment} className="px-4 py-2 bg-teal-600 text-white font-medium rounded shadow-sm hover:bg-teal-700 transition-colors">
+                                    Konfirmasi Pembayaran
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
         </div>
     );
 };

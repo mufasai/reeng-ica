@@ -2,7 +2,7 @@
 
 export type ProjectType = 'FILTER' | 'COMBAT' | 'BLACKSITE' | 'L2H' | 'REFINEN';
 
-export type WOStatus = 'Unassigned' | 'Assigned' | 'Pending SPK Approval' | 'SPK Created' | 'Active' | 'Completed';
+export type WOStatus = 'Unassigned' | 'Assigned' | 'Pending SPK Approval' | 'SPK Created' | 'Active' | 'Implementasi' | 'BAST' | 'Invoice' | 'Completed';
 
 export interface WorkOrder {
   id: string;
@@ -145,7 +145,7 @@ export const USERS: User[] = [
     { id: 'u_eng', name: 'Field Engineer', role: 'engineer' },
     { id: 'u_lead', name: 'Team Leader', role: 'team_leader' },
     { id: 'u_fin', name: 'Finance Staff', role: 'finance' },
-    { id: 'u_mgr', name: 'Manager', role: 'management' },
+    { id: 'u_mgr', name: 'Director', role: 'management' },
     { id: 'u_adm', name: 'Backoffice Admin', role: 'backoffice_admin' },
 ];
 
@@ -539,3 +539,23 @@ export const getActiveSiteCountsByType = (currentUser: User, allProjects: Projec
 
     return counts;
 };
+
+// --- ACTIVITY LOG (MOCK) ---
+export interface ActivityLog {
+    id: string;
+    userId: string;
+    action: string;
+    target: string;
+    timestamp: string;
+}
+
+export const activityFeed: ActivityLog[] = [
+    { id: 'act-1', userId: 'u_lead', action: 'submitted Termin 1 pengajuan', target: 'Site 1B', timestamp: '2 jam lalu' },
+    { id: 'act-2', userId: 'u_mgr', action: 'approved Termin 1', target: 'Site 1A', timestamp: '5 jam lalu' },
+    { id: 'act-3', userId: 'u_fin', action: 'processed payment Termin 1', target: 'Site 1A', timestamp: '6 jam lalu' },
+    { id: 'act-4', userId: 'u_eng', action: 'uploaded 3 evidence photos', target: 'Site 2A', timestamp: '1 hari lalu' },
+    { id: 'act-5', userId: 'u_lead', action: 'submitted request for Ops Cash', target: 'Site Demo Pondasi', timestamp: '1 hari lalu' },
+    { id: 'act-6', userId: 'u_mgr', action: 'approved WO-2024-004 to SPK', target: 'WO-2024-004', timestamp: '2 hari lalu' },
+    { id: 'act-7', userId: 'u_eng', action: 'marked SKP Received', target: 'Site Cruz Alpha', timestamp: '3 hari lalu' },
+    { id: 'act-8', userId: 'u_fin', action: 'processed payment for Termin 2', target: 'Site 1C', timestamp: '4 hari lalu' },
+];

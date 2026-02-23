@@ -2,7 +2,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
-import ProjectList from './pages/ProjectList';
 import ProjectDetail from './pages/ProjectDetail';
 import SiteDetail from './pages/SiteDetail';
 import People from './pages/People';
@@ -24,7 +23,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrderDetail />} />
-          <Route path="projects" element={<ProjectList />} />
+          <Route path="projects" element={<Navigate to="/" replace />} />
           <Route path="projects/type/:type/sites" element={<TypeSiteList />} />
           <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
           <Route path="projects/:id/dashboard" element={<ProjectDetail />} />
@@ -35,6 +34,7 @@ function App() {
           <Route path="sites/:id/termins/:terminId/payment" element={<TerminPayment />} />
           <Route path="people" element={<People />} />
           <Route path="teams" element={<Teams />} />
+          <Route path="spk" element={<Navigate to="/work-orders" replace />} />
           <Route path="demo-guide" element={<DemoGuide />} />
           {/* Redirects for unimplemented routes */}
           <Route path="budget" element={<Navigate to="/projects" replace />} />

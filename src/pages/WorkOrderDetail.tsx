@@ -84,6 +84,9 @@ const WorkOrderDetail = () => {
             case 'Pending SPK Approval': return 'bg-amber-50 text-amber-700 border-amber-200';
             case 'SPK Created': return 'bg-purple-50 text-purple-700 border-purple-200';
             case 'Active': return 'bg-green-50 text-green-700 border-green-200';
+            case 'Implementasi': return 'bg-orange-50 text-orange-700 border-orange-200';
+            case 'BAST': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+            case 'Invoice': return 'bg-sky-50 text-sky-700 border-sky-200';
             case 'Completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
             default: return 'bg-slate-50 text-slate-600 border-slate-200';
         }
@@ -187,7 +190,7 @@ const WorkOrderDetail = () => {
                                                 value={pemberiTugas}
                                                 onChange={e => setPemberiTugas(e.target.value)}
                                             >
-                                                <option value="" disabled>--- Pilih Manager ---</option>
+                                                <option value="" disabled>--- Pilih Director ---</option>
                                                 {people.filter(p => p.role === 'management').map(m => (
                                                     <option key={m.id} value={m.name}>{m.name}</option>
                                                 ))}

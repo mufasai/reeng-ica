@@ -2,44 +2,53 @@
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
-  FolderKanban, 
   Users, 
   Settings, 
   Menu,
-  ClipboardList,
-  FileText
+  ClipboardList
 } from 'lucide-react';
 import clsx from 'clsx';
 import { USERS, type UserRole, getActiveSiteCountsByType, projects, sites, type ProjectType } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = () => {
-  const { currentUser, switchRole, can } = useAuth();
+  const { currentUser, switchRole } = useAuth();
 
   // 1. PROJECT MANAGEMENT
-  const projectManagementItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  ];
+  const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
+    engineer:        ['dashboard'],
+    team_leader:     ['dashboard', 'work-orders'],
+    backoffice_admin:['dashboard', 'work-orders', 'people', 'teams'],
+    finance:         ['dashboard', 'payments'], // 'payments' might be mapped to somewhere else if needed, but for now we follow the spec
+    management:      ['dashboard', 'work-orders', 'people', 'teams', 'options'],
+  };
 
-  if (['backoffice_admin', 'management', 'team_leader'].includes(currentUser.role)) {
-    projectManagementItems.push({ icon: ClipboardList, label: 'Work Orders', path: '/work-orders' });
+  const allowedSidebarItems = ROLE_SIDEBAR_CONFIG[currentUser.role] || [];
+
+  const projectManagementItems = [];
+  
+  if (allowedSidebarItems.includes('dashboard')) {
+      projectManagementItems.push({ icon: LayoutDashboard, label: 'Dashboard', path: '/' });
   }
   
-  projectManagementItems.push({ icon: FileText, label: 'SPK', path: '/spk' });
-
-  if (['backoffice_admin', 'finance', 'management'].includes(currentUser.role)) {
-    projectManagementItems.push({ icon: FolderKanban, label: 'All Projects', path: '/projects' });
+  if (allowedSidebarItems.includes('work-orders')) {
+    // We add an amber badge indicator here for unassigned WOs count (mock value 2 for now, will connect to mockData later)
+    projectManagementItems.push({ icon: ClipboardList, label: 'Work Orders', path: '/work-orders', badge: 2 });
   }
 
-  // 3. DATA MASTER (Hidden for Engineer)
-  const dataMasterItems = [
-    { icon: Users, label: 'People', path: '/people' },
-    { icon: Users, label: 'Teams', path: '/teams' },
-  ];
-  const showDataMaster = can('manage_data'); // Adjust logic as needed
+  // 3. DATA MASTER
+  const dataMasterItems = [];
+  if (allowedSidebarItems.includes('people')) {
+      dataMasterItems.push({ icon: Users, label: 'People', path: '/people' });
+  }
+  if (allowedSidebarItems.includes('teams')) {
+      dataMasterItems.push({ icon: Users, label: 'Teams', path: '/teams' });
+  }
+  
+  const showDataMaster = dataMasterItems.length > 0;
 
   // 4. SYSTEM (Management Only)
-  const showSystem = currentUser.role === 'management';
+  const showSystem = allowedSidebarItems.includes('options');
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-[var(--navy-900)] text-white flex flex-col z-50 transition-all duration-300 border-r border-[var(--navy-800)]">
@@ -108,7 +117,12 @@ const Sidebar = () => {
                 {({ isActive }) => (
                     <>
                         <item.icon className={clsx("w-4 h-4 transition-colors", isActive ? "text-[var(--blue-400)]" : "text-slate-400 group-hover:text-white")} />
-                        <span>{item.label}</span>
+                        <span className="flex-1">{item.label}</span>
+                        {item.badge && (
+                            <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]">
+                                {item.badge}
+                            </span>
+                        )}
                     </>
                 )}
             </NavLink>

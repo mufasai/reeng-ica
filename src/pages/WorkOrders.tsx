@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useRoleAccess } from '../hooks/useRoleAccess';
 import { workOrders as initialWorkOrders, type WorkOrder, teams } from '../data/mockData';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Eye, UserPlus, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Eye, UserPlus, FileSpreadsheet, Trash2, ArrowRight, Bell, CheckCircle, Download } from 'lucide-react';
 import clsx from 'clsx';
 import AddWorkOrderModal from '../components/modals/AddWorkOrderModal';
 import { 
@@ -22,10 +23,15 @@ const WorkOrders = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
+  // Guard route
+  useRoleAccess(['management', 'backoffice_admin', 'team_leader']);
+
   // State
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'all';
+
   const [woList, setWoList] = useState<WorkOrder[]>(initialWorkOrders);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,17 +53,36 @@ const WorkOrders = () => {
      return [];
   }, [currentUser, woList]);
 
-  // Filters
+  // Tabs filtering
   const filteredWOs = useMemo(() => {
       return visibleWOs.filter(wo => {
           const matchesSearch = 
             wo.woNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
             wo.pemberiKerja.toLowerCase().includes(searchTerm.toLowerCase()) ||
             wo.lokasi.toLowerCase().includes(searchTerm.toLowerCase());
-          const matchesStatus = statusFilter ? wo.status === statusFilter : true;
-          return matchesSearch && matchesStatus;
+          
+          let matchesTab = true;
+          switch (activeTab) {
+              case 'unassigned': matchesTab = wo.status === 'Unassigned'; break;
+              case 'assigned': matchesTab = wo.status === 'Assigned'; break;
+              case 'pengajuan': matchesTab = wo.status === 'Pending SPK Approval'; break;
+              case 'spk-active': matchesTab = ['SPK Created', 'Active'].includes(wo.status); break;
+              case 'implementasi': matchesTab = wo.status === 'Implementasi'; break;
+              case 'bast': matchesTab = wo.status === 'BAST'; break;
+              case 'invoice': matchesTab = wo.status === 'Invoice'; break;
+              case 'completed': matchesTab = wo.status === 'Completed'; break;
+              case 'all':
+              default: matchesTab = true; break;
+          }
+          
+          return matchesSearch && matchesTab;
       });
-  }, [visibleWOs, searchTerm, statusFilter]);
+  }, [visibleWOs, searchTerm, activeTab]);
+
+  const handleTabChange = (tabId: string) => {
+      setSearchParams({ tab: tabId });
+      setCurrentPage(1);
+  };
 
   // Pagination
   const totalPages = Math.ceil(filteredWOs.length / itemsPerPage);
@@ -77,6 +102,9 @@ const WorkOrders = () => {
           case 'Pending SPK Approval': return 'bg-amber-50 text-amber-700 border-amber-200';
           case 'SPK Created': return 'bg-purple-50 text-purple-700 border-purple-200';
           case 'Active': return 'bg-green-50 text-green-700 border-green-200';
+          case 'Implementasi': return 'bg-orange-50 text-orange-700 border-orange-200';
+          case 'BAST': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+          case 'Invoice': return 'bg-sky-50 text-sky-700 border-sky-200';
           case 'Completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
           default: return 'bg-slate-50 text-slate-600 border-slate-200';
       }
@@ -94,7 +122,7 @@ const WorkOrders = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-            <h1 className="text-2xl font-bold text-slate-800">Work Orders</h1>
+            <h1 className="text-xl font-bold text-slate-800">Work Orders</h1>
             <p className="text-slate-500 text-sm mt-1">Manage incoming work orders and track assignments.</p>
         </div>
         {canInputWO && (
@@ -108,21 +136,47 @@ const WorkOrders = () => {
         )}
       </div>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
+          {[
+              { id: 'all', label: 'All Work Orders' },
+              { id: 'unassigned', label: 'Unassigned', badge: visibleWOs.filter(w => w.status === 'Unassigned').length },
+              { id: 'assigned', label: 'Assigned' },
+              { id: 'pengajuan', label: 'Pengajuan' },
+              { id: 'spk-active', label: 'SPK Active' },
+              { id: 'implementasi', label: 'Implementasi' },
+              { id: 'bast', label: 'BAST' },
+              { id: 'invoice', label: 'Invoice' },
+              { id: 'completed', label: 'Completed' },
+          ].map(tab => (
+              <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={clsx(
+                      "px-4 py-2.5 text-sm font-bold border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
+                      activeTab === tab.id 
+                          ? "border-blue-600 text-blue-600 bg-blue-50/50" 
+                          : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                  )}
+              >
+                  {tab.label}
+                  {tab.badge ? (
+                      <span className={clsx(
+                          "text-[10px] px-1.5 py-0.5 rounded-full text-white",
+                          activeTab === tab.id ? "bg-blue-600" : "bg-amber-500"
+                      )}>
+                          {tab.badge}
+                      </span>
+                  ) : null}
+              </button>
+          ))}
+      </div>
+
       <TableContainer>
           <FilterBar 
             searchValue={searchTerm}
             onSearchChange={(val) => { setSearchTerm(val); setCurrentPage(1); }}
             searchPlaceholder="Cari WO Number, Mitra, Lokasi..."
-            statusOptions={[
-                { label: 'Unassigned', value: 'Unassigned' },
-                { label: 'Assigned', value: 'Assigned' },
-                { label: 'Pending SPK Approval', value: 'Pending SPK Approval' },
-                { label: 'SPK Created', value: 'SPK Created' },
-                { label: 'Active', value: 'Active' },
-                { label: 'Completed', value: 'Completed' },
-            ]}
-            statusValue={statusFilter}
-            onStatusChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
             showDateRange={true}
           />
 
@@ -144,9 +198,9 @@ const WorkOrders = () => {
                       <tr>
                         <td colSpan={10}>
                             <EmptyState 
-                                message={searchTerm || statusFilter ? "WO tidak ditemukan" : "Belum ada Work Order"}
-                                subMessage={searchTerm || statusFilter ? "Coba reset filter atau gunakan kata kunci lain." : "Data WO baru akan muncul di sini."}
-                                onReset={() => { setSearchTerm(''); setStatusFilter(''); }}
+                                message={searchTerm ? "WO tidak ditemukan" : `Belum ada Work Order di tab ${activeTab.replace('-', ' ')}`}
+                                subMessage={searchTerm ? "Coba reset filter atau gunakan kata kunci lain." : "Data WO baru akan muncul di sini."}
+                                onReset={() => { setSearchTerm(''); }}
                             />
                         </td>
                       </tr>
@@ -200,8 +254,8 @@ const WorkOrders = () => {
                                               <Eye className="w-4 h-4" />
                                           </button>
                                           
-                                          {/* Assign Team (only shown to roles that can manage assignment, and if not Active/Completed?) */}
-                                          {canInputWO && wo.status === 'Unassigned' && (
+                                          {/* Tab-Specific Actions */}
+                                          {activeTab === 'all' && canInputWO && wo.status === 'Unassigned' && (
                                               <button 
                                                 onClick={() => navigate(`/work-orders/${wo.id}`)}
                                                 className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"
@@ -211,8 +265,7 @@ const WorkOrders = () => {
                                               </button>
                                           )}
 
-                                          {/* Create SPK (management) - simulated action */}
-                                          {currentUser.role === 'management' && wo.status === 'Pending SPK Approval' && (
+                                          {activeTab === 'all' && currentUser.role === 'management' && wo.status === 'Pending SPK Approval' && (
                                               <button 
                                                 onClick={() => navigate(`/work-orders/${wo.id}`)}
                                                 className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded"
@@ -222,8 +275,7 @@ const WorkOrders = () => {
                                               </button>
                                           )}
 
-                                          {/* Delete (management only) */}
-                                          {currentUser.role === 'management' && (
+                                          {activeTab === 'all' && currentUser.role === 'management' && (
                                               <button 
                                                 onClick={() => {
                                                     if (window.confirm('Are you sure you want to delete this WO?')) {
@@ -235,6 +287,58 @@ const WorkOrders = () => {
                                               >
                                                   <Trash2 className="w-4 h-4" />
                                               </button>
+                                          )}
+
+                                          {/* Specific Tab Buttons */}
+                                          {activeTab === 'unassigned' && canInputWO && (
+                                              <button 
+                                                onClick={() => navigate(`/work-orders/${wo.id}`)}
+                                                className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-semibold ml-2 transition-colors"
+                                              >
+                                                Assign Team <ArrowRight className="w-3 h-3" />
+                                              </button>
+                                          )}
+
+                                          {activeTab === 'assigned' && ['management', 'backoffice_admin'].includes(currentUser.role) && (
+                                              <button 
+                                                className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded text-xs font-semibold ml-2 transition-colors"
+                                              >
+                                                Remind TL <Bell className="w-3 h-3" />
+                                              </button>
+                                          )}
+
+                                          {activeTab === 'assigned' && currentUser.role === 'team_leader' && (
+                                              <button 
+                                                onClick={() => navigate(`/work-orders/${wo.id}`)}
+                                                className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-semibold ml-2 transition-colors"
+                                              >
+                                                Submit Pengajuan <ArrowRight className="w-3 h-3" />
+                                              </button>
+                                          )}
+
+                                          {activeTab === 'pengajuan' && ['management', 'backoffice_admin'].includes(currentUser.role) && (
+                                              <button 
+                                                onClick={() => navigate(`/work-orders/${wo.id}`)}
+                                                className="flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded text-xs font-semibold ml-2 transition-colors"
+                                              >
+                                                Review & Approve <CheckCircle className="w-3 h-3" />
+                                              </button>
+                                          )}
+
+                                          {activeTab === 'spk-active' && (
+                                              <>
+                                                <button 
+                                                  onClick={() => navigate(`/sites/${wo.id}`)} 
+                                                  className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded text-xs font-semibold ml-2 transition-colors"
+                                                >
+                                                  Go to Site
+                                                </button>
+                                                <button 
+                                                  className="flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded text-xs font-semibold ml-1 transition-colors"
+                                                >
+                                                  <Download className="w-3 h-3" /> SPK
+                                                </button>
+                                              </>
                                           )}
                                       </div>
                                   </TableCell>
