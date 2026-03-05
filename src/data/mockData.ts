@@ -359,6 +359,25 @@ export interface SiteMaterial {
     items: string[];
 }
 
+export interface SiteBoQ {
+    id: string;
+    siteId: string;
+    itemCode: string;
+    description: string;
+    quantity: number;
+    unit: string;
+}
+
+export const siteBoQRecords: SiteBoQ[] = [
+    { id: 'boq1', siteId: 's1', itemCode: 'MAT-001', description: 'Semen Portland', quantity: 50, unit: 'Sak' },
+    { id: 'boq2', siteId: 's1', itemCode: 'MAT-002', description: 'Besi Beton D13', quantity: 100, unit: 'Batang' },
+    { id: 'boq3', siteId: 's1', itemCode: 'MAT-003', description: 'Kabel NYM 2x1.5', quantity: 200, unit: 'Meter' },
+    { id: 'boq4', siteId: 's2', itemCode: 'MAT-004', description: 'Antena Sectoral', quantity: 3, unit: 'Unit' },
+    { id: 'boq5', siteId: 's2', itemCode: 'MAT-005', description: 'RRU', quantity: 3, unit: 'Unit' },
+    { id: 'boq6', siteId: 's2', itemCode: 'MAT-006', description: 'BBU', quantity: 1, unit: 'Unit' },
+    { id: 'boq7', siteId: 'BKS598', itemCode: 'EQP-001', description: 'EQP Filter LTE 900', quantity: 1, unit: 'Set' },
+];
+
 export const skpRecords: SKP[] = [
     { id: 'skp-1', siteId: 's1', skpNumber: 'SKP-2024-001', tanggal: '2024-01-10', keterangan: 'Material Sipil Awal', status: 'Received', uploadedBy: 'u_lead' },
     { id: 'skp-2', siteId: 's1', skpNumber: 'SKP-2024-002', tanggal: '2024-01-15', keterangan: 'Material Elektrikal', status: 'Submitted', uploadedBy: 'u_lead' },
@@ -497,6 +516,149 @@ export const combatTerms: CombatTerm[] = [
         subSteps: [
             { id: '6.1', name: '6.1 Optimization', maxAmount: 4500000, status: 'locked', assignedRole: 'team_leader', requiredDocs: ['Report Optim', 'Signal Params'] }
         ]
+    }
+];
+
+export type SiteMasterStatus = 'unassigned' | 'assigned' | 'spk_active' | 'completed' | 'reallocated' | 'on_hold';
+
+export interface SiteMaster {
+    id: string; // BIGINT equivalent
+    site_id: string; // e.g., "BKS598"
+    ne_id: string; // e.g., "BKS598MT1"
+    site_name: string;
+    plan_capex: string;
+    area: string;
+    region: string;
+    nop: string;
+    sow_eqp: string;
+    quantity: number;
+    sow_pekerjaan: string;
+    po_tsel: string;
+    mitra: string;
+
+    project_type: ProjectType;
+    status: SiteMasterStatus;
+    ineom_registered: boolean;
+    notes?: string;
+
+    work_order_id?: string; // Link to Work Order
+    project_site_id?: string; // Link to Execution Site
+
+    batch_ref: string;
+    imported_by: string; // ID of the user
+    imported_at: string; // Timestamp
+}
+
+export const siteMasterRecords: SiteMaster[] = [
+    {
+        id: 'sm1',
+        site_id: 'BKS598',
+        ne_id: 'BKS598MT1', // Adjusted to match site_id prefix for realism
+        site_name: 'CIPINANGJAYA2DMT',
+        plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
+        area: 'Area 2',
+        region: 'R03 Jakarta & Banten',
+        nop: 'NOP EASTERN JAKARTA',
+        sow_eqp: 'EQP Filter LTE 900',
+        quantity: 1,
+        sow_pekerjaan: 'Impl Services for Filter Jabo & Jabar',
+        po_tsel: '4200052176',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'unassigned',
+        ineom_registered: false,
+        batch_ref: 'EPROC20240210001_Smartelco_BoQ_Filter_Batch1',
+        imported_by: 'u_adm',
+        imported_at: '2024-02-10T10:00:00Z',
+    },
+    {
+        id: 'sm2',
+        site_id: 'JKS026',
+        ne_id: 'JKS026MT1',
+        site_name: 'PONDOKINDAH2MT',
+        plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
+        area: 'Area 2',
+        region: 'R03 Jakarta & Banten',
+        nop: 'NOP EASTERN JAKARTA',
+        sow_eqp: 'EQP Filter LTE 900',
+        quantity: 2,
+        sow_pekerjaan: 'Impl Services for Filter Jabo & Jabar',
+        po_tsel: '4200052176',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'assigned',
+        ineom_registered: true,
+        work_order_id: 'wo-1', // Linked to WO-2024-001
+        batch_ref: 'EPROC20240210001_Smartelco_BoQ_Filter_Batch1',
+        imported_by: 'u_adm',
+        imported_at: '2024-02-10T10:05:00Z',
+    },
+    {
+        id: 'sm3',
+        site_id: 'BDS105',
+        ne_id: 'BDS105MT2',
+        site_name: 'DAGO-PAKAR',
+        plan_capex: 'CAPEX RAN COMBAT 2024',
+        area: 'Area 3',
+        region: 'R12 Jawa Barat',
+        nop: 'NOP WEST JAVA',
+        sow_eqp: 'EQP COMBAT NEW',
+        quantity: 1,
+        sow_pekerjaan: 'Impl Services Combat Jabar',
+        po_tsel: '4200052273',
+        mitra: 'Smartelco',
+        project_type: 'COMBAT',
+        status: 'spk_active',
+        ineom_registered: true,
+        work_order_id: 'wo-2', // Linked to WO-2024-002
+        project_site_id: 's2', // Linked to actual Site 2
+        batch_ref: 'EPROC20240215002_Smartelco_BoQ_Combat_Batch1',
+        imported_by: 'u_mgr',
+        imported_at: '2024-02-15T14:30:00Z',
+    },
+    {
+        id: 'sm4',
+        site_id: 'TGR088',
+        ne_id: 'TGR088MT1',
+        site_name: 'BSD_CITY_SQUARE',
+        plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
+        area: 'Area 2',
+        region: 'R03 Jakarta & Banten',
+        nop: 'NOP WESTERN JAKARTA',
+        sow_eqp: 'EQP Filter LTE 900',
+        quantity: 1,
+        sow_pekerjaan: 'Impl Services for Filter Jabo & Jabar',
+        po_tsel: '4200052176',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'completed',
+        ineom_registered: true,
+        work_order_id: 'wo-1',
+        batch_ref: 'EPROC20240105001_Smartelco_BoQ_Filter_Early',
+        imported_by: 'u_adm',
+        imported_at: '2024-01-05T09:15:00Z',
+    },
+    {
+        id: 'sm5',
+        site_id: 'JKS999',
+        ne_id: 'JKS999MT1',
+        site_name: 'GHOST_SITE_SOUTH',
+        plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
+        area: 'Area 2',
+        region: 'R03 Jakarta & Banten',
+        nop: 'NOP EASTERN JAKARTA',
+        sow_eqp: 'EQP Filter LTE 900',
+        quantity: 0,
+        sow_pekerjaan: 'Impl Services for Filter Jabo & Jabar',
+        po_tsel: '4200052176',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'reallocated',
+        ineom_registered: false,
+        notes: 'Site sudah dialihkan ke mitra lain',
+        batch_ref: 'EPROC20240210001_Smartelco_BoQ_Filter_Batch1',
+        imported_by: 'u_adm',
+        imported_at: '2024-02-10T10:00:00Z',
     }
 ];
 

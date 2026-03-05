@@ -111,7 +111,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                 ) : '-'}
                            </TableCell>
                            <TableCell className="font-medium text-[var(--text-primary)]">
-                                Rp {site.budget.toLocaleString('id-ID')}
+                                {site.budget ? `Rp ${site.budget.toLocaleString('id-ID')}` : '-'}
                            </TableCell>
                            <TableCell className="text-right">
                                <div className="flex justify-end items-center gap-2">

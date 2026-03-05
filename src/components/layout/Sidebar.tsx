@@ -8,7 +8,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 import clsx from 'clsx';
-import { USERS, type UserRole, getActiveSiteCountsByType, projects, sites, type ProjectType } from '../../data/mockData';
+import { USERS, type UserRole, getActiveSiteCountsByType, projects, sites, type ProjectType, siteMasterRecords } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = () => {
@@ -17,10 +17,10 @@ const Sidebar = () => {
   // 1. PROJECT MANAGEMENT
   const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
     engineer:        ['dashboard'],
-    team_leader:     ['dashboard', 'work-orders'],
-    backoffice_admin:['dashboard', 'work-orders', 'people', 'teams'],
-    finance:         ['dashboard', 'payments'], // 'payments' might be mapped to somewhere else if needed, but for now we follow the spec
-    management:      ['dashboard', 'work-orders', 'people', 'teams', 'options'],
+    team_leader:     ['dashboard', 'work-orders', 'site-master'],
+    backoffice_admin:['dashboard', 'work-orders', 'site-master', 'people', 'teams'],
+    finance:         ['dashboard', 'payments', 'site-master'], // 'payments' might be mapped to somewhere else if needed, but for now we follow the spec
+    management:      ['dashboard', 'work-orders', 'site-master', 'people', 'teams', 'options'],
   };
 
   const allowedSidebarItems = ROLE_SIDEBAR_CONFIG[currentUser.role] || [];
@@ -37,12 +37,17 @@ const Sidebar = () => {
   }
 
   // 3. DATA MASTER
-  const dataMasterItems = [];
+  const dataMasterItems: { icon: any, label: string, path: string, badge?: number }[] = [];
+  
   if (allowedSidebarItems.includes('people')) {
       dataMasterItems.push({ icon: Users, label: 'People', path: '/people' });
   }
   if (allowedSidebarItems.includes('teams')) {
       dataMasterItems.push({ icon: Users, label: 'Teams', path: '/teams' });
+  }
+  if (allowedSidebarItems.includes('site-master')) {
+      const unassignedSitesCount = siteMasterRecords.filter(r => r.status === 'unassigned').length;
+      dataMasterItems.push({ icon: LayoutDashboard, label: 'Sites', path: '/site-master', badge: unassignedSitesCount > 0 ? unassignedSitesCount : undefined });
   }
   
   const showDataMaster = dataMasterItems.length > 0;
@@ -211,7 +216,15 @@ const Sidebar = () => {
                         {({ isActive }) => (
                             <>
                                 <item.icon className={clsx("w-4 h-4 transition-colors", isActive ? "text-[var(--blue-400)]" : "text-slate-400 group-hover:text-white")} />
-                                <span>{item.label}</span>
+                                <span className="flex-1">{item.label}</span>
+                                {item.badge && (
+                                    <span className={clsx(
+                                        "text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]",
+                                        "bg-amber-500" // Always amber based on spec: "number of unassigned sites in amber"
+                                    )}>
+                                        [{item.badge}]
+                                    </span>
+                                )}
                             </>
                         )}
                     </NavLink>

@@ -52,7 +52,7 @@ const BuatSKPModal = ({ isOpen, onClose, onSubmit, siteId }: BuatSKPModalProps) 
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <FileText className="w-5 h-5 text-blue-500" />
-                        Buat SKP Baru
+                        Upload / Create Permit
                     </h2>
                     <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
                         <X className="w-5 h-5" />

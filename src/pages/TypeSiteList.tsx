@@ -12,7 +12,8 @@ import {
   combatTerms,
   type ProjectType,
   teams,
-  type Site
+  type Site,
+  siteMasterRecords
 } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
 import ProjectSitesTable from '../components/tables/ProjectSitesTable';
@@ -35,7 +36,29 @@ const TypeSiteList = () => {
   const matchedProjectIds = matchedProjects.map(p => p.id);
 
   const matchedSites = useMemo(() => {
-    let baseSites = sites.filter(s => matchedProjectIds.includes(s.projectId));
+    // We combine the execution 'sites' (from projects) with the 'siteMasterRecords' of the same type.
+    // In a real database, they might be joined. We're displaying both to fulfill the user's request.
+    const executionSites = sites.filter(s => matchedProjectIds.includes(s.projectId));
+    
+    // Get Site Master records for this project type that ARE NOT YET linked to executions
+    // (To avoid duplicate rows since we are just merging them for table display in this mockup)
+    const masterSites = siteMasterRecords.filter(sm => 
+        sm.project_type === upperType && !executionSites.some(es => es.id === sm.site_id)
+    ).map(sm => ({
+        // Map SiteMaster to Site structure for the table
+        id: sm.site_id, // Site ID is placed here to display correctly
+        name: sm.site_name,
+        location: sm.region,
+        status: sm.status === 'completed' ? 'completed' : 'in_progress', // Estimate status for merged list
+        projectId: 'unassigned-prj', // Placeholder
+        teamId: undefined as string | undefined, // Master sites don't have teams assigned in this mockup directly unless via WO
+        startDate: sm.imported_at.split('T')[0],
+        poTsel: sm.po_tsel,
+        ineomRegistered: sm.ineom_registered,
+        budget: 0 // Provide default budget to prevent rendering issues
+    } as any)); // cast as any to slide into Site array smoothly for display
+
+    let baseSites = [...executionSites, ...masterSites];
 
     // Role-based filtering
     if (['engineer', 'team_leader'].includes(currentUser.role)) {
@@ -46,7 +69,7 @@ const TypeSiteList = () => {
       baseSites = baseSites.filter(s => s.teamId && userTeamIds.includes(s.teamId));
     }
     return baseSites;
-  }, [matchedProjectIds, currentUser]);
+  }, [matchedProjectIds, currentUser, upperType]);
 
 
   // 3. Dynamic Stats Calculation based on Type

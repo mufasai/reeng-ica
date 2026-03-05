@@ -14,6 +14,7 @@ import TerminCreate from './pages/TerminCreate';
 import TerminDetail from './pages/TerminDetail';
 import TerminReview from './pages/TerminReview';
 import TerminPayment from './pages/TerminPayment';
+import SiteMaster from './pages/SiteMaster';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
           <Route path="sites/:id/termins/:terminId/payment" element={<TerminPayment />} />
           <Route path="people" element={<People />} />
           <Route path="teams" element={<Teams />} />
+          <Route path="site-master" element={<SiteMaster />} />
           <Route path="spk" element={<Navigate to="/work-orders" replace />} />
           <Route path="demo-guide" element={<DemoGuide />} />
           {/* Redirects for unimplemented routes */}

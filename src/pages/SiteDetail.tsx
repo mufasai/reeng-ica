@@ -1,20 +1,21 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Users, DollarSign, 
+  ArrowLeft, DollarSign, 
   FileText, Upload, CheckCircle2,
-  Image as ImageIcon, Send, Edit
+  Image as ImageIcon, Send, Edit, Plus
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import FilterPaymentSection from '../components/sections/FilterPaymentSection';
 import CombatPaymentSection from '../components/sections/CombatPaymentSection';
 import BuatSKPModal from '../components/modals/BuatSKPModal';
 import TerimaSKPModal from '../components/modals/TerimaSKPModal';
-import { 
+import {
     sites, projects, teams, people, 
     siteMaterials, siteEvidence, siteCosts, files, filterTerms, combatTerms, skpRecords,
-    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type ProjectFile, type SKP
+    siteMasterRecords, siteBoQRecords,
+    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type ProjectFile, type SKP, type SiteBoQ
 } from '../data/mockData';
 import {
     TableContainer,
@@ -36,20 +37,14 @@ interface InfoSectionProps {
     site: Site;
     project: Project;
     team?: Team;
+    teamMembers: { id: string; name: string; role: string }[];
     canViewCosts: boolean;
+    canManageUsers: boolean;
 }
 
-const InfoSection = ({ site, project, team, canViewCosts }: InfoSectionProps) => {
-    // Scroll function for Team link
-    const scrollToTeam = () => {
-        const teamElement = document.getElementById('team-members-strip');
-        if (teamElement) {
-            teamElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    };
-
+const InfoSection = ({ site, project, team, teamMembers, canViewCosts, canManageUsers }: InfoSectionProps) => {
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
             {/* Left: General Info */}
             <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm h-full">
                 <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Informasi Site</h3>
@@ -63,7 +58,7 @@ const InfoSection = ({ site, project, team, canViewCosts }: InfoSectionProps) =>
                 </div>
             </div>
 
-            {/* Right: Schedule & Finance */}
+            {/* Middle: Schedule & Finance */}
             <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm h-full flex flex-col">
                 <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Informasi Lainnya</h3>
                 <div className="space-y-3 text-sm flex-1">
@@ -77,15 +72,34 @@ const InfoSection = ({ site, project, team, canViewCosts }: InfoSectionProps) =>
                     )}
                     <div className="grid grid-cols-3"><span className="text-slate-500">Start Date</span><span className="col-span-2 text-slate-700">{site.startDate || '-'}</span></div>
                     <div className="grid grid-cols-3"><span className="text-slate-500">End Date</span><span className="col-span-2 text-slate-700">{site.endDate || '-'}</span></div>
-                    <div className="grid grid-cols-3">
-                        <span className="text-slate-500 mt-1">Team</span>
-                        <span 
-                            className="col-span-2 text-blue-600 font-medium hover:text-blue-700 hover:underline cursor-pointer group flex items-center gap-1"
-                            onClick={scrollToTeam}
-                        >
-                            {team?.name || 'Unassigned'}
-                        </span>
-                    </div>
+                </div>
+            </div>
+
+            {/* Right: Team Info */}
+            <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm h-full flex flex-col">
+                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                    <h3 className="font-semibold text-slate-800 text-sm">Team: <span className="text-blue-600">{team?.name || 'Unassigned'}</span></h3>
+                    {canManageUsers && (
+                        <button className="text-xs font-medium text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors">
+                            <Edit className="w-3.5 h-3.5" /> Edit
+                        </button>
+                    )}
+                </div>
+                <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 h-[180px]">
+                    {teamMembers.map(m => (
+                        <div key={m.id} className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold border border-blue-200 shrink-0">
+                                {m.name.charAt(0)}
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-medium text-slate-700 leading-tight">{m.name}</span>
+                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{m.role.replace('_', ' ')}</span>
+                            </div>
+                        </div>
+                    ))}
+                    {teamMembers.length === 0 && (
+                        <div className="text-sm text-slate-500 italic py-4 text-center">No team members assigned</div>
+                    )}
                 </div>
             </div>
         </div>
@@ -124,51 +138,7 @@ const CostDibayarField = ({ siteId, budget }: { siteId: string, budget: number }
     );
 }
 
-interface TeamSectionProps {
-    teamName: string;
-    teamMembers: { id: string; name: string; role: string }[];
-    canManageUsers: boolean;
-}
 
-const TeamSection = ({ teamName, teamMembers, canManageUsers }: TeamSectionProps) => {
-    const displayMembers = teamMembers.slice(0, 6);
-    const extraCount = teamMembers.length - 6;
-
-    return (
-        <div className="bg-white border border-slate-200 rounded-lg min-h-[48px] px-4 py-2 flex items-center justify-between shadow-sm mb-6 w-full overflow-x-auto custom-scrollbar">
-            <div className="flex items-center gap-6">
-                <h3 className="font-semibold text-slate-800 flex items-center gap-2 whitespace-nowrap text-sm">
-                    <Users className="w-4 h-4 text-slate-500" /> Team: <span className="text-blue-600 font-bold">{teamName}</span>
-                </h3>
-                
-                <div className="flex items-center gap-4">
-                    {displayMembers.map(m => (
-                        <div key={m.id} className="flex items-center gap-2 whitespace-nowrap">
-                            <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold border border-blue-200 shrink-0">
-                                {m.name.charAt(0)}
-                            </div>
-                            <div className="flex flex-row items-center gap-1.5">
-                                <span className="text-sm font-medium text-slate-700">{m.name}</span>
-                                <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{m.role.replace('_', ' ')}</span>
-                            </div>
-                        </div>
-                    ))}
-                    {extraCount > 0 && (
-                        <span className="text-xs font-medium text-slate-500 whitespace-nowrap bg-slate-100 px-2 py-0.5 rounded-full">
-                            +{extraCount} more
-                        </span>
-                    )}
-                </div>
-            </div>
-
-            {canManageUsers && (
-                <button className="text-sm font-medium text-slate-500 hover:text-blue-600 flex items-center gap-1 shrink-0 px-2 py-1 hover:bg-slate-50 rounded transition-colors ml-4 border border-transparent hover:border-slate-200">
-                    <Edit className="w-3.5 h-3.5" /> Edit
-                </button>
-            )}
-        </div>
-    );
-};
 
 interface EvidenceSectionProps {
     evidences: SiteEvidence[];
@@ -322,14 +292,16 @@ const CostsSection = ({ costs, canSubmit, canUploadProof, canApprove, onSubmit, 
 interface MaterialsSectionProps {
     materials: SiteMaterial[];
     skps: SKP[];
+    siteBoQs: SiteBoQ[];
     canAddSkp: boolean;
     canMarkReceived: boolean;
     onAddSkp: () => void;
     onMarkReceived: (id: string) => void;
 }
 
-const MaterialsSection = ({ materials, skps, canAddSkp, canMarkReceived, onAddSkp, onMarkReceived }: MaterialsSectionProps) => {
+const MaterialsSection = ({ materials, skps, siteBoQs, canAddSkp, canMarkReceived, onAddSkp, onMarkReceived }: MaterialsSectionProps) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [boqSearchTerm, setBoqSearchTerm] = useState('');
     const [page, setPage] = useState(1);
     const itemsPerPage = 5;
 
@@ -346,18 +318,65 @@ const MaterialsSection = ({ materials, skps, canAddSkp, canMarkReceived, onAddSk
     const paginated = visibleMaterials.slice((page - 1) * itemsPerPage, page * itemsPerPage);
     const totalPages = Math.ceil(visibleMaterials.length / itemsPerPage);
 
+    const filteredBoQs = useMemo(() => siteBoQs.filter(b => 
+        b.itemCode.toLowerCase().includes(boqSearchTerm.toLowerCase()) || 
+        b.description.toLowerCase().includes(boqSearchTerm.toLowerCase())
+    ), [siteBoQs, boqSearchTerm]);
+
     return (
       <div className="space-y-6">
-          {/* Sub-Section A: SKP List */}
+          {/* Sub-Section A: Material in Project (BoQ) */}
           <TableContainer>
-              <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
+              <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center flex-wrap gap-4">
                   <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-slate-400" /> Surat Keputusan Pengambilan (SKP)
+                      <FileText className="w-4 h-4 text-slate-400" /> Material in Project
+                  </h3>
+              </div>
+              <FilterBar
+                  searchValue={boqSearchTerm}
+                  onSearchChange={setBoqSearchTerm}
+                  searchPlaceholder="Search materials..."
+                  onExport={(t) => console.log(t)}
+              />
+              <DataTable>
+                  <TableHeader>
+                      <TableHead className="min-w-[120px]">Item Code</TableHead>
+                      <TableHead className="w-full">Description</TableHead>
+                      <TableHead className="min-w-[100px] text-right">Quantity</TableHead>
+                      <TableHead className="min-w-[100px]">Unit</TableHead>
+                  </TableHeader>
+                  <TableBody>
+                      {filteredBoQs.length === 0 ? (
+                          <tr><td colSpan={4}><EmptyState message="Belum ada material BoQ" /></td></tr>
+                      ) : (
+                          filteredBoQs.map(b => (
+                              <TableRow key={b.id}>
+                                  <TableCell className="font-medium text-slate-700">{b.itemCode}</TableCell>
+                                  <TableCell className="text-slate-600">{b.description}</TableCell>
+                                  <TableCell className="text-slate-800 font-semibold text-right">{b.quantity}</TableCell>
+                                  <TableCell className="text-slate-500">{b.unit}</TableCell>
+                              </TableRow>
+                          ))
+                      )}
+                  </TableBody>
+              </DataTable>
+          </TableContainer>
+
+          {/* Sub-Section B: Surat Perintah Ambil Material (SPAM/SKP) */}
+          <TableContainer>
+              <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center flex-wrap gap-4">
+                  <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-slate-400" /> Surat Perintah Ambil Material (SKP)
                   </h3>
                   {canAddSkp && (
-                      <button onClick={onAddSkp} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm font-medium">
-                          <Upload className="w-3 h-3" /> Buat SKP
-                      </button>
+                      <div className="flex gap-2">
+                          <button onClick={onAddSkp} className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 text-sm rounded hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-sm font-medium">
+                              <Upload className="w-3 h-3" /> Upload Permit
+                          </button>
+                          <button onClick={onAddSkp} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm font-medium">
+                              <FileText className="w-3 h-3" /> Create Permit
+                          </button>
+                      </div>
                   )}
               </div>
               <DataTable>
@@ -412,13 +431,24 @@ const MaterialsSection = ({ materials, skps, canAddSkp, canMarkReceived, onAddSk
               </DataTable>
           </TableContainer>
 
-          {/* Sub-Section B: Material Log */}
+          {/* Sub-Section C: Berita Acara Terima Material (BATM) */}
           {receivedSkps.length > 0 && (
              <TableContainer>
-                <div className="p-4 border-b border-slate-200 bg-slate-50/50">
+                <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center flex-wrap gap-4">
                     <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Material Received Log
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Berita Acara Terima Material
                     </h3>
+                    <div className="flex flex-wrap gap-2">
+                        <button className="px-3 py-1.5 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 transition-colors flex items-center gap-1 shadow-sm font-medium">
+                            <Plus className="w-3 h-3" /> Input Material
+                        </button>
+                        <button className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 text-sm rounded hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-sm font-medium">
+                            <Upload className="w-3 h-3" /> Upload Material
+                        </button>
+                        <button className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-sm font-medium">
+                            <FileText className="w-3 h-3" /> Create Surat Perintah Ambil Material
+                        </button>
+                    </div>
                 </div>
                 
                 <FilterBar
@@ -535,7 +565,7 @@ const SiteDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can, currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'details' | 'evidence' | 'costs'>('costs');
+  const [activeTab, setActiveTab] = useState<'details' | 'evidence' | 'costs'>('details');
 
   // SKP Modals State
   const [isSkpModalOpen, setIsSkpModalOpen] = useState(false);
@@ -543,8 +573,43 @@ const SiteDetail = () => {
   const [selectedSkpId, setSelectedSkpId] = useState<string>('');
   const [localSkps, setLocalSkps] = useState<SKP[]>(skpRecords.filter(s => s.siteId === id));
 
-  const site = sites.find(s => s.id === id);
-  const project = projects.find(p => p.id === site?.projectId);
+  let site = sites.find(s => s.id === id);
+  let project = projects.find(p => p.id === site?.projectId);
+
+  // Fallback to Site Master records
+  if (!site) {
+      const masterRecord = siteMasterRecords.find(sm => sm.site_id === id || sm.id === id);
+      if (masterRecord) {
+          site = {
+              id: masterRecord.site_id,
+              projectId: `mock-prj-${masterRecord.project_type}`,
+              name: masterRecord.site_name,
+              location: masterRecord.region,
+              budget: 0,
+              status: masterRecord.status === 'completed' ? 'completed' : 'in_progress',
+              startDate: masterRecord.imported_at.split('T')[0],
+              endDate: '',
+              jobName: masterRecord.sow_pekerjaan,
+              contractNumber: masterRecord.po_tsel,
+              workOrderId: masterRecord.work_order_id || ''
+          } as unknown as Site;
+          
+          project = projects.find(p => p.type === masterRecord.project_type);
+          if (!project) {
+              project = { 
+                  id: `mock-prj`, 
+                  name: `Unassigned ${masterRecord.project_type}`, 
+                  type: masterRecord.project_type, 
+                  status: 'active', 
+                  client: 'Telkomsel', 
+                  region: masterRecord.region, 
+                  totalBudget: 0, 
+                  unassignedPos: 0 
+              } as Project;
+          }
+      }
+  }
+
   const team = teams.find(t => t.id === site?.teamId);
   const teamMembers = team ? people.filter(p => team.members.some(m => m.personId === p.id)).map(p => {
       const memberRole = team.members.find(m => m.personId === p.id)?.role || 'engineer';
@@ -553,24 +618,78 @@ const SiteDetail = () => {
 
   // Filtered Data
   const materials = siteMaterials.filter(m => m.siteId === id);
-  const skps = localSkps; // Use local state for immediate UI updates
-  const evidences = siteEvidence.filter(e => e.siteId === id);
+  const siteBoQs = siteBoQRecords.filter(b => b.siteId === id || b.siteId === site?.projectId);
   const costs = siteCosts.filter(c => c.siteId === id);
   const filteredTerms = filterTerms.filter(f => f.siteId === id);
   const filteredCombatTerms = combatTerms.filter(c => c.siteId === id);
-  const siteFiles = files.filter(f => f.projectId === site?.projectId);
+
+  // Local State for Mocked File Uploads
+  const [localEvidences, setLocalEvidences] = useState<SiteEvidence[]>(siteEvidence.filter(e => e.siteId === id));
+  const [localFiles, setLocalFiles] = useState<ProjectFile[]>(files.filter(f => f.projectId === site?.projectId));
+
+  // File Input Refs
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const evidenceInputRef = useRef<HTMLInputElement>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
+  const materialInputRef = useRef<HTMLInputElement>(null);
 
   if (!site || !project) {
     return <div className="p-8 text-center text-slate-500">Site not found</div>;
   }
 
   // --- ACTIONS ---
-  const handleFileUpload = () => alert("Upload File Modal would open");
-  const handleEvidenceUpload = () => alert("Upload Evidence Modal would open");
+  const handleFileUpload = () => fileInputRef.current?.click();
+  const handleEvidenceUpload = () => evidenceInputRef.current?.click();
   const handleSubmitCost = () => alert("Submit Cost Modal would open");
-  const handleUploadProof = (costId: string) => alert(`Upload proof for cost ${costId}`);
+  const handleUploadProof = (costId: string) => { proofInputRef.current?.click(); console.log('Uploading proof for cost:', costId); };
   const handleApproveCost = (costId: string) => alert(`Approve cost ${costId}`);
   const handleRejectCost = (costId: string) => alert(`Reject cost ${costId}`);
+
+  // Upload Handlers (Mock logic to update local component state)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const newFile: ProjectFile = { 
+              id: `f-mock-${Date.now()}`, 
+              projectId: site.projectId, 
+              title: file.name, 
+              originalName: file.name,
+              type: file.type || 'application/octet-stream',
+              size: `${(file.size / 1024).toFixed(1)} KB`, 
+              uploadedAt: new Date().toISOString().split('T')[0], 
+              uploadedBy: currentUser?.name || 'Current User' 
+          };
+          setLocalFiles([newFile, ...localFiles]);
+          alert(`File ${file.name} uploaded successfully!`);
+      }
+      e.target.value = ''; // Reset input
+  };
+
+  const handleEvidenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const newEv: SiteEvidence = { 
+              id: `ev-mock-${Date.now()}`, 
+              siteId: site.id, 
+              filename: file.name,
+              originalName: file.name,
+              progressTag: `Latest Upload: ${file.name}`, 
+              uploadedAt: new Date().toISOString().split('T')[0], 
+              uploadedBy: currentUser?.name || 'Current User' 
+          };
+          setLocalEvidences([newEv, ...localEvidences]);
+          alert(`Evidence ${file.name} uploaded successfully!`);
+      }
+      e.target.value = ''; // Reset input
+  };
+
+  const handleGenericUpload = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          alert(`${type} ${file.name} uploaded successfully!`);
+      }
+      e.target.value = ''; // Reset input
+  };
 
   // SKP Actions
   const handleCreateSkpSubmit = (newSkp: Partial<SKP>) => {
@@ -607,12 +726,8 @@ const SiteDetail = () => {
             site={site}
             project={project}
             team={team}
-            canViewCosts={can('view_financials')}
-        />
-
-        <TeamSection 
-            teamName={team?.name || 'Unassigned'}
             teamMembers={teamMembers}
+            canViewCosts={can('view_financials')}
             canManageUsers={can('manage_data')}
         />
 
@@ -638,13 +753,14 @@ const SiteDetail = () => {
                 {activeTab === 'details' && (
                     <div className="space-y-8">
                         <EvidenceSection
-                            evidences={evidences}
+                            evidences={localEvidences}
                             canUploadEvidence={can('upload_evidence')}
                             onUpload={handleEvidenceUpload}
                         />
                         <MaterialsSection 
                             materials={materials} 
-                            skps={skps}
+                            skps={localSkps}
+                            siteBoQs={siteBoQs}
                             canAddSkp={can('manage_data') || (currentUser?.role === 'team_leader')}
                             canMarkReceived={can('manage_data') || (currentUser?.role === 'team_leader') || (currentUser?.role === 'engineer')}
                             onAddSkp={() => setIsSkpModalOpen(true)}
@@ -655,7 +771,7 @@ const SiteDetail = () => {
                         />
 
                         <FilesSection
-                            files={siteFiles}
+                            files={localFiles}
                             canUpload={can('manage_data') || can('upload_docs')}
                             canDelete={can('manage_data')}
                             onUpload={handleFileUpload}
@@ -667,9 +783,9 @@ const SiteDetail = () => {
                     <div className="space-y-6">
                         <div className="w-full">
                             {project.type === 'FILTER' ? (
-                                <FilterPaymentSection terms={filteredTerms} isTermin1Enabled={skps.some(s => s.status === 'Received')} />
+                                <FilterPaymentSection terms={filteredTerms} isTermin1Enabled={localSkps.some(s => s.status === 'Received')} />
                             ) : project.type === 'COMBAT' ? (
-                                 <CombatPaymentSection terms={filteredCombatTerms} isTermin1Enabled={skps.some(s => s.status === 'Received')} />
+                                 <CombatPaymentSection terms={filteredCombatTerms} isTermin1Enabled={localSkps.some(s => s.status === 'Received')} />
                             ) : null}
                         </div>
                         <CostsSection
@@ -698,8 +814,14 @@ const SiteDetail = () => {
             onClose={() => setIsReceiveModalOpen(false)}
             onSubmit={handleReceiveSkpSubmit}
             skpId={selectedSkpId}
-            skpNumber={skps.find(s => s.id === selectedSkpId)?.skpNumber || ''}
+            skpNumber={localSkps.find(s => s.id === selectedSkpId)?.skpNumber || ''}
         />
+
+        {/* Hidden File Inputs for Document Uploads */}
+        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+        <input type="file" ref={evidenceInputRef} className="hidden" accept="image/*" onChange={handleEvidenceChange} />
+        <input type="file" ref={proofInputRef} className="hidden" accept="image/*,.pdf" onChange={(e) => handleGenericUpload(e, 'Payment Proof')} />
+        <input type="file" ref={materialInputRef} className="hidden" onChange={(e) => handleGenericUpload(e, 'Material Document')} />
     </div>
   );
 };
