@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, FileSpreadsheet, Check } from 'lucide-react';
+import { Plus, Check } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -14,8 +14,9 @@ import {
   Pagination,
   EmptyState
 } from '../components/common/Table';
-import { siteMasterRecords } from '../data/mockData';
 import ImportSiteModal from '../components/modals/ImportSiteModal';
+import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
+import { siteMasterRecords } from '../data/mockData';
 
 // Custom lightweight Filter component matching the requested design
 const DataMasterFilter = ({ 
@@ -25,6 +26,7 @@ const DataMasterFilter = ({
     regionFilter, setRegionFilter,
     poFilter, setPoFilter,
     ineomFilter, setIneomFilter,
+    stageFilter, setStageFilter,
     onReset
 }: any) => {
     return (
@@ -46,6 +48,23 @@ const DataMasterFilter = ({
                     <option value="completed">Completed</option>
                     <option value="reallocated">Reallocated</option>
                     <option value="on_hold">On Hold</option>
+                </select>
+
+                <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white min-w-[140px]">
+                    <option value="">All Stages</option>
+                    <option value="imported">Imported</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="permit_process">Permit</option>
+                    <option value="permit_ready">Permit Ready</option>
+                    <option value="akses_process">Akses</option>
+                    <option value="akses_ready">Akses Ready</option>
+                    <option value="implementasi">Implementasi</option>
+                    <option value="rfi_done">RFI Done</option>
+                    <option value="rfs_done">RFS Done</option>
+                    <option value="dokumen_done">Docs Done</option>
+                    <option value="bast">BAST</option>
+                    <option value="invoice">Invoice</option>
+                    <option value="completed">Completed</option>
                 </select>
 
                 <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white">
@@ -95,11 +114,13 @@ const SiteMasterPage = () => {
     const [regionFilter, setRegionFilter] = useState('');
     const [poFilter, setPoFilter] = useState('');
     const [ineomFilter, setIneomFilter] = useState('');
+    const [stageFilter, setStageFilter] = useState('');
     const [page, setPage] = useState(1);
     const itemsPerPage = 10;
     
     // Modal State
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [summaryData, setSummaryData] = useState<ImportSummaryData | null>(null);
 
     // Filter Logic
     const filteredRecords = useMemo(() => {
@@ -122,6 +143,7 @@ const SiteMasterPage = () => {
             );
         }
         if (statusFilter) result = result.filter(r => r.status === statusFilter);
+        if (stageFilter) result = result.filter(r => r.stage === stageFilter);
         if (typeFilter) result = result.filter(r => r.project_type === typeFilter);
         if (regionFilter) result = result.filter(r => r.region === regionFilter);
         if (poFilter) result = result.filter(r => r.po_tsel === poFilter);
@@ -131,7 +153,7 @@ const SiteMasterPage = () => {
         }
 
         return result;
-    }, [isRestricted, searchTerm, statusFilter, typeFilter, regionFilter, poFilter, ineomFilter]);
+    }, [isRestricted, searchTerm, statusFilter, stageFilter, typeFilter, regionFilter, poFilter, ineomFilter]);
 
     // Summary Strip Logic
     const summary = useMemo(() => {
@@ -161,6 +183,25 @@ const SiteMasterPage = () => {
         }
     };
 
+    const getStageProps = (stage: string) => {
+        switch (stage) {
+            case 'imported': return { color: 'bg-slate-100 text-slate-700 border-slate-200', label: 'Imported' };
+            case 'assigned': return { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Assigned' };
+            case 'permit_process': return { color: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Permit' };
+            case 'permit_ready': return { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Permit Ready' };
+            case 'akses_process': return { color: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Akses' };
+            case 'akses_ready': return { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Akses Ready' };
+            case 'implementasi': return { color: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200', label: 'Implementasi' };
+            case 'rfi_done': return { color: 'bg-teal-100 text-teal-700 border-teal-200', label: 'RFI Done' };
+            case 'rfs_done': return { color: 'bg-teal-100 text-teal-700 border-teal-200', label: 'RFS Done' };
+            case 'dokumen_done': return { color: 'bg-teal-100 text-teal-700 border-teal-200', label: 'Docs Done' };
+            case 'bast': return { color: 'bg-orange-100 text-orange-700 border-orange-200', label: 'BAST' };
+            case 'invoice': return { color: 'bg-orange-100 text-orange-700 border-orange-200', label: 'Invoice' };
+            case 'completed': return { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: '✓ Selesai' };
+            default: return { color: 'bg-slate-100 text-slate-700 border-slate-200', label: stage || '-' };
+        }
+    };
+
     const getTypeColor = (type: string) => {
         switch (type) {
             case 'FILTER': return 'bg-violet-100 text-violet-700 border-violet-200';
@@ -177,7 +218,81 @@ const SiteMasterPage = () => {
         setRegionFilter('');
         setPoFilter('');
         setIneomFilter('');
+        setStageFilter('');
         setPage(1);
+    };
+
+    const handleImportData = (parsedData: any[], fileName: string) => {
+        let newCount = 0;
+        let updatedCount = 0;
+        let coordsUpdatedCount = 0;
+        let nameUpdatedCount = 0;
+        const errors = 0;
+
+        // Note: For mock purposes, we are modifying `siteMasterRecords` directly.
+        parsedData.forEach(newRow => {
+            const existingIndex = siteMasterRecords.findIndex(r => r.unique_key === newRow.unique_key);
+            
+            if (existingIndex >= 0) {
+                const existing = siteMasterRecords[existingIndex];
+                let wasUpdated = false;
+                
+                if (newRow.longitude && newRow.latitude && (newRow.longitude !== existing.longitude || newRow.latitude !== existing.latitude)) {
+                    existing.longitude = newRow.longitude;
+                    existing.latitude = newRow.latitude;
+                    coordsUpdatedCount++;
+                    wasUpdated = true;
+                }
+
+                if (newRow.site_name && newRow.site_name !== existing.site_name) {
+                    existing.site_name = newRow.site_name;
+                    nameUpdatedCount++;
+                    wasUpdated = true;
+                }
+                
+                if (newRow.tower_provider && newRow.tower_provider !== existing.tower_provider) { existing.tower_provider = newRow.tower_provider; wasUpdated = true; }
+                if (newRow.sector && newRow.sector !== existing.sector) { existing.sector = newRow.sector; wasUpdated = true; }
+                if (newRow.cluster && newRow.cluster !== existing.cluster) { existing.cluster = newRow.cluster; wasUpdated = true; }
+                // Keep operational data intact.
+
+                if (wasUpdated) {
+                    existing.import_source = fileName;
+                    updatedCount++;
+                }
+            } else {
+                newCount++;
+                // In a real app we'd trigger a backend save here. We just push to the mock array.
+                siteMasterRecords.push({
+                    id: `sm_new_${Date.now()}_${newCount}`,
+                    unique_key: newRow.unique_key,
+                    site_id: newRow.site_id,
+                    project_type: newRow.project_type || 'FILTER',
+                    site_name: newRow.site_name || 'Unknown Site',
+                    region: newRow.region || 'Unknown Region',
+                    po_tsel: newRow.po_tsel || '-',
+                    status: 'unassigned',
+                    stage: 'imported',
+                    quantity: newRow.quantity || 1,
+                    ineom_registered: false,
+                    longitude: newRow.longitude,
+                    latitude: newRow.latitude,
+                    tower_provider: newRow.tower_provider,
+                    sector: newRow.sector,
+                    cluster: newRow.cluster,
+                    import_source: fileName
+                } as any);
+            }
+        });
+
+        // Trigger summary modal
+        setSummaryData({
+            totalProcessed: parsedData.length,
+            newCreated: newCount,
+            updated: updatedCount,
+            coordsUpdated: coordsUpdatedCount,
+            nameUpdated: nameUpdatedCount,
+            errors: errors,
+        });
     };
 
     return (
@@ -236,6 +351,7 @@ const SiteMasterPage = () => {
                 regionFilter={regionFilter} setRegionFilter={setRegionFilter}
                 poFilter={poFilter} setPoFilter={setPoFilter}
                 ineomFilter={ineomFilter} setIneomFilter={setIneomFilter}
+                stageFilter={stageFilter} setStageFilter={setStageFilter}
                 onReset={handleReset}
             />
 
@@ -252,6 +368,7 @@ const SiteMasterPage = () => {
                         <TableHead className="text-center">INEOM</TableHead>
                         <TableHead>Work Order</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Stage</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableHeader>
                     <TableBody>
@@ -302,6 +419,16 @@ const SiteMasterPage = () => {
                                                 {site.status.replace('_', ' ').toUpperCase()}
                                             </span>
                                         </TableCell>
+                                        <TableCell>
+                                            {(() => {
+                                                const stageDisplay = getStageProps(site.stage);
+                                                return (
+                                                    <span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border", stageDisplay.color)} title={`Updated At: ${site.stage_updated_at || '-'}`}>
+                                                        {stageDisplay.label}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">
                                                 <ActionButton type="view" onClick={() => alert(`View site ${site.site_id}`)} />
@@ -343,10 +470,16 @@ const SiteMasterPage = () => {
                     alert('Add Manual Form Submitted');
                     setIsImportModalOpen(false);
                 }}
-                onImportExcel={() => {
-                    alert('Excel Uploaded & Imported');
+                onImportExcel={(parsedData, fileName) => {
+                    handleImportData(parsedData, fileName);
                     setIsImportModalOpen(false);
                 }}
+            />
+            
+            <ImportSummaryModal
+                isOpen={!!summaryData}
+                onClose={() => setSummaryData(null)}
+                summary={summaryData}
             />
         </div>
     );

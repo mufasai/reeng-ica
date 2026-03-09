@@ -5,54 +5,49 @@ import {
   Users, 
   Settings, 
   Menu,
-  ClipboardList
+  Database
 } from 'lucide-react';
 import clsx from 'clsx';
-import { USERS, type UserRole, getActiveSiteCountsByType, projects, sites, type ProjectType, siteMasterRecords } from '../../data/mockData';
+import { USERS, type UserRole, getActiveSiteCountsByType, projects, type ProjectType, siteMasterRecords } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = () => {
   const { currentUser, switchRole } = useAuth();
 
-  // 1. PROJECT MANAGEMENT
+  // OVERVIEW & OTHER PERMISSIONS
   const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
     engineer:        ['dashboard'],
-    team_leader:     ['dashboard', 'work-orders', 'site-master'],
-    backoffice_admin:['dashboard', 'work-orders', 'site-master', 'people', 'teams'],
-    finance:         ['dashboard', 'payments', 'site-master'], // 'payments' might be mapped to somewhere else if needed, but for now we follow the spec
-    management:      ['dashboard', 'work-orders', 'site-master', 'people', 'teams', 'options'],
+    team_leader:     ['dashboard', 'site-master'],
+    backoffice_admin:['dashboard', 'site-master', 'people', 'teams'],
+    finance:         ['dashboard', 'site-master'], 
+    management:      ['dashboard', 'site-master', 'people', 'teams', 'options'],
   };
 
   const allowedSidebarItems = ROLE_SIDEBAR_CONFIG[currentUser.role] || [];
 
-  const projectManagementItems = [];
+  const overviewItems: { icon: any, label: string, path: string, badge?: number }[] = [];
   
   if (allowedSidebarItems.includes('dashboard')) {
-      projectManagementItems.push({ icon: LayoutDashboard, label: 'Dashboard', path: '/' });
-  }
-  
-  if (allowedSidebarItems.includes('work-orders')) {
-    // We add an amber badge indicator here for unassigned WOs count (mock value 2 for now, will connect to mockData later)
-    projectManagementItems.push({ icon: ClipboardList, label: 'Work Orders', path: '/work-orders', badge: 2 });
+      overviewItems.push({ icon: LayoutDashboard, label: 'Dashboard', path: '/' });
   }
 
-  // 3. DATA MASTER
+  // DATA & DOKUMEN
   const dataMasterItems: { icon: any, label: string, path: string, badge?: number }[] = [];
   
+  if (allowedSidebarItems.includes('site-master')) {
+      const unassignedSitesCount = siteMasterRecords.filter(r => r.status === 'unassigned').length;
+      dataMasterItems.push({ icon: Database, label: 'Sites', path: '/site-master', badge: unassignedSitesCount > 0 ? unassignedSitesCount : undefined });
+  }
   if (allowedSidebarItems.includes('people')) {
       dataMasterItems.push({ icon: Users, label: 'People', path: '/people' });
   }
   if (allowedSidebarItems.includes('teams')) {
       dataMasterItems.push({ icon: Users, label: 'Teams', path: '/teams' });
   }
-  if (allowedSidebarItems.includes('site-master')) {
-      const unassignedSitesCount = siteMasterRecords.filter(r => r.status === 'unassigned').length;
-      dataMasterItems.push({ icon: LayoutDashboard, label: 'Sites', path: '/site-master', badge: unassignedSitesCount > 0 ? unassignedSitesCount : undefined });
-  }
   
   const showDataMaster = dataMasterItems.length > 0;
 
-  // 4. SYSTEM (Management Only)
+  // SYSTEM (Management Only)
   const showSystem = allowedSidebarItems.includes('options');
 
   return (
@@ -102,10 +97,10 @@ const Sidebar = () => {
         </div>
 
 
-        {/* 1. PROJECT MANAGEMENT */}
-        <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-4 pb-[6px]">Project Management</p>
+        {/* 1. OVERVIEW */}
+        <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-4 pb-[6px]">Overview</p>
         <div className="px-2 space-y-1">
-            {projectManagementItems.map((item) => (
+            {overviewItems.map((item) => (
             <NavLink
                 key={item.path}
                 to={item.path}
@@ -123,9 +118,9 @@ const Sidebar = () => {
                     <>
                         <item.icon className={clsx("w-4 h-4 transition-colors", isActive ? "text-[var(--blue-400)]" : "text-slate-400 group-hover:text-white")} />
                         <span className="flex-1">{item.label}</span>
-                        {item.badge && (
+                        {(item as any).badge && (
                             <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]">
-                                {item.badge}
+                                {(item as any).badge}
                             </span>
                         )}
                     </>
@@ -134,8 +129,37 @@ const Sidebar = () => {
             ))}
         </div>
 
-        {/* 2. PROJECT TYPES */}
-        <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-6 pb-[6px]">Project Types</p>
+        {/* 2. PEKERJAAN */}
+        <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-6 pb-[6px]">Pekerjaan</p>
+        
+        {/* SEMUA SITES */}
+        <div className="px-2 mb-2">
+            <NavLink
+                to="/all-sites"
+                className={({ isActive }) => clsx(
+                    'flex items-center justify-between px-4 py-2 text-[13px] rounded-lg mx-1 transition-all duration-150 group',
+                    isActive
+                    ? 'bg-[var(--navy-800)] text-white font-bold border-l-2 border-blue-600'
+                    : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] border-l-2 border-transparent font-medium'
+                )}
+            >
+                {({ isActive }) => (
+                    <>
+                        <div className="flex items-center gap-3">
+                            <span className="truncate">Semua Sites</span>
+                        </div>
+                        <span className={clsx(
+                            "text-[11px] px-1.5 py-0.5 rounded border",
+                            isActive 
+                                ? "bg-blue-600/20 text-blue-400 border-blue-500/30 font-bold" 
+                                : "bg-[var(--navy-700)] text-white border-[var(--navy-600)]"
+                        )}>
+                            [{siteMasterRecords.length}]
+                        </span>
+                    </>
+                )}
+            </NavLink>
+        </div>
         
         {(() => {
             const types: { id: ProjectType; label: string; colorClass: string }[] = [
@@ -147,10 +171,10 @@ const Sidebar = () => {
             ];
 
             // Get counts based on user role and team assignments
-            // Using the global mock arrays projects and sites 
+            // Using the global mock arrays projects and siteMasterRecords
             // In a real app these would come from AuthContext or a hook
             // For now, we need to import them at the top of Sidebar.tsx
-            const typeCounts = getActiveSiteCountsByType(currentUser, projects, sites);
+            const typeCounts = getActiveSiteCountsByType(currentUser, projects, siteMasterRecords);
             const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
 
             return types.map((type) => {
@@ -195,10 +219,10 @@ const Sidebar = () => {
             });
         })()}
 
-        {/* 3. DATA MASTER */}
+        {/* 3. DATA & DOKUMEN */}
         {showDataMaster && (
             <>
-                <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-6 pb-[6px]">Data Master</p>
+                <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-6 pb-[6px]">Data & Dokumen</p>
                 <div className="px-2 space-y-1">
                     {dataMasterItems.map((item) => (
                     <NavLink

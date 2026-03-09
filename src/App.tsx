@@ -15,6 +15,7 @@ import TerminDetail from './pages/TerminDetail';
 import TerminReview from './pages/TerminReview';
 import TerminPayment from './pages/TerminPayment';
 import SiteMaster from './pages/SiteMaster';
+import AllSites from './pages/AllSites';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="all-sites" element={<AllSites />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrderDetail />} />
           <Route path="projects" element={<Navigate to="/" replace />} />

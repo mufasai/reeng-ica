@@ -3,17 +3,20 @@ import { useParams, Navigate } from 'react-router-dom';
 import { 
   FolderKanban, 
   MapPin, 
-  Layers
+  Layers,
+  List,
+  FileSpreadsheet
 } from 'lucide-react';
+import MapWidget from '../components/MapWidget';
+import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
 import { 
-  projects, 
-  sites, 
   filterTerms,
   combatTerms,
   type ProjectType,
   teams,
-  type Site,
-  siteMasterRecords
+  type SiteMaster,
+  siteMasterRecords,
+  workOrders
 } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
 import ProjectSitesTable from '../components/tables/ProjectSitesTable';
@@ -22,43 +25,27 @@ const TypeSiteList = () => {
   const { type } = useParams<{ type: string }>();
   const { currentUser } = useAuth();
   const [filterState, setFilterState] = useState<{ step: number | null, statusGroup: string | null }>({ step: null, statusGroup: null });
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'termin'>('pipeline');
+  const [isBulkUpdateOpen, setIsBulkUpdateOpen] = useState(false);
+  
+  // View Toggle (List vs Map)
+  const [viewMode, setViewMode] = useState<'list' | 'map'>(() => {
+    return (localStorage.getItem('siteview_filter') as 'list' | 'map') || 'list';
+  });
+
+  const handleToggleView = (mode: 'list' | 'map') => {
+      setViewMode(mode);
+      localStorage.setItem('siteview_filter', mode);
+  };
   
   // 1. Data Validation & Formatting
   const upperType = type?.toUpperCase() as ProjectType;
   const validTypes: ProjectType[] = ['FILTER', 'COMBAT', 'BLACKSITE', 'L2H', 'REFINEN'];
   
-  if (!upperType || !validTypes.includes(upperType)) {
-    return <Navigate to="/projects" replace />;
-  }
-
-  // 2. Fetch Relevant Projects & Sites
-  const matchedProjects = useMemo(() => projects.filter(p => p.type === upperType), [upperType]);
-  const matchedProjectIds = matchedProjects.map(p => p.id);
-
+  // 2. Fetch Relevant Sites
   const matchedSites = useMemo(() => {
-    // We combine the execution 'sites' (from projects) with the 'siteMasterRecords' of the same type.
-    // In a real database, they might be joined. We're displaying both to fulfill the user's request.
-    const executionSites = sites.filter(s => matchedProjectIds.includes(s.projectId));
-    
-    // Get Site Master records for this project type that ARE NOT YET linked to executions
-    // (To avoid duplicate rows since we are just merging them for table display in this mockup)
-    const masterSites = siteMasterRecords.filter(sm => 
-        sm.project_type === upperType && !executionSites.some(es => es.id === sm.site_id)
-    ).map(sm => ({
-        // Map SiteMaster to Site structure for the table
-        id: sm.site_id, // Site ID is placed here to display correctly
-        name: sm.site_name,
-        location: sm.region,
-        status: sm.status === 'completed' ? 'completed' : 'in_progress', // Estimate status for merged list
-        projectId: 'unassigned-prj', // Placeholder
-        teamId: undefined as string | undefined, // Master sites don't have teams assigned in this mockup directly unless via WO
-        startDate: sm.imported_at.split('T')[0],
-        poTsel: sm.po_tsel,
-        ineomRegistered: sm.ineom_registered,
-        budget: 0 // Provide default budget to prevent rendering issues
-    } as any)); // cast as any to slide into Site array smoothly for display
-
-    let baseSites = [...executionSites, ...masterSites];
+    let baseSites = siteMasterRecords.filter(s => s.project_type === upperType);
 
     // Role-based filtering
     if (['engineer', 'team_leader'].includes(currentUser.role)) {
@@ -66,10 +53,15 @@ const TypeSiteList = () => {
         .filter(t => t.members.some(m => m.personId === currentUser.id))
         .map(t => t.id);
       
-      baseSites = baseSites.filter(s => s.teamId && userTeamIds.includes(s.teamId));
+      // Filter based on assigned team via work order
+      baseSites = baseSites.filter(s => {
+          if (!s.work_order_id) return false;
+          const wo = workOrders.find(w => w.id === s.work_order_id);
+          return wo && wo.assignedTeamId && userTeamIds.includes(wo.assignedTeamId);
+      });
     }
     return baseSites;
-  }, [matchedProjectIds, currentUser, upperType]);
+  }, [upperType, currentUser]);
 
 
   // 3. Dynamic Stats Calculation based on Type
@@ -89,8 +81,14 @@ const TypeSiteList = () => {
       }).length;
 
       // 2. Total Teams
-      const uniqueTeamIds = Array.from(new Set(matchedSites.filter(s => !!s.teamId).map(s => s.teamId!)));
-      const totalTeams = uniqueTeamIds.length;
+      const uniqueTeamIds = new Set<string>();
+      matchedSites.forEach(s => {
+          if (s.work_order_id) {
+              const wo = workOrders.find(w => w.id === s.work_order_id);
+              if (wo && wo.assignedTeamId) uniqueTeamIds.add(wo.assignedTeamId);
+          }
+      });
+      const totalTeams = uniqueTeamIds.size;
 
       // 3. Total People
       const uniquePeopleIds = new Set<string>();
@@ -106,28 +104,23 @@ const TypeSiteList = () => {
       let actionNeededCount = 0;
       let mostUrgentAction = '';
 
+      // Need to adjust action calculation as matchedSites is now SiteMaster[]
+      // For now, looking for notes with issue or permit_process older than 14 days
       matchedSites.forEach(site => {
           let hasUrgentAction = false;
           let urgentText = '';
 
-          if (upperType === 'FILTER') {
-              const terms = filterTerms.filter(t => t.siteId === site.id);
-              const urgentTerm = terms.find(t => t.status === 'pengajuan' || t.status === 'pending_review');
-              if (urgentTerm) {
-                  hasUrgentAction = true;
-                  urgentText = `${site.name} · ${urgentTerm.name} menunggu approval`;
+          if (site.stage_notes?.toLowerCase().includes('issue')) {
+              hasUrgentAction = true;
+              urgentText = `${site.site_name} · Terdapat issue: ${site.stage_notes}`;
+          } else if (site.stage === 'permit_process' && site.stage_updated_at) {
+              const updatedDate = new Date(site.stage_updated_at);
+              const now = new Date();
+              const diffDays = Math.floor((now.getTime() - updatedDate.getTime()) / (1000 * 3600 * 24));
+              if (diffDays > 14) {
+                 hasUrgentAction = true;
+                 urgentText = `${site.site_name} · Permit process pending > 14 days`;
               }
-          } else if (upperType === 'COMBAT') {
-               const terms = combatTerms.filter(t => t.siteId === site.id);
-               // Find first term in progress
-               const activeTerm = terms.find(t => t.status === 'in_progress');
-               if (activeTerm) {
-                   const urgentSubStep = activeTerm.subSteps.find(s => s.status === 'pengajuan' || s.status === 'pending_review');
-                   if (urgentSubStep) {
-                       hasUrgentAction = true;
-                       urgentText = `${site.name} · ${urgentSubStep.name} menunggu approval`;
-                   }
-               }
           }
 
           if (hasUrgentAction) {
@@ -255,8 +248,54 @@ const TypeSiteList = () => {
       });
   }, [matchedSites, filterState, upperType]);
 
-  const handleEditSite = (site: Site) => { console.log('Edit site', site); };
+  // 6. Calculate Pipeline Progress (Stage Counts)
+  const pipelineGroups = useMemo(() => {
+    const STAGE_GROUPS = [
+      { label: 'Assigned', keys: ['assigned'] },
+      { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
+      { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
+      { label: 'Implementasi', keys: ['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done'] },
+      { label: 'BAST', keys: ['bast'] },
+      { label: 'Invoice', keys: ['invoice'] },
+      { label: 'Selesai', keys: ['completed'] }
+    ];
+
+    const counts = STAGE_GROUPS.map(g => ({ ...g, count: 0 }));
+    let issueCount = 0;
+
+    matchedSites.forEach(site => {
+        const stage = site.stage || 'imported';
+        
+        counts.forEach(g => {
+            if (g.keys.includes(stage)) g.count++;
+        });
+
+        if (site.stage_notes?.toLowerCase().includes('issue') || (stage as string) === 'issue_hold') {
+            issueCount++;
+        }
+    });
+
+    return { counts, issueCount };
+  }, [matchedSites]);
+
+  // 7. Apply Stage Filter to Table Sites
+  const finalFilteredSites = useMemo(() => {
+    if (!stageFilter) return filteredTableSites;
+
+    const targetKeys = pipelineGroups.counts.find(c => c.label === stageFilter)?.keys || [];
+
+    return filteredTableSites.filter(site => {
+        const stage = site.stage || 'imported';
+        return targetKeys.includes(stage);
+    });
+  }, [filteredTableSites, stageFilter, pipelineGroups]);
+
+  const handleEditSite = (site: SiteMaster) => { console.log('Edit site', site); };
   const handleDeleteSite = (siteId: string) => { console.log('Delete site', siteId); };
+
+  if (!upperType || !validTypes.includes(upperType)) {
+    return <Navigate to="/projects" replace />;
+  }
 
   const typeDetails = {
       'FILTER': { color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' },
@@ -272,7 +311,7 @@ const TypeSiteList = () => {
       {/* 1. HEADER */}
       <div className="space-y-6">
           <div className="page-header kpi-glow-bg z-10 relative flex items-center gap-4 !pt-0 !px-0">
-              <div className={`p-3 rounded-xl bg-[var(--glass-bg-hover)] border border-[var(--glass-border)] shadow-sm`}>
+              <div className="p-3 rounded-xl bg-[var(--glass-bg-hover)] border border-[var(--glass-border)] shadow-sm">
                   <FolderKanban className={`w-8 h-8 ${typeDetails?.color.replace('text-', 'text-[var(--')}-400)]`} />
               </div>
               <div>
@@ -283,87 +322,205 @@ const TypeSiteList = () => {
                       Overview and tracking for all active {upperType} specific deployments.
                   </p>
               </div>
+              
+              {/* VIEW TOGGLE */}
+              <div className="ml-auto flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                  <button 
+                      onClick={() => handleToggleView('list')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${viewMode === 'list' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                      <List className="w-4 h-4" />
+                      List
+                  </button>
+                  <button 
+                      onClick={() => handleToggleView('map')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${viewMode === 'map' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                  >
+                      <MapPin className="w-4 h-4" />
+                      Map
+                  </button>
+              </div>
           </div>
 
           {/* KPI CARDS */}
           {matchedSites.length > 0 && (
-            <div className="kpi-row relative z-10">
-              <div className="kpi blue">
+            <div className="kpi-row relative z-10 mb-2">
+              <div className="kpi blue group">
+                <MapPin className="kpi-icon-overlay" />
                 <div className="kpi-lbl">Total Sites</div>
                 <div className="kpi-val">{statCards.totalSites}</div>
                 <div className="kpi-desc">{statCards.totalSites} active, {statCards.completedSites} completed</div>
               </div>
-              <div className="kpi violet">
+              <div className="kpi violet group">
+                <Layers className="kpi-icon-overlay" />
                 <div className="kpi-lbl">Total Teams</div>
                 <div className="kpi-val">{statCards.totalTeams}</div>
                 <div className="kpi-desc">Unique teams assigned</div>
               </div>
-              <div className="kpi green">
+              <div className="kpi green group">
+                <FolderKanban className="kpi-icon-overlay" />
                 <div className="kpi-lbl">Total People</div>
                 <div className="kpi-val">{statCards.totalPeople}</div>
                 <div className="kpi-desc">Across all {upperType} teams</div>
               </div>
-              <div className="kpi amber">
+              <div className="kpi amber group">
+                <List className="kpi-icon-overlay" />
                 <div className="kpi-lbl">Menunggu Aksi</div>
-                <div className="kpi-val amber">{statCards.actionNeededCount} <span style={{fontSize:'14px',fontWeight:500,color:'var(--text-4)'}}>sites</span></div>
-                <div className="kpi-hint" title={statCards.mostUrgentAction}>
+                <div className="kpi-val amber flex items-center gap-2">
+                    {statCards.actionNeededCount} 
+                    {statCards.actionNeededCount > 0 && <span className="pulse"></span>}
+                </div>
+                <div className="kpi-hint flex-1" title={statCards.mostUrgentAction}>
                   {statCards.actionNeededCount > 0 ? (
-                    <><span className="pulse"></span>{statCards.mostUrgentAction}</>
-                  ) : 'No immediate action'}
+                    <span className="truncate w-full block">{statCards.mostUrgentAction.length > 30 ? statCards.mostUrgentAction.substring(0, 30) + '...' : statCards.mostUrgentAction}</span>
+                  ) : <span className="text-slate-400 font-normal truncate">No immediate action</span>}
                 </div>
               </div>
             </div>
           )}
       </div>
 
-      {/* 2. PROGRESS TERMIN PER SITE MATRIX */}
-      {distributionMatrix.length > 0 && (
-        <div className="card relative z-10 mb-5">
-          <div className="card-header border-b border-[var(--border, #E4E8F0)] flex items-center justify-between p-5 bg-white rounded-t-xl">
-            <h2 className="section-header section-header-accent !mb-0 !text-[14px]">
-              <FolderKanban className="w-4 h-4 text-[var(--blue-500)]" />
-              <span className="uppercase tracking-wide text-[var(--text-secondary)] font-bold">Progress Termin per Site</span>
-            </h2>
-            <button className="flex items-center gap-1 px-3 py-1.5 bg-[#F0F5FF] text-[#2563EB] text-xs font-semibold rounded-md border border-[#DBEAFE] hover:bg-[#E0E7FF] transition-colors" onClick={(e) => {
-              const el = e.currentTarget.parentElement?.parentElement?.querySelector('.expanded-wrap');
-              if (el) {
-                el.classList.toggle('open');
-              }
-            }}>
-              Detail <span className="text-[10px]">↕</span>
-            </button>
-          </div>
+      {/* TABS COMPONENT */}
+      <div className="relative z-10 mb-2">
+        <div className="flex border-b border-slate-200">
+          <button
+            className={`px-1 py-3 mr-6 text-sm flex-none transition-colors border-b-2 ${
+              activeTab === 'pipeline'
+                ? 'border-blue-600 text-blue-800 font-bold pointer-events-none'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+            onClick={() => setActiveTab('pipeline')}
+          >
+            Pipeline Progress
+          </button>
+          <button
+            className={`px-1 py-3 text-sm flex-none transition-colors border-b-2 ${
+              activeTab === 'termin'
+                ? 'border-blue-600 text-blue-800 font-bold pointer-events-none'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+            onClick={() => setActiveTab('termin')}
+          >
+            Termin & Pembayaran
+          </button>
+        </div>
+      </div>
 
+      {/* PIPELINE PROGRESS (STAGE TRACKING) */}
+      {activeTab === 'pipeline' && (
+      <div className="relative z-10 mb-5 bg-white border border-slate-200 rounded-lg shadow-sm">
+        <div className="p-4 px-6 overflow-x-auto custom-scrollbar">
+            <div className="flex items-start w-full min-w-max py-4 pt-6 px-4">
+                {pipelineGroups.counts.map((group, idx) => {
+                    const hasIssue = group.count > 0 && pipelineGroups.issueCount > 0;
+                    const stageFilterActive = stageFilter === group.label;
+                    
+                    let circleConfig = {
+                        fill: 'bg-[#F9FAFB]', border: 'border-[#E5E7EB]', text: 'text-[#9CA3AF]', label: 'text-[#9CA3AF]'
+                    };
+                    
+                    if (group.count > 0) {
+                        if (group.label === 'Permit') circleConfig = { fill: 'bg-[#FEF3C7]', border: 'border-[#F59E0B]', text: 'text-[#F59E0B]', label: 'text-[#F59E0B]' };
+                        else if (group.label === 'Akses') circleConfig = { fill: 'bg-[#DBEAFE]', border: 'border-[#3B82F6]', text: 'text-[#3B82F6]', label: 'text-[#3B82F6]' };
+                        else if (group.label === 'Implementasi') circleConfig = { fill: 'bg-[#EDE9FE]', border: 'border-[#7C3AED]', text: 'text-[#7C3AED]', label: 'text-[#7C3AED]' };
+                        else if (group.label === 'BAST' || group.label === 'Invoice') circleConfig = { fill: 'bg-[#FFF7ED]', border: 'border-[#F97316]', text: 'text-[#F97316]', label: 'text-[#F97316]' };
+                        else if (group.label === 'Selesai') circleConfig = { fill: 'bg-[#ECFDF5]', border: 'border-[#10B981]', text: 'text-[#10B981]', label: 'text-[#10B981]' };
+                        else if (group.label === 'Assigned') circleConfig = { fill: 'bg-[#F0F4FF]', border: 'border-[#6B7280]', text: 'text-[#6B7280]', label: 'text-[#6B7280]' };
+                    }
+
+                    const ringClass = stageFilterActive ? `ring-2 ring-offset-2 ring-blue-500` : '';
+                    
+                    let connectorColor = 'bg-[#E5E7EB]';
+                    if (idx < pipelineGroups.counts.length - 1) {
+                        if (group.count > 0) {
+                            if (group.label === 'Permit') connectorColor = 'bg-[#F59E0B]';
+                            else if (group.label === 'Akses') connectorColor = 'bg-[#3B82F6]';
+                            else if (group.label === 'Implementasi') connectorColor = 'bg-[#7C3AED]';
+                            else if (group.label === 'BAST' || group.label === 'Invoice') connectorColor = 'bg-[#F97316]';
+                            else if (group.label === 'Selesai') connectorColor = 'bg-[#10B981]';
+                            else if (group.label === 'Assigned') connectorColor = 'bg-[#6B7280]';
+                        }
+                    }
+
+                    return (
+                        <React.Fragment key={idx}>
+                            <div 
+                                className="flex flex-col items-center flex-none cursor-pointer group w-[85px]"
+                                onClick={() => setStageFilter(stageFilter === group.label ? null : group.label)}
+                            >
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-[15px] mb-2 border-[2px] transition-all z-10 ${circleConfig.fill} ${circleConfig.border} ${circleConfig.text} ${ringClass}`}>
+                                    {group.count > 0 ? group.count : '—'}
+                                </div>
+                                <span className={`text-[11px] font-semibold whitespace-nowrap text-center transition-colors ${stageFilterActive ? 'text-blue-700 font-bold' : circleConfig.label}`}>
+                                    {group.label} {hasIssue && <span className="text-amber-500 ml-1">⚡</span>}
+                                </span>
+                            </div>
+                            {idx < pipelineGroups.counts.length - 1 && (
+                                <div className={`flex-1 h-[2px] ${connectorColor} self-start mt-5 mx-1 transition-colors`}></div>
+                            )}
+                        </React.Fragment>
+                    )
+                })}
+            </div>
+
+            <div className="mt-4 flex justify-center text-sm font-medium text-[var(--text-secondary)]">
+                {pipelineGroups.counts.find(c => c.label === 'Permit')?.count === 0 && pipelineGroups.issueCount === 0 
+                  ? <>{matchedSites.length} sites total <span className="mx-2 opacity-50">•</span> semua site masih dalam proses awal</>
+                  : <>{matchedSites.length} sites total <span className="mx-2 opacity-50">•</span> {pipelineGroups.counts.find(c => c.label === 'Permit')?.count || 0} permit siap {pipelineGroups.issueCount > 0 && <><span className="mx-2 opacity-50">•</span> <span className="text-amber-600">⚡ {pipelineGroups.issueCount} butuh tindakan</span></>}</>
+                }
+            </div>
+        </div>
+      </div>
+      )}
+
+      {/* TERMIN & PEMBAYARAN */}
+      {activeTab === 'termin' && (
+        <div className="relative z-10 mb-5 bg-white border border-slate-200 rounded-lg shadow-sm">
+           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mx-6 mt-6 rounded-r-lg flex gap-3 shadow-sm">
+               <span className="text-xl leading-none pt-0.5">ℹ️</span>
+               <p className="text-sm text-blue-800 font-medium leading-relaxed">Termin tracking akan aktif setelah SPK digenerate untuk setiap site. SPK digenerate setelah permit selesai dan disetujui.</p>
+           </div>
           {statCards.actionNeededCount > 0 && (
-            <div className="action-banner">
+            <div className="action-banner rounded-t-lg">
               <span>⚡</span>
               <span><strong>{statCards.actionNeededCount} site{statCards.actionNeededCount > 1 ? 's' : ''}</strong> menunggu tindakan — <strong>{statCards.mostUrgentAction.split('·')[0]}</strong> · {statCards.mostUrgentAction.split('·')[1]}</span>
               <span className="action-link" onClick={() => {
-                 setFilterState({ step: null, statusGroup: 'pending' }); // approximate quickly scrolling down or showing it
+                 setFilterState({ step: null, statusGroup: 'pending' }); 
               }}>Lihat →</span>
             </div>
           )}
 
-          <div className="stepper-wrap">
+          <div className="stepper-wrap !pt-2 pb-0">
+             <div className="flex justify-end px-5 pt-3">
+                 <button className="flex items-center gap-1 px-3 py-1.5 bg-[#F0F5FF] text-[#2563EB] text-xs font-semibold rounded-md border border-[#DBEAFE] hover:bg-[#E0E7FF] transition-colors" onClick={(e) => {
+                    const el = e.currentTarget.parentElement?.parentElement?.parentElement?.querySelector('.expanded-wrap');
+                    if (el) {
+                        el.classList.toggle('open');
+                    }
+                 }}>
+                 Detail <span className="text-[10px]">↕</span>
+                 </button>
+             </div>
             <div className="stepper">
               {distributionMatrix.map((col, idx) => {
+                 const hasAnyData = distributionMatrix.some(c => c.paid > 0 || c.approved > 0 || c.pending > 0 || c.inProgress > 0 || c.locked > 0);
+                 const isEmpty = col.paid === 0 && col.approved === 0 && col.pending === 0 && col.inProgress === 0 && col.locked === 0;
                  const isAction = col.pending > 0;
                  const isCompleted = col.locked === 0 && col.inProgress === 0 && col.pending === 0 && col.approved === 0 && col.paid > 0;
                  const isApproved = col.approved > 0 && col.pending === 0 && col.inProgress === 0 && col.locked === 0;
                  
-                 let circleClass = 'pending';
+                 let circleClass = 'inactive';
                  let circleContent = (idx + 1).toString();
-                 if (isAction) {
+                 if (!hasAnyData || isEmpty) {
+                     circleClass = 'inactive opacity-60';
+                     circleContent = '🔒';
+                 } else if (isAction) {
                    circleClass = 'action';
                    circleContent = '!';
                  } else if (isCompleted) {
                    circleClass = 'done';
                    circleContent = '✓';
-                 } else if (isApproved) {
-                   circleClass = 'approved';
-                   circleContent = '✓';
-                 } else if (col.paid > 0 || col.approved > 0 || col.inProgress > 0) {
-                   // Partially active but no immediate action needed, maybe just done with some parts
+                 } else if (isApproved || col.paid > 0 || col.approved > 0 || col.inProgress > 0) {
                    circleClass = 'approved';
                    circleContent = '✓';
                  }
@@ -372,6 +529,7 @@ const TypeSiteList = () => {
                    <React.Fragment key={col.step}>
                      {/* Step Node */}
                      <div className="step" onClick={(e) => {
+                        if (!hasAnyData || isEmpty) return; // Prevent filtering on empty steps
                         setFilterState({ step: col.step, statusGroup: null });
                         document.querySelectorAll('.step-circle').forEach(s => (s as HTMLElement).style.outline = 'none');
                         (e.currentTarget.querySelector('.step-circle') as HTMLElement).style.outline = '3px solid var(--blue, #2563EB)';
@@ -383,17 +541,27 @@ const TypeSiteList = () => {
                          <div className="step-pct">{col.title.split('(')[1]?.replace(')','')}</div>
                        </div>
                        <div className="step-stats">
-                          {col.paid > 0 && <div className="step-stat-row s-paid"><span className="step-stat-dot dot-em"></span>{col.paid} Dibayarkan</div>}
-                          {col.approved > 0 && <div className="step-stat-row s-approved"><span className="step-stat-dot dot-em"></span>{col.approved} Approved</div>}
-                          {col.pending > 0 && <div className="step-stat-row s-action"><span className="step-stat-dot dot-am"></span>{col.pending} Menunggu Aksi</div>}
-                          
-                          {/* Show Belum Aktif as a muted pill if all others are zero, just to show there's something, or normally if locked > 0 */}
-                          {col.locked > 0 && (
-                            <div className={`step-stat-row s-inactive ${col.paid === 0 && col.approved === 0 && col.pending === 0 && col.inProgress === 0 ? 'muted-pill' : ''}`}>
-                              <span className="step-stat-dot dot-gr bg-transparent border"></span>{col.locked} Belum Aktif
-                            </div>
+                          {(!hasAnyData || isEmpty) ? (
+                              <>
+                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— Dibayarkan</div>
+                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— Approved</div>
+                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— Menunggu Aksi</div>
+                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— In Progress</div>
+                              </>
+                          ) : (
+                              <>
+                                  {col.paid > 0 && <div className="step-stat-row s-paid"><span className="step-stat-dot dot-em"></span>{col.paid} Dibayarkan</div>}
+                                  {col.approved > 0 && <div className="step-stat-row s-approved"><span className="step-stat-dot dot-em"></span>{col.approved} Approved</div>}
+                                  {col.pending > 0 && <div className="step-stat-row s-action"><span className="step-stat-dot dot-am"></span>{col.pending} Menunggu Aksi</div>}
+                                  
+                                  {col.locked > 0 && (
+                                    <div className={`step-stat-row s-inactive ${col.paid === 0 && col.approved === 0 && col.pending === 0 && col.inProgress === 0 ? 'muted-pill' : ''}`}>
+                                      <span className="step-stat-dot dot-gr bg-transparent border"></span>{col.locked} Belum Aktif
+                                    </div>
+                                  )}
+                                  {col.inProgress > 0 && <div className="step-stat-row s-inactive"><span className="step-stat-dot dot-gr !bg-[var(--blue-500)] border-none"></span>{col.inProgress} In Progress</div>}
+                              </>
                           )}
-                          {col.inProgress > 0 && <div className="step-stat-row s-inactive"><span className="step-stat-dot dot-gr !bg-[var(--blue-500)] border-none"></span>{col.inProgress} In Progress</div>}
                        </div>
                      </div>
                      
@@ -401,7 +569,10 @@ const TypeSiteList = () => {
                      {idx < distributionMatrix.length - 1 && (
                        <div className="step-connector">
                          <div className="step-connector-track">
-                           <div className={`step-connector-fill ${circleClass === 'done' || circleClass === 'approved' ? 'full' : (circleClass === 'action' ? 'partial' : 'none')}`}></div>
+                           {(!hasAnyData || isEmpty) 
+                             ? <div className="step-connector-fill none border-t-2 border-dashed border-slate-300 bg-transparent w-full h-[2px]"></div>
+                             : <div className={`step-connector-fill ${circleClass === 'done' || circleClass === 'approved' ? 'full' : (circleClass === 'action' ? 'partial' : 'none')}`}></div>
+                           }
                          </div>
                        </div>
                      )}
@@ -411,41 +582,10 @@ const TypeSiteList = () => {
             </div>
           </div>
 
-          {/* Progress bar */}
-          <div className="overall-bar-wrap px-6 pb-5 pt-4 mt-2 border-t border-[var(--border, #E4E8F0)]">
-            <div className="overall-bar-top">
-              <span>Overall pipeline progress — {statCards.totalSites} sites</span>
-              <span className="overall-pct">
-                 ~{Math.round(
-                    upperType === 'FILTER' 
-                      ? distributionMatrix.reduce((acc, m, idx) => acc + ((m.paid + m.approved) / Math.max(1, statCards.totalSites)) * [30,50,10,10][idx], 0)
-                      : distributionMatrix.reduce((acc, m) => acc + ((m.paid + m.approved) / Math.max(1, statCards.totalSites)) * (100/distributionMatrix.length), 0)
-                 )}% complete
-              </span>
-            </div>
-            <div className="overall-track">
-              <div className="bar-seg bar-paid" style={{width: `${
-                 upperType === 'FILTER' 
-                  ? distributionMatrix.reduce((acc, m, idx) => acc + (m.paid / Math.max(1, statCards.totalSites)) * [30,50,10,10][idx], 0)
-                  : distributionMatrix.reduce((acc, m) => acc + (m.paid / Math.max(1, statCards.totalSites)) * (100/distributionMatrix.length), 0)
-              }%`}}></div>
-              <div className="bar-seg bar-approved" style={{width: `${
-                 upperType === 'FILTER' 
-                  ? distributionMatrix.reduce((acc, m, idx) => acc + (m.approved / Math.max(1, statCards.totalSites)) * [30,50,10,10][idx], 0)
-                  : distributionMatrix.reduce((acc, m) => acc + (m.approved / Math.max(1, statCards.totalSites)) * (100/distributionMatrix.length), 0)
-              }%`}}></div>
-              <div className="bar-seg bar-action" style={{width: `${
-                 upperType === 'FILTER' 
-                  ? distributionMatrix.reduce((acc, m, idx) => acc + (m.pending / Math.max(1, statCards.totalSites)) * [30,50,10,10][idx], 0)
-                  : distributionMatrix.reduce((acc, m) => acc + (m.pending / Math.max(1, statCards.totalSites)) * (100/distributionMatrix.length), 0)
-              }%`}}></div>
-            </div>
-          </div>
-
           {/* Expanded detail */}
           <div className="expanded-wrap" id="expandedDetail">
             <div className="expanded-grid">
-              {distributionMatrix.map((col) => (
+              {distributionMatrix.filter(col => col.paid > 0 || col.approved > 0 || col.pending > 0 || col.inProgress > 0 || col.locked > 0).map((col) => (
                 <div key={col.step} className="exp-col">
                   <div className="exp-col-title">
                     {col.title.split(' ')[0]} {col.title.split(' ')[1]}
@@ -475,47 +615,125 @@ const TypeSiteList = () => {
               ))}
             </div>
           </div>
+
+          {/* SITE-LEVEL STATUS TABLE */}
+           <div className="px-6 py-6 border-t border-slate-200">
+               <h3 className="text-sm font-bold text-slate-800 mb-4">Site-level Termin Status</h3>
+               <div className="overflow-x-auto">
+                   <table className="w-full text-left text-sm whitespace-nowrap">
+                       <thead>
+                           <tr className="border-b border-slate-200">
+                               <th className="pb-2 font-semibold text-slate-500">Site Name</th>
+                               <th className="pb-2 font-semibold text-slate-500 text-center">T1</th>
+                               <th className="pb-2 font-semibold text-slate-500 text-center">T2</th>
+                               <th className="pb-2 font-semibold text-slate-500 text-center">T3</th>
+                               <th className="pb-2 font-semibold text-slate-500 text-center">T4</th>
+                           </tr>
+                       </thead>
+                       <tbody>
+                           {matchedSites.map(site => {
+                               const terms = upperType === 'FILTER' ? filterTerms.filter(t => t.siteId === site.id) : combatTerms.filter(t => t.siteId === site.id);
+                               
+                               const renderTermStatus = (stepId: number) => {
+                                   if (upperType === 'FILTER') {
+                                       const term = terms.find(t => t.step === stepId);
+                                       if (!term) return <span className="text-slate-400" title="Locked">🔒</span>;
+                                       if (term.status === 'paid' || term.status === 'dibayarkan') return <span className="text-emerald-500 font-bold" title="Paid">✓</span>;
+                                       if (term.status === 'approved' || term.status === 'diterima') return <span className="text-blue-500 font-bold" title="Approved">●</span>;
+                                       if (term.status === 'pengajuan' || term.status === 'pending_review' || term.status === 'submitted') return <span className="text-amber-500 font-bold" title="Menunggu Aksi">⚡</span>;
+                                       return <span className="text-blue-400 font-bold" title="In Progress">●</span>;
+                                   } else {
+                                       // Combine 4-6 into 4
+                                       const term = stepId === 4 ? terms.find(t => t.step >= 4) : terms.find(t => t.step === stepId);
+                                       if (!term) return <span className="text-slate-400" title="Locked">🔒</span>;
+                                       if (term.status === 'completed') return <span className="text-emerald-500 font-bold" title="Paid">✓</span>;
+                                       if (term.status === 'in_progress' && term.subSteps.some((s: any) => s.status === 'pengajuan' || s.status === 'pending_review')) return <span className="text-amber-500 font-bold" title="Menunggu Aksi">⚡</span>;
+                                       return <span className="text-blue-500 font-bold" title="In Progress">●</span>;
+                                   }
+                               };
+
+                               return (
+                                   <tr key={site.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                                       <td className="py-2.5 font-medium text-slate-700 max-w-[200px] truncate" title={site.site_name}>{site.site_name}</td>
+                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(1)}</td>
+                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(2)}</td>
+                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(3)}</td>
+                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(4)}</td>
+                                   </tr>
+                               );
+                           })}
+                       </tbody>
+                   </table>
+               </div>
+           </div>
         </div>
       )}
 
-      {/* 3. SITES TABLE */}
-      <div className="table-wrapper relative z-10">
-          <div className="p-5 border-b border-[var(--glass-border)] flex items-center justify-between bg-[var(--glass-bg)]">
-              <h2 className="section-header section-header-accent !mb-0 !text-[14px]">
-                  <MapPin className="w-4 h-4 text-[var(--text-muted)]" />
-                  Site Registry
-                  {filterState.step && (
-                      <span className="ml-2 px-2.5 py-1 bg-[var(--glass-bg-active)] text-[var(--blue-400)] text-xs font-semibold rounded-full border border-[var(--glass-border-active)]">
-                          Filtered
-                          <button onClick={() => setFilterState({step: null, statusGroup: null})} className="ml-2 hover:text-white">&times;</button>
-                      </span>
+      {/* CONTENT AREA (TABLE OR MAP) */}
+      {viewMode === 'list' ? (
+          <div className="table-wrapper relative z-10">
+              <div className="p-5 border-b border-[var(--glass-border)] flex items-center justify-between bg-[var(--glass-bg)]">
+                  <h2 className="section-header section-header-accent !mb-0 !text-[14px]">
+                      <MapPin className="w-4 h-4 text-[var(--text-muted)]" />
+                      Site Registry
+                      {filterState.step && (
+                          <span className="ml-2 px-2.5 py-1 bg-[var(--glass-bg-active)] text-[var(--blue-400)] text-xs font-semibold rounded-full border border-[var(--glass-border)]">
+                              Filtered
+                              <button onClick={() => setFilterState({step: null, statusGroup: null})} className="ml-2 hover:text-white">&times;</button>
+                          </span>
+                      )}
+                  </h2>
+                  <div className="flex items-center gap-3">
+                      <div className="bg-[var(--glass-bg)] text-[var(--text-secondary)] px-3 py-1 rounded-full text-sm font-medium border border-[var(--glass-border)]">
+                          Showing: {finalFilteredSites.length} of {matchedSites.length}
+                      </div>
+                      <button onClick={() => setIsBulkUpdateOpen(true)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-lg text-xs transition-colors shadow-sm flex items-center gap-2">
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
+                          Bulk Update Stage
+                      </button>
+                  </div>
+              </div>
+
+              <div className="p-5">
+                  {finalFilteredSites.length === 0 ? (
+                      <div className="text-center py-16 px-4">
+                          <div className="w-16 h-16 bg-[var(--glass-bg)] rounded-full flex items-center justify-center mx-auto mb-4 border border-[var(--glass-border)] shadow-sm">
+                              <Layers className="w-8 h-8 text-[var(--text-muted)]" />
+                          </div>
+                          <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Belum ada site aktif yang sesuai.</h3>
+                          <p className="text-[var(--text-muted)] text-sm max-w-md mx-auto mb-6">
+                              There are currently no sites matching the selected filters based on your access level.
+                          </p>
+                      </div>
+                  ) : (
+                      <ProjectSitesTable 
+                          sites={finalFilteredSites}
+                          onEdit={handleEditSite}
+                          onDelete={handleDeleteSite}
+                      />
                   )}
-              </h2>
-              <div className="bg-[var(--glass-bg)] text-[var(--text-secondary)] px-3 py-1 rounded-full text-sm font-medium border border-[var(--glass-border)]">
-                  Showing: {filteredTableSites.length} of {matchedSites.length}
               </div>
           </div>
-
-          <div className="p-5">
-              {filteredTableSites.length === 0 ? (
-                  <div className="text-center py-16 px-4">
-                      <div className="w-16 h-16 bg-[var(--glass-bg)] rounded-full flex items-center justify-center mx-auto mb-4 border border-[var(--glass-border)] shadow-sm">
-                          <Layers className="w-8 h-8 text-[var(--text-muted)]" />
-                      </div>
-                      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Belum ada site aktif yang sesuai.</h3>
-                      <p className="text-[var(--text-muted)] text-sm max-w-md mx-auto mb-6">
-                          There are currently no sites matching the selected filters based on your access level.
-                      </p>
-                  </div>
-              ) : (
-                  <ProjectSitesTable 
-                      sites={filteredTableSites}
-                      onEdit={handleEditSite}
-                      onDelete={handleDeleteSite}
-                  />
-              )}
+      ) : (
+          /* MAP VIEW */
+          <div className="relative z-10 h-[calc(100vh-300px)] min-h-[500px] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                        <MapPin className="w-4 h-4 text-blue-600" />
+                        Peta Sebaran {upperType} Sites
+                    </h3>
+               </div>
+               <div className="flex-1 w-full bg-slate-100 relative">
+                   <MapWidget height="100%" presetType={upperType} />
+               </div>
           </div>
-      </div>
+      )}
+
+      <BulkStageUpdateModal 
+          isOpen={isBulkUpdateOpen} 
+          onClose={() => setIsBulkUpdateOpen(false)}
+          projectType={upperType}
+      />
     </div>
   );
 };

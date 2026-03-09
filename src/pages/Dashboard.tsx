@@ -1,14 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
     Building2, Users, Wallet, CheckCircle2,
-    Plus, CreditCard, ChevronRight, Activity, Clock, FileText, UploadCloud, AlertCircle, FileSpreadsheet
+    Plus, CreditCard, ChevronRight, Activity, Clock, FileText, UploadCloud, AlertCircle, MapPin, Filter
 } from 'lucide-react';
 import clsx from 'clsx';
+import MapWidget from '../components/MapWidget';
 import { 
     projects, sites, teams, workOrders, activityFeed, people,
-    filterTerms, combatTerms, type ProjectType
+    filterTerms, combatTerms, siteMasterRecords, type ProjectType
 } from '../data/mockData';
 
 // Helper to format currency
@@ -21,14 +22,25 @@ const formatRupiah = (amount: number) => {
 const Dashboard = () => {
     const { currentUser } = useAuth();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
-    const [activeTab, setActiveTab] = useState<'overview' | 'all-sites' | 'work-orders'>('overview');
+    const initialTab = searchParams.get('tab') === 'map' ? 'map' : 'overview';
+    const [activeTab, setActiveTab] = useState<'overview' | 'map'>(initialTab as any);
+
+    // Sync tab with URL
+    useEffect(() => {
+        if (searchParams.get('tab') === 'map') {
+            setActiveTab('map');
+        } else {
+            setActiveTab('overview');
+        }
+    }, [searchParams]);
 
     // ----------------------------------------------------------------------
     // 1. DATA AGGREGATION & FILTERING
     // ----------------------------------------------------------------------
     
-    // Determine which sites are visible to the current user
+    // Determine which EXECUTION sites are visible to the current user
     const visibleSites = useMemo(() => {
         const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
         if (!isRestricted) return sites; // backoffice, management, finance see all
@@ -117,9 +129,34 @@ const Dashboard = () => {
         }).length;
     }, [visibleSites, activeProjects]);
     const activeSitesCount = visibleSites.length - completedSitesCount;
-    const totalTeamsCount = teams.length;
-    const totalPeopleCount = people.length;
-    const unassignedWOCount = workOrders.filter(w => w.status === 'Unassigned').length;
+
+    // ----------------------------------------------------------------------
+    // 1.5 STATUS LAPANGAN (STAGES SUMMARY FROM siteMasterRecords)
+    // ----------------------------------------------------------------------
+    const stageSummary = useMemo(() => {
+        let menungguPermit = 0;
+        let permitReady = 0;
+        let aksesReady = 0;
+        let implementasi = 0;
+        let issues = 0;
+        let selesai = 0;
+
+        siteMasterRecords.forEach(master => {
+            const stage = master.stage || 'imported';
+
+            if (stage === 'permit_process') menungguPermit++;
+            else if (stage === 'permit_ready') permitReady++;
+            else if (stage === 'akses_ready') aksesReady++;
+            else if (['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done'].includes(stage)) implementasi++;
+            else if (stage === 'completed') selesai++;
+
+            if ((stage as string) === 'issue_hold' || master.stage_notes?.toLowerCase().includes('issue')) {
+                issues++;
+            }
+        });
+
+        return { menungguPermit, permitReady, aksesReady, implementasi, issues, selesai, total: siteMasterRecords.length };
+    }, []);
 
     // ----------------------------------------------------------------------
     // 2. PROJECT TYPE SUMMARY
@@ -133,13 +170,18 @@ const Dashboard = () => {
     ];
 
     const getTypeSummary = (type: ProjectType) => {
+        const typeMasterSites = siteMasterRecords.filter(sm => sm.project_type === type);
+        const importedCount = typeMasterSites.length;
+
+        // Execution sites
         const typeSites = visibleSites.filter(s => {
             const p = activeProjects.find(proj => proj.id === s.projectId);
             return p?.type === type;
         });
-        const count = typeSites.length;
+        const activeCount = typeSites.length;
         const budget = typeSites.reduce((sum, s) => sum + s.budget, 0);
-        return { count, budget };
+
+        return { importedCount, activeCount, budget };
     };
 
     // ----------------------------------------------------------------------
@@ -371,107 +413,146 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            {/* SECTION 3: STATS STRIP */}
-            <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md px-4 py-2 flex items-center gap-4 text-sm font-medium text-slate-600 overflow-x-auto shadow-sm backdrop-blur-sm">
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                    <Building2 className="w-4 h-4 text-slate-400" /> 
-                    <span className="text-slate-800 font-bold">{activeSitesCount}</span> Sites Active
-                    <span className="text-slate-400 mx-1">·</span>
-                    <span className="text-emerald-600">{completedSitesCount} completed</span>
+            {/* SECTION 2.5: TAB 1 STAGE SUMMARY (site_master) */}
+            {activeTab === 'overview' && (
+            <div className="mb-6">
+                <h3 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-emerald-500" />
+                    Status Lapangan <span className="text-xs font-normal text-slate-500">({stageSummary.total} Total Records)</span>
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_process' }); }} className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 text-center leading-tight hover:underline">Menunggu<br/>Permit</span>
+                        <span className="text-lg font-bold text-slate-700">{stageSummary.menungguPermit}</span>
+                    </div>
+                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_ready' }); }} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-emerald-300 transition-colors">
+                        <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider mb-1 text-center leading-tight hover:underline">Permit<br/>Ready</span>
+                        <span className="text-lg font-bold text-emerald-700">{stageSummary.permitReady}</span>
+                    </div>
+                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'akses_ready' }); }} className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
+                        <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider mb-1 text-center leading-tight hover:underline">Akses<br/>Ready</span>
+                        <span className="text-lg font-bold text-blue-700">{stageSummary.aksesReady}</span>
+                    </div>
+                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'implementasi' }); }} className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                        <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider mb-1 hover:underline">Implementasi</span>
+                        <span className="text-lg font-bold text-indigo-700">{stageSummary.implementasi}</span>
+                    </div>
+                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'issue_hold' }); }} className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm relative overflow-hidden group cursor-pointer hover:border-amber-400 transition-colors">
+                        {stageSummary.issues > 0 && <div className="absolute inset-0 bg-red-100/50 animate-pulse mix-blend-multiply pointer-events-none"></div>}
+                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1 relative z-10 pointer-events-none group-hover:underline">
+                            Issue ⚡
+                        </span>
+                        <span className="text-lg font-bold text-amber-700 relative z-10 pointer-events-none">{stageSummary.issues}</span>
+                    </div>
+                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'completed' }); }} className="bg-emerald-500 border border-emerald-600 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm text-white relative cursor-pointer hover:bg-emerald-600 transition-colors group">
+                        <span className="text-[10px] font-semibold text-emerald-100 uppercase tracking-wider mb-1 pointer-events-none group-hover:underline">Selesai</span>
+                        <span className="text-lg font-bold text-white pointer-events-none">{stageSummary.selesai}</span>
+                        <CheckCircle2 className="w-8 h-8 absolute -right-2 -bottom-2 text-white/20 pointer-events-none" />
+                    </div>
                 </div>
-                <div className="w-px h-4 bg-slate-300"></div>
-                
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                    <Users className="w-4 h-4 text-slate-400" /> 
-                    <span className="text-slate-800 font-bold">{totalTeamsCount}</span> Teams
-                </div>
-                <div className="w-px h-4 bg-slate-300"></div>
-
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                    <Users className="w-4 h-4 text-slate-400" /> 
-                    <span className="text-slate-800 font-bold">{totalPeopleCount}</span> People
-                </div>
-                <div className="w-px h-4 bg-slate-300"></div>
-
-                <Link to="/work-orders" className="flex items-center gap-2 whitespace-nowrap hover:text-blue-600 group">
-                    <FileSpreadsheet className="w-4 h-4 text-amber-500" /> 
-                    <span className="text-amber-600 font-bold group-hover:underline">{unassignedWOCount}</span> Unassigned WOs
-                </Link>
             </div>
+            )}
 
-            {/* SECTION 4: PROJECT TYPE SUMMARY GRID */}
-             <div>
-                <h3 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">Overview per Tipe Project</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    {projectTypes.map(type => {
-                        const summary = getTypeSummary(type.id);
-                        if (summary.count === 0) {
+            {/* SECTION 3: TAB 1 STRIP & MAP WIDGET & OVERVIEW PER TIPE (site_master driven) */}
+            {activeTab === 'overview' && (
+                <>
+                {/* STRIP */}
+                <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md px-4 py-2 flex items-center gap-4 text-sm font-medium text-slate-600 overflow-x-auto shadow-sm backdrop-blur-sm mb-6">
+                    <div className="flex items-center gap-2 whitespace-nowrap px-3 py-1 bg-white rounded-md border border-[var(--glass-border)] shadow-sm">
+                        <Users className="w-4 h-4 text-[var(--coral-500)]" />
+                        <span className="font-bold text-[var(--text-primary)]">{teams.length}</span> Teams Active
+                    </div>
+                </div>
+
+                {/* OVERVIEW PER TIPE ROW */}
+                <div>
+                    <h3 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-blue-500" />
+                            Overview per Tipe
+                        </div>
+                        <span className="text-xs font-normal text-slate-500 hover:text-blue-600 cursor-pointer flex items-center">
+                            Lihat Semua Tipe <ChevronRight className="w-3 h-3 ml-1" />
+                        </span>
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        {projectTypes.map((t) => {
+                            const summary = getTypeSummary(t.id);
                             return (
-                                <div key={type.id} className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-3 h-[90px] flex flex-col items-center justify-center opacity-70">
-                                    <span className="font-bold text-slate-400 text-sm">{type.label}</span>
-                                    <span className="text-xs text-slate-400 mt-1 italic">Belum ada project</span>
-                                </div>
-                            );
-                        }
-                        return (
-                            <Link 
-                                key={type.id} 
-                                to={`/projects/type/${type.id}/sites`}
-                                className="bg-white border border-slate-200 rounded-lg p-3 h-[90px] flex flex-col justify-between hover:shadow-md hover:border-blue-300 transition-all group"
-                            >
-                                <div className="flex justify-between items-start">
-                                    <span className={clsx("px-2 py-0.5 rounded text-[10px] font-bold uppercase", getBadgeClass(type.id))}>{type.label}</span>
-                                    <span className="text-lg font-bold text-slate-800 leading-none">{summary.count} <span className="text-[10px] text-slate-500 font-normal">Sites</span></span>
-                                </div>
-                                <div className="flex justify-between items-end">
+                                <Link to={`/projects/type/${t.id.toLowerCase()}/sites`} key={t.id} className="bg-white border text-left border-[var(--glass-border)] rounded-xl p-4 shadow-sm hover:shadow-md transition-all hover:border-[var(--blue-300)] group flex flex-col justify-between h-[120px]">
                                     <div>
-                                        <div className="text-[10px] text-slate-400">Total Budget</div>
-                                        <div className="font-mono text-xs font-bold text-slate-700">{formatRupiah(summary.budget)}</div>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-xs font-bold text-[var(--text-secondary)] tracking-wider">TIPE</span>
+                                            <span className={clsx("w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-110 group-hover:rotate-3", t.color)}>
+                                                <Building2 className="w-4 h-4" />
+                                            </span>
+                                        </div>
+                                        <h4 className="text-lg font-black text-[var(--text-primary)]">{t.label}</h4>
                                     </div>
-                                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                                </div>
-                            </Link>
-                        );
-                    })}
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <div className="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold text-slate-600 border border-slate-200">
+                                            {summary.importedCount} Master
+                                        </div>
+                                        {summary.activeCount > 0 && (
+                                            <div className="bg-blue-50 px-2 py-1 rounded text-[10px] font-bold text-blue-600 border border-blue-200 flex items-center gap-1 shrink-0">
+                                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
+                                                {summary.activeCount} Aktif
+                                            </div>
+                                        )}
+                                    </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
-
+                </>
+            )}
             {/* SECTION 5: DASHBOARD TABS */}
-            <div className="flex items-center gap-1 border-b border-slate-200 mb-6">
-                <button 
-                    onClick={() => setActiveTab('overview')}
+            <div className="flex bg-[var(--navy-900)] text-slate-300 px-6 pt-1 sticky top-16 z-30 shadow-md">
+                <button
+                    onClick={() => {
+                        setSearchParams({ tab: 'overview' });
+                    }}
                     className={clsx(
-                        "px-4 py-2.5 text-sm font-bold border-b-2 transition-colors",
-                        activeTab === 'overview' ? "border-blue-600 text-blue-600 bg-blue-50/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                        "px-6 py-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2",
+                        activeTab === 'overview'
+                        ? 'border-[var(--blue-400)] text-white bg-slate-800/50 rounded-t-lg'
+                        : 'border-transparent hover:text-white hover:bg-slate-800/30 rounded-t-lg'
                     )}
                 >
+                    <Building2 className="w-4 h-4" />
                     Overview
                 </button>
-                <button 
-                    onClick={() => setActiveTab('all-sites')}
+                <button
+                    onClick={() => {
+                        setSearchParams({ tab: 'map' });
+                    }}
                     className={clsx(
-                        "px-4 py-2.5 text-sm font-bold border-b-2 transition-colors",
-                        activeTab === 'all-sites' ? "border-blue-600 text-blue-600 bg-blue-50/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                        "px-6 py-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2",
+                        activeTab === 'map'
+                        ? 'border-[var(--blue-400)] text-white bg-slate-800/50 rounded-t-lg'
+                        : 'border-transparent hover:text-white hover:bg-slate-800/30 rounded-t-lg'
                     )}
                 >
-                    All Sites
-                </button>
-                <button 
-                    onClick={() => setActiveTab('work-orders')}
-                    className={clsx(
-                        "px-4 py-2.5 text-sm font-bold border-b-2 transition-colors flex items-center gap-2",
-                        activeTab === 'work-orders' ? "border-blue-600 text-blue-600 bg-blue-50/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                    )}
-                >
-                    All Work Orders
-                    {unassignedWOCount > 0 && <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{unassignedWOCount}</span>}
+                    <MapPin className="w-4 h-4" />
+                    Peta Sites
                 </button>
             </div>
+
+            {/* TAB CONTENT: PETA SITES */}
+            {activeTab === 'map' && (
+                <div className="h-[calc(100vh-140px)] w-full relative -mx-6 -mb-16 -mt-6">
+                    <MapWidget 
+                        height="100%" 
+                        presetStage={searchParams.get('stage') || undefined} 
+                    />
+                </div>
+            )}
 
             {/* TAB CONTENT: OVERVIEW */}
             {activeTab === 'overview' && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-300">
-                    
+
                     {/* LEFT COLUMN (60%) */}
                     <div className="lg:col-span-7 space-y-6">
                     {/* Action Needed */}
@@ -504,7 +585,7 @@ const Dashboard = () => {
                                                 <Clock className="w-3 h-3 text-amber-500" /> {item.statusText}
                                             </div>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={() => navigate(item.link)}
                                             className={clsx("px-3 py-1.5 rounded text-xs font-bold transition-colors whitespace-nowrap", item.btnClass)}
                                         >
@@ -636,65 +717,6 @@ const Dashboard = () => {
                         </div>
                     </div>
                     </div>
-                </div>
-            )}
-
-            {/* TAB CONTENT: ALL SITES */}
-            {activeTab === 'all-sites' && (
-                <div className="bg-white border border-slate-200 rounded-lg shadow-sm animate-in fade-in duration-300">
-                     <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
-                        <h3 className="font-bold text-slate-800">Semua Site</h3>
-                    </div>
-                    <div className="p-0 overflow-x-auto">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500">
-                                    <th className="px-4 py-3 font-semibold">Site ID & Name</th>
-                                    <th className="px-4 py-3 font-semibold">Project & Type</th>
-                                    <th className="px-4 py-3 font-semibold">Termin (Mock)</th>
-                                    <th className="px-4 py-3 font-semibold text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {visibleSites.map(s => {
-                                    const proj = activeProjects.find(p => p.id === s.projectId);
-                                    return (
-                                        <tr key={s.id} className="hover:bg-slate-50">
-                                            <td className="px-4 py-3">
-                                                <div className="font-bold text-slate-700">{s.name}</div>
-                                                <div className="text-xs text-slate-400">{s.id.toUpperCase()}</div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="text-sm text-slate-600">{proj?.name || '-'}</div>
-                                                {proj && <span className={clsx("mt-1 inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", getBadgeClass(proj.type))}>{proj.type}</span>}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="text-xs text-slate-500">
-                                                    Progress placeholder
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <button onClick={() => navigate(`/sites/${s.id}`)} className="text-blue-600 hover:text-blue-700 font-medium text-xs px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition-colors">Lihat Detail</button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                        {visibleSites.length === 0 && (
-                            <div className="p-8 text-center text-slate-500 text-sm">Belum ada site yang aktif.</div>
-                        )}
-                    </div>
-                </div>
-            )}
-            {/* TAB CONTENT: WORK ORDERS (MINI VIEW) */}
-            {activeTab === 'work-orders' && (
-                <div className="bg-white border border-slate-200 rounded-lg shadow-sm animate-in fade-in duration-300 p-8 text-center">
-                    <h3 className="text-lg font-bold text-slate-700 mb-2">Work Orders (Mini View)</h3>
-                    <p className="text-slate-500 text-sm mb-4">You can view all your work orders here without leaving the dashboard.</p>
-                    <button onClick={() => navigate('/work-orders')} className="bg-blue-600 text-white font-medium text-sm px-4 py-2 rounded shadow-sm hover:bg-blue-700 transition-colors">
-                        Go to Work Orders Page →
-                    </button>
                 </div>
             )}
         </div>

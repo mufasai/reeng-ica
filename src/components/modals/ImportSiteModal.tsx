@@ -5,7 +5,7 @@ import clsx from 'clsx';
 interface ImportSiteModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onImportExcel: () => void;
+    onImportExcel: (parsedData: any[], fileName: string) => void;
     onAddManual: () => void;
 }
 
@@ -13,11 +13,31 @@ const ImportSiteModal: React.FC<ImportSiteModalProps> = ({ isOpen, onClose, onIm
     const [activeTab, setActiveTab] = useState<'excel' | 'manual'>('excel');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [importFormat, setImportFormat] = useState<'A' | 'B' | null>(null);
 
     // Reset file when modal closes
     const handleClose = () => {
         setSelectedFile(null);
+        setImportFormat(null);
         onClose();
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setSelectedFile(file || null);
+        
+        if (file) {
+            // Mock format detection based on file name or random chance for UI feedback
+            if (file.name.toLowerCase().includes('format_b') || file.name.toLowerCase().includes('batch5')) {
+                setImportFormat('B');
+            } else if (file.name.toLowerCase().includes('format_a') || file.name.toLowerCase().includes('batch2')) {
+                setImportFormat('A');
+            } else {
+                setImportFormat(Math.random() > 0.5 ? 'A' : 'B');
+            }
+        } else {
+            setImportFormat(null);
+        }
     };
 
     if (!isOpen) return null;
@@ -72,7 +92,7 @@ const ImportSiteModal: React.FC<ImportSiteModalProps> = ({ isOpen, onClose, onIm
                                 className="hidden" 
                                 ref={fileInputRef} 
                                 accept=".xlsx, .xls"
-                                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                                onChange={handleFileChange}
                             />
                             <div 
                                 className={clsx(
@@ -87,7 +107,14 @@ const ImportSiteModal: React.FC<ImportSiteModalProps> = ({ isOpen, onClose, onIm
                                             <FileSpreadsheet className="w-6 h-6 text-emerald-500" />
                                         </div>
                                         <h3 className="text-sm font-bold text-emerald-800 mb-1">{selectedFile.name}</h3>
-                                        <p className="text-xs text-emerald-600 mb-4">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                                        <p className="text-xs text-emerald-600 mb-2">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                                        
+                                        {importFormat && (
+                                            <div className="inline-flex max-w-sm mb-4 items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-200 rounded text-xs font-semibold text-emerald-700">
+                                                <span>Detected Format: {importFormat === 'A' ? 'A (Batch 2 / NE_ID)' : 'B (Batch 5 / IOMS)'}</span>
+                                            </div>
+                                        )}
+                                        <br/>
                                         <button className="px-4 py-2 bg-white border border-emerald-300 rounded text-sm font-medium text-emerald-700 hover:bg-emerald-50 shadow-sm transition-colors">
                                             Change File
                                         </button>
@@ -105,15 +132,24 @@ const ImportSiteModal: React.FC<ImportSiteModalProps> = ({ isOpen, onClose, onIm
                                     </>
                                 )}
                             </div>
+                            
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700 space-y-2">
+                                <p><strong>Import akan dilakukan secara otomatis oleh sistem:</strong></p>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li><strong>Site Baru:</strong> Akan ditambahkan ke database.</li>
+                                    <li><strong>Site Existing:</strong> Sistem otomatis merge (update koordinat & info TI) tanpa mengubah data operasional (stage, tim, dll).</li>
+                                </ul>
+                            </div>
 
-                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3">
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3">
                                 <span className="text-xl">💡</span>
                                 <div className="text-sm text-blue-800">
                                     <p className="font-bold mb-1">Catatan Import:</p>
                                     <ul className="list-disc pl-4 space-y-1 text-blue-700/80">
                                         <li>Kolom wajib: <code>SITE_ID</code>, <code>Region</code>, <code>PO Tsel</code>.</li>
-                                        <li>Site yang sudah ada akan diabaikan atau diupdate berdasarkan SITE_ID.</li>
-                                        <li>Status awal otomatis diset menjadi <strong>Unassigned</strong>.</li>
+                                        <li>Satu baris di Excel = Satu baris di Site Master.</li>
+                                        <li>Jika terdapat format IOMS/Batch 5 (ada kolom SECTOR), akan dipecah menjadi multiple record dengan <code>unique_key</code> (contoh: <code>SRG277-S1</code>). Jika tidak ada (Format A), <code>unique_key</code> = <code>SITE_ID</code>.</li>
+                                        <li>Kolom tambahan akan otomatis disimpan ke field <code>extra_data</code> dengan format JSON.</li>
                                     </ul>
                                 </div>
                             </div>
@@ -180,7 +216,18 @@ const ImportSiteModal: React.FC<ImportSiteModalProps> = ({ isOpen, onClose, onIm
                     </button>
                     {activeTab === 'excel' ? (
                         <button 
-                            onClick={onImportExcel}
+                            onClick={() => {
+                                // Simulate parsing result
+                                const mockParsed = importFormat === 'B' ? [
+                                    { unique_key: 'SRG277-S1', site_id: 'SRG277', site_name: 'TEGAL_ALUR', sector: '1', tower_provider: 'Tower Bersama', region: 'R03 Jakarta & Banten', po_tsel: '4200052176' },
+                                    { unique_key: 'SRG277-S3', site_id: 'SRG277', site_name: 'TEGAL_ALUR', sector: '3', tower_provider: 'Tower Bersama', region: 'R03 Jakarta & Banten', po_tsel: '4200052176' }
+                                ] : [
+                                    { unique_key: 'SRG278', site_id: 'SRG278', site_name: 'TEST_FORMAT_A_S1', region: 'R03 Jakarta & Banten', po_tsel: '4200052176' },
+                                    // Simulated existing record update
+                                    { unique_key: 'sm1', site_id: 'sm1', site_name: 'Existing Site Updated', region: 'R03 Jakarta & Banten', po_tsel: '4200052176', longitude: 106.8, latitude: -6.2 }
+                                ];
+                                onImportExcel(mockParsed, selectedFile.name);
+                            }}
                             disabled={!selectedFile}
                             className={clsx(
                                 "px-4 py-2 text-sm font-medium text-white rounded-md shadow-sm transition-colors flex items-center gap-2",

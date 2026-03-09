@@ -113,6 +113,7 @@ export interface Site {
   contractNumber?: string;
   startDate?: string;
   endDate?: string;
+  import_source?: string;
 }
 
 export interface ProjectFile {
@@ -210,19 +211,7 @@ export const projects: Project[] = [
 ];
 
 export const sites: Site[] = [
-    { 
-        id: 's1', projectId: 'p1', name: 'Site 1A', location: 'Jakarta Selatan', budget: 500000000,
-        teamId: 't1', jobName: 'Install Filter Unit A', contractNumber: 'CTR-2024-001A', startDate: '2024-01-10', endDate: '2024-03-10'
-    },
-    // New Demo Sites
-    { 
-        id: 's1b', projectId: 'p1', name: 'Site 1B', location: 'Jakarta Timur', budget: 750000000,
-        teamId: 't3', jobName: 'Install Filter Unit B', contractNumber: 'CTR-2024-001B', startDate: '2024-02-01', endDate: '2024-04-01'
-    },
-    { 
-        id: 's1c', projectId: 'p1', name: 'Site 1C', location: 'Jakarta Pusat', budget: 400000000,
-        teamId: 't3', jobName: 'Install Filter Unit C', contractNumber: 'CTR-2024-001C', startDate: '2024-02-15', endDate: '2024-04-15'
-    },
+    // Execution sites array (empty for FILTER initially, keeping COMBAT site for example if needed)
     { 
         id: 's2', projectId: 'p2', name: 'Site B - Combat', location: 'Bandung', budget: 750000000,
         teamId: 't2', jobName: 'Site Readiness', contractNumber: 'CTR-2024-002', startDate: '2024-02-01', endDate: '2024-04-01'
@@ -418,25 +407,7 @@ export interface FilterTerm {
     paidAt?: string;
 }
 
-export const filterTerms: FilterTerm[] = [
-    // Site 1A (S1) - In Progress
-    { id: 'ft-1', siteId: 's1', step: 1, name: 'Termin 1 (30%)', percentage: 30, status: 'paid', amountRequest: 150000000, amountPaid: 150000000, paidAt: '2024-01-15' },
-    { id: 'ft-2', siteId: 's1', step: 2, name: 'Termin 2 (50%)', percentage: 50, status: 'approved', amountRequest: 250000000, submittedAt: '2024-02-10' },
-    { id: 'ft-3', siteId: 's1', step: 3, name: 'Termin 3 (10%)', percentage: 10, status: 'pending' },
-    { id: 'ft-4', siteId: 's1', step: 4, name: 'Termin 4 (10%)', percentage: 10, status: 'pending' },
-
-    // Site 1B (S1B) - Demo Pending Approval
-    { id: 'ft-s1b-1', siteId: 's1b', step: 1, name: 'Termin 1 (30%)', percentage: 30, status: 'pengajuan', amountRequest: 225000000, submittedAt: '2024-02-20' },
-    { id: 'ft-s1b-2', siteId: 's1b', step: 2, name: 'Termin 2 (50%)', percentage: 50, status: 'pending' },
-    { id: 'ft-s1b-3', siteId: 's1b', step: 3, name: 'Termin 3 (10%)', percentage: 10, status: 'pending' },
-    { id: 'ft-s1b-4', siteId: 's1b', step: 4, name: 'Termin 4 (10%)', percentage: 10, status: 'pending' },
-
-    // Site 1C (S1C) - Fresh
-    { id: 'ft-s1c-1', siteId: 's1c', step: 1, name: 'Termin 1 (30%)', percentage: 30, status: 'pending' },
-    { id: 'ft-s1c-2', siteId: 's1c', step: 2, name: 'Termin 2 (50%)', percentage: 50, status: 'pending' },
-    { id: 'ft-s1c-3', siteId: 's1c', step: 3, name: 'Termin 3 (10%)', percentage: 10, status: 'pending' },
-    { id: 'ft-s1c-4', siteId: 's1c', step: 4, name: 'Termin 4 (10%)', percentage: 10, status: 'pending' },
-];
+export const filterTerms: FilterTerm[] = [];
 
 export interface CombatSubStep {
     id: string;
@@ -521,11 +492,17 @@ export const combatTerms: CombatTerm[] = [
 
 export type SiteMasterStatus = 'unassigned' | 'assigned' | 'spk_active' | 'completed' | 'reallocated' | 'on_hold';
 
+export type SiteStage = 'imported' | 'assigned' | 'permit_process' | 'permit_ready' | 'akses_process' | 'akses_ready' | 'implementasi' | 'rfi_done' | 'rfs_done' | 'dokumen_done' | 'bast' | 'invoice' | 'completed';
+
 export interface SiteMaster {
     id: string; // BIGINT equivalent
+    unique_key: string; // e.g. "BKS598-S1" or "BKS598"
     site_id: string; // e.g., "BKS598"
     ne_id: string; // e.g., "BKS598MT1"
     site_name: string;
+    cluster?: string;
+    sector?: string;
+    tower_provider?: string;
     plan_capex: string;
     area: string;
     region: string;
@@ -538,8 +515,16 @@ export interface SiteMaster {
 
     project_type: ProjectType;
     status: SiteMasterStatus;
+    stage: SiteStage;
+    stage_updated_at?: string;
+    stage_notes?: string;
     ineom_registered: boolean;
+    import_source?: string;
     notes?: string;
+    extra_data?: Record<string, any>;
+
+    longitude?: number;
+    latitude?: number;
 
     work_order_id?: string; // Link to Work Order
     project_site_id?: string; // Link to Execution Site
@@ -552,9 +537,12 @@ export interface SiteMaster {
 export const siteMasterRecords: SiteMaster[] = [
     {
         id: 'sm1',
+        unique_key: 'BKS598',
         site_id: 'BKS598',
         ne_id: 'BKS598MT1', // Adjusted to match site_id prefix for realism
         site_name: 'CIPINANGJAYA2DMT',
+        sector: '1',
+        tower_provider: 'Tower Bersama',
         plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
         area: 'Area 2',
         region: 'R03 Jakarta & Banten',
@@ -566,16 +554,24 @@ export const siteMasterRecords: SiteMaster[] = [
         mitra: 'Smartelco',
         project_type: 'FILTER',
         status: 'unassigned',
+        stage: 'imported',
+        stage_updated_at: '2024-02-10T10:00:00Z',
         ineom_registered: false,
         batch_ref: 'EPROC20240210001_Smartelco_BoQ_Filter_Batch1',
         imported_by: 'u_adm',
         imported_at: '2024-02-10T10:00:00Z',
+        latitude: -6.2479,
+        longitude: 106.5844,
     },
     {
         id: 'sm2',
-        site_id: 'JKS026',
-        ne_id: 'JKS026MT1',
-        site_name: 'PONDOKINDAH2MT',
+        unique_key: 'JKS026',
+        site_id: 'JKT010',
+        ne_id: 'JKT010-S1',
+        site_name: 'Menara Sudirman',
+        cluster: 'JAKSEL',
+        sector: 'Sector 1',
+        tower_provider: 'TBG',
         plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
         area: 'Area 2',
         region: 'R03 Jakarta & Banten',
@@ -587,17 +583,25 @@ export const siteMasterRecords: SiteMaster[] = [
         mitra: 'Smartelco',
         project_type: 'FILTER',
         status: 'assigned',
+        stage: 'permit_process',
+        stage_updated_at: '2024-02-12T08:30:00Z',
+        stage_notes: 'Pengurusan permit sedang berjalan',
         ineom_registered: true,
         work_order_id: 'wo-1', // Linked to WO-2024-001
         batch_ref: 'EPROC20240210001_Smartelco_BoQ_Filter_Batch1',
         imported_by: 'u_adm',
         imported_at: '2024-02-10T10:05:00Z',
+        latitude: -6.2255,
+        longitude: 106.8016,
     },
     {
         id: 'sm3',
+        unique_key: 'BDS105',
         site_id: 'BDS105',
         ne_id: 'BDS105MT2',
         site_name: 'DAGO-PAKAR',
+        sector: '3',
+        tower_provider: 'Mitratel',
         plan_capex: 'CAPEX RAN COMBAT 2024',
         area: 'Area 3',
         region: 'R12 Jawa Barat',
@@ -609,18 +613,24 @@ export const siteMasterRecords: SiteMaster[] = [
         mitra: 'Smartelco',
         project_type: 'COMBAT',
         status: 'spk_active',
+        stage: 'implementasi',
+        stage_updated_at: '2024-02-28T14:00:00Z',
         ineom_registered: true,
         work_order_id: 'wo-2', // Linked to WO-2024-002
         project_site_id: 's2', // Linked to actual Site 2
         batch_ref: 'EPROC20240215002_Smartelco_BoQ_Combat_Batch1',
         imported_by: 'u_mgr',
         imported_at: '2024-02-15T14:30:00Z',
+        latitude: -6.8795,
+        longitude: 107.6254,
     },
     {
         id: 'sm4',
+        unique_key: 'TGR088',
         site_id: 'TGR088',
         ne_id: 'TGR088MT1',
         site_name: 'BSD_CITY_SQUARE',
+        sector: '1',
         plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
         area: 'Area 2',
         region: 'R03 Jakarta & Banten',
@@ -632,17 +642,23 @@ export const siteMasterRecords: SiteMaster[] = [
         mitra: 'Smartelco',
         project_type: 'FILTER',
         status: 'completed',
+        stage: 'completed',
+        stage_updated_at: '2024-03-01T10:00:00Z',
         ineom_registered: true,
         work_order_id: 'wo-1',
         batch_ref: 'EPROC20240105001_Smartelco_BoQ_Filter_Early',
         imported_by: 'u_adm',
         imported_at: '2024-01-05T09:15:00Z',
+        latitude: -6.2954,
+        longitude: 106.6436,
     },
     {
         id: 'sm5',
+        unique_key: 'JKS999',
         site_id: 'JKS999',
         ne_id: 'JKS999MT1',
         site_name: 'GHOST_SITE_SOUTH',
+        sector: '2',
         plan_capex: 'CAPEX RAN Filter Frekuensi 900 MHz 2024',
         area: 'Area 2',
         region: 'R03 Jakarta & Banten',
@@ -654,11 +670,100 @@ export const siteMasterRecords: SiteMaster[] = [
         mitra: 'Smartelco',
         project_type: 'FILTER',
         status: 'reallocated',
+        stage: 'imported',
+        stage_updated_at: '2024-02-10T10:00:00Z',
         ineom_registered: false,
         notes: 'Site sudah dialihkan ke mitra lain',
         batch_ref: 'EPROC20240210001_Smartelco_BoQ_Filter_Batch1',
         imported_by: 'u_adm',
         imported_at: '2024-02-10T10:00:00Z',
+        // Intentional: missing coordinates to test "missing coordinates" logic
+    }
+];
+
+export const STAGE_ORDER = [
+    'imported', 'assigned', 'permit_process', 'permit_ready',
+    'akses_process', 'akses_ready', 'implementasi',
+    'rfi_done', 'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed'
+];
+
+export interface SiteStageLog {
+    id: string; // auto-increment / SurrealDB auto ID
+    site_master_id: string; // reference to site_master (required)
+    from_stage: SiteStage | null; // string, nullable (null if first stage)
+    to_stage: SiteStage; // string, required
+    notes?: string; // text, nullable
+    created_by: string; // reference to users (nullable) - user ID
+    created_at: string; // datetime, default now()
+    evidence_files?: string[]; // array of site_files IDs
+    source?: 'manual' | 'bulk_import'; // flag for bulk imported stage transitions
+}
+
+export const siteStageLogs: SiteStageLog[] = [
+    { id: 'log-1', site_master_id: 'sm2', from_stage: 'imported', to_stage: 'assigned', created_by: 'u_mgr', created_at: '2024-02-11T09:00:00Z' },
+    { id: 'log-2', site_master_id: 'sm2', from_stage: 'assigned', to_stage: 'permit_process', notes: 'Pengurusan permit sedang berjalan', created_by: 'u_lead', created_at: '2024-02-12T08:30:00Z', evidence_files: ['file-1'] },
+    { id: 'log-3', site_master_id: 'sm3', from_stage: 'akses_ready', to_stage: 'implementasi', created_by: 'u_eng', created_at: '2024-02-28T14:00:00Z' }
+];
+
+// --- UNIFIED SITE FILES ---
+export interface SiteFile {
+    id: string;
+    site_id: string;
+    filename: string;
+    original_name: string;
+    file_url: string;
+    mime_type: string;
+    file_size: number;
+    source: 'direct_upload' | 'stage_update';
+    stage_context?: string;
+    stage_log_id?: string;
+    uploaded_by: string;
+    uploaded_at: string;
+    description?: string;
+    tags?: string[];
+}
+
+export const mockSiteFiles: SiteFile[] = [
+    {
+        id: 'file-1',
+        site_id: 'sm2', // BKS598
+        filename: 'permit_tpas_BKS598.pdf',
+        original_name: 'permit_tpas.pdf',
+        file_url: '#',
+        mime_type: 'application/pdf',
+        file_size: 2100000, // ~2.1MB
+        source: 'stage_update',
+        stage_context: 'permit_process→permit_ready',
+        stage_log_id: 'log-2',
+        uploaded_by: 'Sari',
+        uploaded_at: '2024-02-12T08:31:00Z',
+        tags: ['permit', 'TPAS']
+    },
+    {
+        id: 'file-2',
+        site_id: 'sm2', // BKS598
+        filename: 'foto_site_BKS598.jpg',
+        original_name: 'foto_site.jpg',
+        file_url: '#',
+        mime_type: 'image/jpeg',
+        file_size: 1400000, // ~1.4MB
+        source: 'stage_update',
+        stage_context: 'permit_process→permit_ready',
+        stage_log_id: 'log-2',
+        uploaded_by: 'Sari',
+        uploaded_at: '2024-02-12T08:31:00Z'
+    },
+    {
+        id: 'file-3',
+        site_id: 'sm2',
+        filename: 'spk_BKS598.pdf',
+        original_name: 'spk_BKS598.pdf',
+        file_url: '#',
+        mime_type: 'application/pdf',
+        file_size: 1200000, // ~1.2MB
+        source: 'direct_upload',
+        uploaded_by: 'Admin',
+        uploaded_at: '2024-02-10T10:00:00Z'
     }
 ];
 
@@ -670,7 +775,7 @@ export const siteMasterRecords: SiteMaster[] = [
  * - management/backoffice/finance: sees all sites across all projects.
  * - team_leader/engineer: sees only sites assigned to their team.
  */
-export const getActiveSiteCountsByType = (currentUser: User, allProjects: Project[], allSites: Site[]) => {
+export const getActiveSiteCountsByType = (currentUser: User, _allProjects: Project[], masters: SiteMaster[]) => {
     const counts: Record<ProjectType, number> = {
         FILTER: 0,
         COMBAT: 0,
@@ -687,15 +792,22 @@ export const getActiveSiteCountsByType = (currentUser: User, allProjects: Projec
     // Is the user restricted?
     const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
 
-    allSites.forEach(site => {
+    masters.forEach(site => {
+        // Find assigned team from work_order
+        let siteTeamId: string | undefined;
+        if (site.work_order_id) {
+            const wo = workOrders.find(w => w.id === site.work_order_id);
+            if (wo) siteTeamId = wo.assignedTeamId;
+        }
+
         // If restricted, they can only see sites assigned to their team
-        if (isRestricted && (!site.teamId || !userTeamIds.includes(site.teamId))) {
+        if (isRestricted && (!siteTeamId || !userTeamIds.includes(siteTeamId))) {
             return;
         }
 
-        const project = allProjects.find(p => p.id === site.projectId);
-        if (project && project.status === 'active') {
-            counts[project.type]++;
+        // Just use project_type directly
+        if (site.project_type && counts[site.project_type] !== undefined) {
+             counts[site.project_type]++;
         }
     });
 
