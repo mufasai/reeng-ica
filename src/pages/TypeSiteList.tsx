@@ -5,8 +5,11 @@ import {
   MapPin, 
   Layers,
   List,
-  FileSpreadsheet
+  FileSpreadsheet,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
+import ModernKPICard from '../components/stats/ModernKPICard';
 import MapWidget from '../components/MapWidget';
 import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
 import { 
@@ -154,9 +157,9 @@ const TypeSiteList = () => {
   const formatFull = (amount: number | null): string =>
     amount ? `Rp ${amount.toLocaleString('id-ID')}` : '—';
 
-  // Calculate financial totals for FILTER sites
+  // Calculate financial totals for FILTER & COMBAT sites
   const calculateFinancials = () => {
-    if (upperType !== 'FILTER') return null;
+    if (upperType !== 'FILTER' && upperType !== 'COMBAT') return null;
     const siteIds = matchedSites.map(s => s.site_id || s.id);
 
     // Total Harga: sum of site.budget (the contract value field) for matched sites
@@ -405,127 +408,129 @@ const TypeSiteList = () => {
           {matchedSites.length > 0 && (
             <div className="relative">
               <div
-                className="flex gap-3 overflow-x-auto pb-1"
+                className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {/* ── Operational Cards (4) ── */}
-                <div className="kpi blue group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
-                  <MapPin className="kpi-icon-overlay" />
-                  <div className="kpi-lbl">Total Sites</div>
-                  <div className="kpi-val">{statCards.totalSites}</div>
-                  <div className="kpi-desc">{statCards.totalSites} active, {statCards.completedSites} completed</div>
-                </div>
-                <div className="kpi violet group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
-                  <Layers className="kpi-icon-overlay" />
-                  <div className="kpi-lbl">Total Teams</div>
-                  <div className="kpi-val">{statCards.totalTeams}</div>
-                  <div className="kpi-desc">Unique teams assigned</div>
-                </div>
-                <div className="kpi green group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
-                  <FolderKanban className="kpi-icon-overlay" />
-                  <div className="kpi-lbl">Total People</div>
-                  <div className="kpi-val">{statCards.totalPeople}</div>
-                  <div className="kpi-desc">Across all {upperType} teams</div>
-                </div>
-                <div className="kpi amber group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
-                  <List className="kpi-icon-overlay" />
-                  <div className="kpi-lbl">Menunggu Aksi</div>
-                  <div className="kpi-val amber flex items-center gap-2">
-                    {statCards.actionNeededCount}
-                    {statCards.actionNeededCount > 0 && <span className="pulse"></span>}
-                  </div>
-                  <div className="kpi-hint flex-1" title={statCards.mostUrgentAction}>
-                    {statCards.actionNeededCount > 0 ? (
-                      <span className="truncate w-full block">{statCards.mostUrgentAction.length > 30 ? statCards.mostUrgentAction.substring(0, 30) + '...' : statCards.mostUrgentAction}</span>
-                    ) : <span className="text-slate-400 font-normal truncate">No immediate action</span>}
-                  </div>
-                </div>
+                <ModernKPICard
+                    title="Total Sites"
+                    value={statCards.totalSites}
+                    icon={MapPin}
+                    iconClass="bg-blue-100 text-blue-600"
+                    subtitle={`${statCards.completedSites} completed`}
+                    minWidth={200}
+                />
+                
+                <ModernKPICard
+                    title="Total Teams"
+                    value={statCards.totalTeams}
+                    icon={Layers}
+                    iconClass="bg-violet-100 text-violet-600"
+                    subtitle="Unique teams assigned"
+                    minWidth={200}
+                />
+                
+                <ModernKPICard
+                    title="Total People"
+                    value={statCards.totalPeople}
+                    icon={FolderKanban}
+                    iconClass="bg-emerald-100 text-emerald-600"
+                    subtitle={`Across all ${upperType} teams`}
+                    minWidth={200}
+                />
+                
+                <ModernKPICard
+                    title="Menunggu Aksi"
+                    value={
+                        <div className="flex items-center gap-2">
+                            {statCards.actionNeededCount}
+                            {statCards.actionNeededCount > 0 && (
+                                <span className="relative flex h-2.5 w-2.5 mx-1">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                                </span>
+                            )}
+                        </div>
+                    }
+                    icon={AlertCircle}
+                    iconClass={statCards.actionNeededCount > 0 ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-400"}
+                    subtitle={
+                        statCards.actionNeededCount > 0 
+                            ? <span className="truncate w-full block">{statCards.mostUrgentAction}</span>
+                            : "No immediate action"
+                    }
+                    trend={statCards.actionNeededCount > 0 ? { direction: 'down', label: 'Urgent', colorClass: 'bg-amber-100 text-amber-700' } : undefined}
+                    titleTooltip={statCards.mostUrgentAction}
+                    minWidth={200}
+                />
 
                 {/* ── Divider ── */}
-                {upperType === 'FILTER' && fin && (
-                  <div className="shrink-0 flex items-stretch py-1">
-                    <div className="w-px bg-[var(--glass-border)] mx-1 rounded-full" />
+                {fin && (
+                  <div className="shrink-0 flex items-stretch py-2 mx-1 opacity-50">
+                    <div className="w-px bg-slate-300 rounded-full" />
                   </div>
                 )}
 
-                {/* ── Financial Cards (4) — FILTER only ── */}
-                {upperType === 'FILTER' && fin && (
+                {/* ── Financial Cards (4) — FILTER & COMBAT ── */}
+                {fin && (
                   <>
-                    {/* Total Harga */}
-                    <div
-                      className="kpi blue group shrink-0 cursor-default"
-                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(59,130,246,0.04)' }}
-                      title={fin.totalHarga ? `Total nilai kontrak: ${formatFull(fin.totalHarga)}\nIncl. 70% dari nilai kontrak TI` : 'Belum ada data harga'}
-                    >
-                      <div className="kpi-lbl">Total Harga</div>
-                      <div className="kpi-val" style={{ fontSize: fin.totalHarga && fin.totalHarga >= 1e9 ? 18 : undefined }}>
-                        {fin.totalHarga ? formatRupiah(fin.totalHarga) : '—'}
-                      </div>
-                      <div className="kpi-desc">
-                        {fin.totalHarga ? 'Incl. 70% dari nilai kontrak TI' : 'Belum ada data harga'}
-                      </div>
-                    </div>
+                    <ModernKPICard
+                        title="Total Harga"
+                        value={fin.totalHarga ? formatRupiah(fin.totalHarga) : '—'}
+                        icon={CheckCircle2}
+                        iconClass="bg-blue-50 text-blue-600"
+                        subtitle={fin.totalHarga ? 'Incl. 70% kontrak TI' : 'Belum ada data harga'}
+                        titleTooltip={fin.totalHarga ? `Total: ${formatFull(fin.totalHarga)}\nIncl. 70% dari nilai kontrak TI` : 'Belum ada data harga'}
+                        minWidth={200}
+                    />
 
-                    {/* Budget Terpakai */}
-                    <div
-                      className="kpi amber group shrink-0 cursor-default"
-                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(249,115,22,0.04)' }}
-                      title={fin.budgetTerpakai ? `Terbayar: ${formatFull(fin.budgetTerpakai)}\nMenunggu: ${formatFull(fin.budgetMenunggu)}` : 'Belum ada pembayaran'}
-                    >
-                      <div className="kpi-lbl">Budget Terpakai</div>
-                      <div className="kpi-val">{fin.budgetTerpakai ? formatRupiah(fin.budgetTerpakai) : '—'}</div>
-                      <div className="kpi-desc">
-                        {fin.pct ? `${fin.pct}% dari total harga` : 'Belum ada pembayaran'}
-                      </div>
-                    </div>
+                    <ModernKPICard
+                        title="Budget Terpakai"
+                        value={fin.budgetTerpakai ? formatRupiah(fin.budgetTerpakai) : '—'}
+                        icon={FileSpreadsheet}
+                        iconClass="bg-orange-50 text-orange-600"
+                        subtitle={fin.pct ? `${fin.pct}% dari total` : 'Belum ada pembayaran'}
+                        titleTooltip={fin.budgetTerpakai ? `Terbayar: ${formatFull(fin.budgetTerpakai)}\nMenunggu: ${formatFull(fin.budgetMenunggu)}` : 'Belum ada pembayaran'}
+                        minWidth={200}
+                    />
 
-                    {/* Sisa Budget */}
-                    <div
-                      className="kpi green group shrink-0 cursor-default"
-                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(16,185,129,0.04)' }}
-                      title={fin.sisaBudget !== null ? `Sisa: ${formatFull(fin.sisaBudget)}` : 'Belum ada data harga'}
-                    >
-                      <div className="kpi-lbl">Sisa Budget</div>
-                      <div
-                        className="kpi-val"
-                        style={{ color: fin.sisaBudget !== null && fin.sisaBudget < 0 ? 'var(--red-400, #ef4444)' : undefined }}
-                      >
-                        {fin.sisaBudget !== null ? formatRupiah(fin.sisaBudget) : '—'}
-                      </div>
-                      <div className="kpi-desc">
-                        {fin.sisaBudget !== null
-                          ? (fin.sisaBudget < 0 ? '⚠️ Over budget' : 'Tersedia untuk termin berikutnya')
-                          : 'Belum ada data harga'}
-                      </div>
-                    </div>
+                    <ModernKPICard
+                        title="Sisa Budget"
+                        value={
+                            <span className={fin.sisaBudget !== null && fin.sisaBudget < 0 ? 'text-red-500' : ''}>
+                                {fin.sisaBudget !== null ? formatRupiah(fin.sisaBudget) : '—'}
+                            </span>
+                        }
+                        icon={CheckCircle2}
+                        iconClass="bg-emerald-50 text-emerald-600"
+                        subtitle={fin.sisaBudget !== null ? (fin.sisaBudget < 0 ? '⚠️ Over budget' : 'Tersedia utk termin lain') : 'Belum ada data harga'}
+                        titleTooltip={fin.sisaBudget !== null ? `Sisa: ${formatFull(fin.sisaBudget)}` : 'Belum ada data harga'}
+                        minWidth={200}
+                    />
 
-                    {/* Total Terbayar */}
-                    <div
-                      className="kpi green group shrink-0 cursor-default"
-                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(20,184,166,0.05)', borderTopColor: 'teal' }}
-                      title={Object.entries(fin.perTermin)
-                        .filter(([,v]) => v > 0)
-                        .map(([k,v]) => `${k}: Rp ${v.toLocaleString('id-ID')}`)
-                        .join('\n') || 'Belum ada termin terbayar'}
-                    >
-                      <div className="kpi-lbl">Total Terbayar</div>
-                      <div className="kpi-val">{fin.totalTerbayar ? formatRupiah(fin.totalTerbayar) : '—'}</div>
-                      <div className="kpi-desc" style={{ fontSize: 10 }}>
-                        {Object.entries(fin.perTermin).filter(([,v]) => v > 0).length > 0
-                          ? Object.entries(fin.perTermin)
-                              .filter(([,v]) => v > 0)
-                              .map(([k,v]) => `${k}: ${formatRupiah(v)}`)
-                              .join('  •  ')
-                          : 'Belum ada termin terbayar'}
-                      </div>
-                    </div>
+                    <ModernKPICard
+                        title="Total Terbayar"
+                        value={fin.totalTerbayar ? formatRupiah(fin.totalTerbayar) : '—'}
+                        icon={List}
+                        iconClass="bg-teal-50 text-teal-600"
+                        subtitle={
+                            Object.entries(fin.perTermin).filter(([,v]) => v > 0).length > 0
+                              ? Object.entries(fin.perTermin)
+                                  .filter(([,v]) => v > 0)
+                                  .map(([k,v]) => `${k}: ${formatRupiah(v)}`)
+                                  .join(' • ')
+                              : 'Belum ada termin terbayar'
+                        }
+                        titleTooltip={Object.entries(fin.perTermin).filter(([,v]) => v > 0).map(([k,v]) => `${k}: Rp ${v.toLocaleString('id-ID')}`).join('\n') || 'Belum ada termin terbayar'}
+                        minWidth={200}
+                    />
                   </>
                 )}
               </div>
 
               {/* Right-edge scroll hint gradient */}
               <div
-                className="pointer-events-none absolute right-0 top-0 h-full w-16 rounded-r-xl"
+                className="pointer-events-none absolute right-0 top-0 h-full w-12 rounded-r-2xl"
                 style={{ background: 'linear-gradient(to right, transparent, var(--page-bg, #f8fafc))' }}
               />
             </div>

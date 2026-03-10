@@ -14,8 +14,7 @@ import TerminCreate from './pages/TerminCreate';
 import TerminDetail from './pages/TerminDetail';
 import TerminReview from './pages/TerminReview';
 import TerminPayment from './pages/TerminPayment';
-import SiteMaster from './pages/SiteMaster';
-import AllSites from './pages/AllSites';
+import Sites from './pages/Sites';
 
 function App() {
   return (
@@ -23,7 +22,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="all-sites" element={<AllSites />} />
+          <Route path="sites" element={<Sites />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrderDetail />} />
           <Route path="projects" element={<Navigate to="/" replace />} />
@@ -37,12 +36,13 @@ function App() {
           <Route path="sites/:id/termins/:terminId/payment" element={<TerminPayment />} />
           <Route path="people" element={<People />} />
           <Route path="teams" element={<Teams />} />
-          <Route path="site-master" element={<SiteMaster />} />
           <Route path="spk" element={<Navigate to="/work-orders" replace />} />
           <Route path="demo-guide" element={<DemoGuide />} />
           {/* Redirects for unimplemented routes */}
           <Route path="budget" element={<Navigate to="/projects" replace />} />
           <Route path="reports" element={<Navigate to="/" replace />} />
+          <Route path="all-sites" element={<Navigate to="/sites" replace />} />
+          <Route path="site-master" element={<Navigate to="/sites" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

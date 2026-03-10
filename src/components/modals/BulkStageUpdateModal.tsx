@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { X, Upload, Download, CheckCircle2, AlertTriangle, XCircle, ArrowRight, ArrowLeft, FileSpreadsheet } from 'lucide-react';
 import clsx from 'clsx';
 import * as xlsx from 'xlsx';
-import { STAGE_ORDER, siteMasterRecords, type SiteStage } from '../../data/mockData';
+import { STAGE_ORDER } from '../../data/mockData';
+import { generateBulkUpdateTemplate } from '../../utils/excelTemplates';
 
 interface BulkStageUpdateModalProps {
     isOpen: boolean;
@@ -40,7 +41,6 @@ interface ValidatedRow {
 export default function BulkStageUpdateModal({ isOpen, onClose, projectType, onSuccess }: BulkStageUpdateModalProps) {
     const [step, setStep] = useState<Step>(1);
     const [isDragActive, setIsDragActive] = useState(false);
-    const [fileOptions, setFileOptions] = useState<File | null>(null);
     const [validatedRows, setValidatedRows] = useState<ValidatedRow[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -51,7 +51,6 @@ export default function BulkStageUpdateModal({ isOpen, onClose, projectType, onS
 
     const resetModal = () => {
         setStep(1);
-        setFileOptions(null);
         setValidatedRows([]);
         setUpdatedCount(0);
         setSkippedCount(0);
@@ -67,40 +66,7 @@ export default function BulkStageUpdateModal({ isOpen, onClose, projectType, onS
     if (!isOpen) return null;
 
     const downloadTemplate = () => {
-        // Filter sites to template bounds
-        const rawSites = projectType 
-            ? siteMasterRecords.filter(s => s.project_type === projectType)
-            : siteMasterRecords;
-
-        // Construct Data
-        const templateData = rawSites.map(s => ({
-            unique_key: s.unique_key || s.site_id,
-            site_id: s.site_id,
-            site_name: s.site_name,
-            current_stage: s.stage || 'imported',
-            new_stage: '',
-            tower_provider: '',
-            jenis_kunci: '',
-            ci_date: '',
-            ci_time: '',
-            co_date: '',
-            co_time: '',
-            rfi_done: '',
-            rfs_done: '',
-            catatan: ''
-        }));
-
-        const ws = xlsx.utils.json_to_sheet(templateData);
-        const wb = xlsx.utils.book_new();
-        xlsx.utils.book_append_sheet(wb, ws, 'Update_Template');
-
-        // Add Reference Sheet
-        const refData = STAGE_ORDER.map(s => ({ stage_values: s }));
-        const wsRef = xlsx.utils.json_to_sheet(refData);
-        xlsx.utils.book_append_sheet(wb, wsRef, 'STAGE_REFERENCE');
-
-        const prefix = projectType ? projectType : 'ALL';
-        xlsx.writeFile(wb, `Bulk_Update_Template_${prefix}.xlsx`);
+        generateBulkUpdateTemplate(projectType || 'ALL');
     };
 
     const processExcel = async (file: File) => {

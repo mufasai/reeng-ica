@@ -341,7 +341,7 @@ const MapWidget: React.FC<MapWidgetProps> = ({ className = '', height = '100%', 
                             </div>
                             <div className="grid grid-cols-3 gap-1">
                                 <span className="text-xs text-slate-500">Team:</span>
-                                <span className="col-span-2 text-xs font-semibold text-slate-800">{activeSite.team_assigned || '— Belum ditugaskan'}</span>
+                                <span className="col-span-2 text-xs font-semibold text-slate-800">{(activeSite as any).team_assigned || '— Belum ditugaskan'}</span>
                             </div>
                             <div className="grid grid-cols-3 gap-1">
                                 <span className="text-xs text-slate-500">Updated:</span>
@@ -449,7 +449,7 @@ const MapWidget: React.FC<MapWidgetProps> = ({ className = '', height = '100%', 
                                         <div className="w-1.5 h-1.5 rounded-full" style={{backgroundColor: getPinColor(site.stage as SiteStage, site.stage_notes)}}></div>
                                         {getPinLabel(site.stage as SiteStage, site.stage_notes)}
                                     </div>
-                                    <div className="text-[10px] text-slate-500 leading-none mt-1.5 pt-1.5 border-t border-slate-100">Team: {site.team_assigned || '—'}</div>
+                                    <div className="text-[10px] text-slate-500 leading-none mt-1.5 pt-1.5 border-t border-slate-100">Team: {(site as any).team_assigned || '—'}</div>
                                 </Tooltip>
                             </Marker>
                         ))}

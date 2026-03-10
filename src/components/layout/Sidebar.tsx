@@ -19,11 +19,11 @@ const Sidebar = () => {
 
   // OVERVIEW & OTHER PERMISSIONS
   const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
-    engineer:        ['dashboard'],
-    team_leader:     ['dashboard', 'site-master'],
-    backoffice_admin:['dashboard', 'site-master', 'people', 'teams'],
-    finance:         ['dashboard', 'site-master'], 
-    management:      ['dashboard', 'site-master', 'people', 'teams', 'options'],
+    engineer:        ['dashboard', 'sites'],
+    team_leader:     ['dashboard', 'sites'],
+    backoffice_admin:['dashboard', 'sites', 'people', 'teams'],
+    finance:         ['dashboard', 'sites'], 
+    management:      ['dashboard', 'sites', 'people', 'teams', 'options'],
   };
 
   const allowedSidebarItems = ROLE_SIDEBAR_CONFIG[currentUser.role] || [];
@@ -36,11 +36,7 @@ const Sidebar = () => {
 
   // DATA & DOKUMEN
   const dataMasterItems: { icon: any, label: string, path: string, badge?: number }[] = [];
-  
-  if (allowedSidebarItems.includes('site-master')) {
-      const unassignedSitesCount = siteMasterRecords.filter(r => r.status === 'unassigned').length;
-      dataMasterItems.push({ icon: Database, label: 'Sites', path: '/site-master', badge: unassignedSitesCount > 0 ? unassignedSitesCount : undefined });
-  }
+
   if (allowedSidebarItems.includes('people')) {
       dataMasterItems.push({ icon: Users, label: 'People', path: '/people' });
   }
@@ -203,39 +199,41 @@ const Sidebar = () => {
         {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">Pekerjaan</p>}
         {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
 
-        {/* Semua Sites */}
-        <div className="px-1 mb-1">
-          <NavLink
-            to="/all-sites"
-            className={({ isActive }) => clsx(
-              'flex items-center rounded-lg mx-0 transition-all duration-150 group relative',
-              collapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-4 py-2 text-[13px]',
-              isActive
-                ? 'bg-[var(--navy-800)] text-white font-bold border-l-2 border-blue-600'
-                : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] border-l-2 border-transparent font-medium'
-            )}
-            title={collapsed ? 'Semua Sites' : undefined}
-          >
-            {({ isActive: _ia }) => (
-              <>
-                <Database className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-white" />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 mx-3 truncate">Semua Sites</span>
-                    <span className="text-[11px] px-1.5 py-0.5 rounded border bg-[var(--navy-700)] text-white border-[var(--navy-600)]">
-                      [{siteMasterRecords.length}]
+        {/* Sites */}
+        {allowedSidebarItems.includes('sites') && (
+          <div className="px-1 mb-1">
+            <NavLink
+              to="/sites"
+              className={({ isActive }) => clsx(
+                'flex items-center rounded-lg mx-0 transition-all duration-150 group relative',
+                collapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-4 py-2 text-[13px]',
+                isActive
+                  ? 'bg-[var(--navy-800)] text-white font-bold border-l-2 border-blue-600'
+                  : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] border-l-2 border-transparent font-medium'
+              )}
+              title={collapsed ? 'Sites' : undefined}
+            >
+              {({ isActive: _ia }) => (
+                <>
+                  <Database className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-white" />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 mx-3 truncate">Sites</span>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border bg-[var(--navy-700)] text-white border-[var(--navy-600)]">
+                        [{siteMasterRecords.length}]
+                      </span>
+                    </>
+                  )}
+                  {collapsed && (
+                    <span className="absolute left-full ml-3 px-2 py-1 bg-[var(--navy-700)] text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                      Sites [{siteMasterRecords.length}]
                     </span>
-                  </>
-                )}
-                {collapsed && (
-                  <span className="absolute left-full ml-3 px-2 py-1 bg-[var(--navy-700)] text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                    Semua Sites [{siteMasterRecords.length}]
-                  </span>
-                )}
-              </>
-            )}
-          </NavLink>
-        </div>
+                  )}
+                </>
+              )}
+            </NavLink>
+          </div>
+        )}
 
         {/* Project Type Links */}
         <div className="px-1 space-y-0.5">

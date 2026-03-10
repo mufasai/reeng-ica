@@ -2,20 +2,21 @@ import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-    Building2, Users, Wallet, CheckCircle2,
-    Plus, CreditCard, ChevronRight, Activity, Clock, FileText, UploadCloud, AlertCircle, MapPin, Filter
+    Building2, Wallet, CheckCircle2,
+    CreditCard, Activity, Clock, MapPin
 } from 'lucide-react';
 import clsx from 'clsx';
 import MapWidget from '../components/MapWidget';
+import ModernKPICard from '../components/stats/ModernKPICard';
 import { 
-    projects, sites, teams, workOrders, activityFeed, people,
+    sites, teams, activityFeed, people,
     filterTerms, combatTerms, siteMasterRecords, type ProjectType
 } from '../data/mockData';
 
 // Helper to format currency
 const formatRupiah = (amount: number) => {
-    if (amount >= 1000000000) return `Rp ${(amount / 1000000000).toFixed(1)}B`;
-    if (amount >= 1000000) return `Rp ${(amount / 1000000).toFixed(0)}Jt`;
+    if (amount >= 1e9) return `Rp ${(amount / 1e9).toFixed(1)}B`;
+    if (amount >= 1e6) return `Rp ${(amount / 1e6).toFixed(0)}Jt`;
     return `Rp ${amount.toLocaleString('id-ID')}`;
 };
 
@@ -27,23 +28,17 @@ const Dashboard = () => {
     const initialTab = searchParams.get('tab') === 'map' ? 'map' : 'overview';
     const [activeTab, setActiveTab] = useState<'overview' | 'map'>(initialTab as any);
 
-    // Sync tab with URL
     useEffect(() => {
-        if (searchParams.get('tab') === 'map') {
-            setActiveTab('map');
-        } else {
-            setActiveTab('overview');
-        }
+        if (searchParams.get('tab') === 'map') setActiveTab('map');
+        else setActiveTab('overview');
     }, [searchParams]);
 
     // ----------------------------------------------------------------------
-    // 1. DATA AGGREGATION & FILTERING
+    // 1. VISIBLE SITES
     // ----------------------------------------------------------------------
-    
-    // Determine which EXECUTION sites are visible to the current user
     const visibleSites = useMemo(() => {
         const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
-        if (!isRestricted) return sites; // backoffice, management, finance see all
+        if (!isRestricted) return sites;
         
         const userTeamIds = teams
             .filter(t => t.members.some(m => m.personId === currentUser.id))
@@ -52,86 +47,8 @@ const Dashboard = () => {
         return sites.filter(s => s.teamId && userTeamIds.includes(s.teamId));
     }, [currentUser]);
 
-    // Filter to Active Projects only (that have visible sites)
-    const activeProjects = useMemo(() => {
-        const visibleProjectIds = new Set(visibleSites.map(s => s.projectId));
-        return projects.filter(p => p.status === 'active' && visibleProjectIds.has(p.id));
-    }, [visibleSites]);
-    
-    // Calculate Total Budget (sum of active project budgets)
-    const totalBudget = useMemo(() => activeProjects.reduce((sum, p) => sum + (p.budget || 0), 0), [activeProjects]);
-
-    // Calculate Budget Terpakai
-    // For simplicity in mock data, we'll sum up paid amounts across all terms for all active sites
-    const budgetTerpakai = useMemo(() => {
-        let paid = 0;
-        // Filter terms
-        filterTerms.forEach(t => { if (t.status === 'paid') paid += (t.amountPaid || 0); });
-        // Combat terms
-        combatTerms.forEach(t => {
-            t.subSteps.forEach(s => { if (s.status === 'paid') paid += (s.amountPaid || 0); });
-        });
-        return paid;
-    }, []);
-
-    const sisaBudget = totalBudget - budgetTerpakai;
-    const terpakaiPercent = totalBudget > 0 ? (budgetTerpakai / totalBudget) * 100 : 0;
-    const sisaPercent = totalBudget > 0 ? (sisaBudget / totalBudget) * 100 : 0;
-
-    // Calculate Pending Approval (Pengajuan)
-    const pendingApprovals = useMemo(() => {
-        let count = 0;
-        let amount = 0;
-        filterTerms.forEach(t => {
-            if (t.status === 'pengajuan') { count++; amount += (t.amountRequest || 0); }
-        });
-        combatTerms.forEach(t => {
-            t.subSteps.forEach(s => {
-                if (s.status === 'pengajuan') { count++; amount += (s.amountRequest || 0); }
-            });
-        });
-        return { count, amount };
-    }, []);
-
-    // Average Progress
-    const avgProgress = useMemo(() => {
-        if (sites.length === 0) return 0;
-        let totalPct = 0;
-        sites.forEach(s => {
-            const p = projects.find(proj => proj.id === s.projectId);
-            if (p?.type === 'FILTER') {
-                let pct = 0;
-                filterTerms.filter(t => t.siteId === s.id && t.status === 'paid').forEach(t => pct += t.percentage);
-                totalPct += pct;
-            } else if (p?.type === 'COMBAT') {
-                const sTerms = combatTerms.filter(t => t.siteId === s.id);
-                const max = sTerms.reduce((sum, t) => sum + t.totalMaxAmount, 0);
-                if (max > 0) {
-                    let paid = 0;
-                    sTerms.forEach(t => t.subSteps.forEach(sub => { if (sub.status === 'paid') paid += (sub.amountPaid || 0); }));
-                    totalPct += (paid / max) * 100;
-                }
-            }
-        });
-        return Math.round(totalPct / sites.length);
-    }, []);
-
-    // Secondary Stats
-    // activeSitesCount and completedSitesCount need to find status from terms. 
-    // For mock simplicity, we assume sites with 100% progress are completed, others are active.
-    const completedSitesCount = useMemo(() => {
-        return visibleSites.filter(s => {
-             const p = activeProjects.find(proj => proj.id === s.projectId);
-             if (p?.type === 'FILTER') {
-                 return filterTerms.filter(t => t.siteId === s.id && t.status === 'paid').reduce((acc, t) => acc + t.percentage, 0) >= 100;
-             }
-             return false;
-        }).length;
-    }, [visibleSites, activeProjects]);
-    const activeSitesCount = visibleSites.length - completedSitesCount;
-
     // ----------------------------------------------------------------------
-    // 1.5 STATUS LAPANGAN (STAGES SUMMARY FROM siteMasterRecords)
+    // 2. STATUS LAPANGAN (STAGES SUMMARY FROM siteMasterRecords)
     // ----------------------------------------------------------------------
     const stageSummary = useMemo(() => {
         let menungguPermit = 0;
@@ -143,7 +60,6 @@ const Dashboard = () => {
 
         siteMasterRecords.forEach(master => {
             const stage = master.stage || 'imported';
-
             if (stage === 'permit_process') menungguPermit++;
             else if (stage === 'permit_ready') permitReady++;
             else if (stage === 'akses_ready') aksesReady++;
@@ -154,384 +70,169 @@ const Dashboard = () => {
                 issues++;
             }
         });
-
         return { menungguPermit, permitReady, aksesReady, implementasi, issues, selesai, total: siteMasterRecords.length };
     }, []);
 
     // ----------------------------------------------------------------------
-    // 2. PROJECT TYPE SUMMARY
+    // 3. FINANCIAL SUMMARY
     // ----------------------------------------------------------------------
-    const projectTypes: { id: ProjectType; label: string; color: string; border: string; bg: string }[] = [
-        { id: 'BLACKSITE', label: 'Blacksite', color: 'text-red-600', border: 'border-red-200', bg: 'bg-red-50' },
-        { id: 'COMBAT', label: 'Combat', color: 'text-orange-600', border: 'border-orange-200', bg: 'bg-orange-50' },
-        { id: 'FILTER', label: 'Filter', color: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50' },
-        { id: 'L2H', label: 'L2H', color: 'text-blue-600', border: 'border-blue-200', bg: 'bg-blue-50' },
-        { id: 'REFINEN', label: 'Refinen', color: 'text-purple-600', border: 'border-purple-200', bg: 'bg-purple-50' }
+    const financials = useMemo(() => {
+        let totalHarga = 0;
+        let terminTerbayar = 0;
+        let menungguApprovalCount = 0;
+        
+        // Sum total harga across active sites (from site master)
+        visibleSites.forEach(s => {
+            const master = siteMasterRecords.find(m => m.site_id === s.id);
+            if (master) {
+                totalHarga += (master as any).nilai_kontrak || (master as any).budget || 0;
+            }
+        });
+
+        // Paid & Submitted 
+        filterTerms.forEach(t => { 
+            if (t.status === 'paid' || t.status === 'dibayarkan') terminTerbayar += (t.amountPaid || t.amountRequest || 0);
+            if (['pengajuan', 'submitted', 'pending_review'].includes(t.status)) menungguApprovalCount++;
+        });
+        combatTerms.forEach(t => {
+            t.subSteps.forEach(s => { 
+                if (s.status === 'paid' || s.status === 'dibayarkan') terminTerbayar += (s.amountPaid || s.amountRequest || 0); 
+                if (['pengajuan', 'submitted', 'pending_review'].includes(s.status)) menungguApprovalCount++;
+            });
+        });
+
+        const sisaTagih = totalHarga > 0 ? totalHarga - terminTerbayar : 0;
+        const pctTerbayar = totalHarga > 0 ? ((terminTerbayar / totalHarga) * 100).toFixed(1) : '0.0';
+
+        return { totalHarga, terminTerbayar, menungguApprovalCount, sisaTagih, pctTerbayar };
+    }, [visibleSites]);
+
+    // ----------------------------------------------------------------------
+    // 4. PROJECT TYPE SUMMARY
+    // ----------------------------------------------------------------------
+    const projectTypes: { id: ProjectType; label: string; color: string; bg: string }[] = [
+        { id: 'BLACKSITE', label: 'Blacksite', color: 'text-[#DC2626]', bg: 'bg-red-50' },
+        { id: 'COMBAT', label: 'Combat', color: 'text-[#EA580C]', bg: 'bg-orange-50' },
+        { id: 'FILTER', label: 'Filter', color: 'text-[#16A34A]', bg: 'bg-green-50' },
+        { id: 'L2H', label: 'L2H', color: 'text-[#2563EB]', bg: 'bg-blue-50' },
+        { id: 'REFINEN', label: 'Refinen', color: 'text-[#7C3AED]', bg: 'bg-purple-50' }
     ];
 
     const getTypeSummary = (type: ProjectType) => {
         const typeMasterSites = siteMasterRecords.filter(sm => sm.project_type === type);
         const importedCount = typeMasterSites.length;
 
-        // Execution sites
-        const typeSites = visibleSites.filter(s => {
-            const p = activeProjects.find(proj => proj.id === s.projectId);
-            return p?.type === type;
+        let awal = 0;
+        let permit = 0;
+        let akses = 0;
+        let impl = 0;
+        let selesai = 0;
+        typeMasterSites.forEach(s => {
+           const st = s.stage as string;
+           if (['imported', 'assigned'].includes(st)) awal++;
+           else if (['permit_process', 'permit_ready'].includes(st)) permit++;
+           else if (['akses_process', 'akses_ready'].includes(st)) akses++;
+           else if (['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done', 'bast', 'invoice'].includes(st)) impl++;
+           else if (st === 'completed') selesai++;
         });
-        const activeCount = typeSites.length;
-        const budget = typeSites.reduce((sum, s) => sum + s.budget, 0);
 
-        return { importedCount, activeCount, budget };
+        return { importedCount, awal, permit, akses, impl, selesai };
     };
 
     // ----------------------------------------------------------------------
-    // 3. BUTUH TINDAKAN (ACTION NEEDED)
+    // 5. LEFT COLUMN: BUTUH TINDAKAN SEGERA
     // ----------------------------------------------------------------------
-    // Mocking a role-filtered action list based on terms
     const actionNeededList = useMemo(() => {
         let items: any[] = [];
-        
-        // Find filter terms needing action
-        filterTerms.forEach(t => {
-            if (!visibleSites.find(s => s.id === t.siteId)) return; // Only process visible sites
-
-            if (t.status === 'pengajuan') {
-                const site = visibleSites.find(s => s.id === t.siteId);
-                const proj = activeProjects.find(p => p.id === site?.projectId);
+        siteMasterRecords.forEach(s => {
+            const daysDiff = s.stage_updated_at ? Math.floor((Date.now() - new Date(s.stage_updated_at).getTime()) / 86400000) : 0;
+            if (daysDiff > 14 || (s.stage as string) === 'issue_hold' || s.stage_notes?.toLowerCase().includes('issue')) {
                 items.push({
-                    id: t.id,
-                    siteName: site?.name || 'Unknown',
-                    type: proj?.type || 'FILTER',
-                    title: t.name,
-                    statusText: 'Menunggu Review',
-                    reqRole: 'management',
-                    link: `/sites/${t.siteId}/termins/${t.id}/review`,
-                    btnText: 'Review →',
-                    btnClass: 'text-amber-600 bg-amber-50 hover:bg-amber-100'
+                    id: s.site_id,
+                    siteName: s.site_name,
+                    type: s.project_type,
+                    title: s.stage_notes || `${s.stage?.replace('_', ' ')} > 14 hari`,
+                    link: `/all-sites`
                 });
-            } else if (t.status === 'approved') {
-                const site = visibleSites.find(s => s.id === t.siteId);
-                const proj = activeProjects.find(p => p.id === site?.projectId);
-                items.push({
-                    id: t.id,
-                    siteName: site?.name || 'Unknown',
-                    type: proj?.type || 'FILTER',
-                    title: t.name,
-                    statusText: 'Menunggu Pembayaran',
-                    reqRole: 'finance',
-                    link: `/sites/${t.siteId}/termins/${t.id}/payment`,
-                    btnText: 'Bayar →',
-                    btnClass: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-                });
-            } else if (t.status === 'pending') {
-                // If it's pending, team leader can submit
-                 const site = visibleSites.find(s => s.id === t.siteId);
-                 const proj = activeProjects.find(p => p.id === site?.projectId);
-                 // just a mock check
-                 if (t.step === 1 || filterTerms.find(prev => prev.siteId === t.siteId && prev.step === t.step - 1 && prev.status === 'paid')) {
-                     items.push({
-                        id: t.id,
-                        siteName: site?.name || 'Unknown',
-                        type: proj?.type || 'FILTER',
-                        title: t.name,
-                        statusText: 'Siap Diajukan',
-                        reqRole: 'team_leader',
-                        link: `/sites/${t.siteId}/termins/create`, // usually termin create picks the term
-                        btnText: 'Submit →',
-                        btnClass: 'text-blue-600 bg-blue-50 hover:bg-blue-100'
-                     });
-                 }
             }
         });
-
-        // Filter by user role (mock simple logic)
-        let visibleItems = items;
-        if (currentUser.role === 'management' || currentUser.role === 'backoffice_admin') {
-            visibleItems = items.filter(i => i.reqRole === 'management');
-        } else if (currentUser.role === 'finance') {
-            visibleItems = items.filter(i => i.reqRole === 'finance');
-        } else if (currentUser.role === 'team_leader') {
-            visibleItems = items.filter(i => i.reqRole === 'team_leader');
-        } else if (currentUser.role === 'engineer') {
-            visibleItems = []; // Read-only or upload only
-        }
-
-        return visibleItems.slice(0, 5);
-    }, [currentUser.role]);
-
+        return items.slice(0, 5);
+    }, []);
 
     // ----------------------------------------------------------------------
-    // RENDER HELPERS
+    // 6. RIGHT COLUMN: PENGAJUAN MENUNGGU APPROVAL
     // ----------------------------------------------------------------------
-    const getBadgeClass = (type: ProjectType) => {
-        const conf = projectTypes.find(p => p.id === type);
-        return conf ? `${conf.bg} ${conf.color} border-${conf.border}` : 'bg-slate-100 text-slate-600';
-    };
+    const pendingPengajuanList = useMemo(() => {
+        let list: any[] = [];
+        filterTerms.forEach(t => {
+            if (['pengajuan', 'submitted', 'pending_review'].includes(t.status)) {
+                 const site = sites.find(s => s.id === t.siteId);
+                 list.push({
+                     id: t.id,
+                     siteId: t.siteId,
+                     siteName: site?.name || siteMasterRecords.find(sm => sm.site_id === t.siteId)?.site_name || t.siteId,
+                     title: t.name,
+                     amount: t.amountRequest || 0,
+                     date: t.submittedAt || new Date().toISOString(),
+                 });
+            }
+        });
+        combatTerms.forEach(t => {
+            t.subSteps.forEach(s => {
+                if (['pengajuan', 'submitted', 'pending_review'].includes(s.status)) {
+                    const site = sites.find(st => st.id === t.siteId);
+                    list.push({
+                        id: s.id,
+                        siteId: t.siteId,
+                        siteName: site?.name || siteMasterRecords.find(sm => sm.site_id === t.siteId)?.site_name || t.siteId,
+                        title: `${(s as any).stepName} (${(s as any).percentage}%)`,
+                        status: 'pending_review',
+                        date: (s as any).submittedAt || new Date().toISOString(),
+                    });
+                }
+            });
+        });
+        list.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return list;
+    }, []);
 
     return (
-        <div className="space-y-6 pb-16">
-            {/* SECTION 1: PAGE HEADER & QUICK ACTION BAR */}
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
-                        <p className="text-slate-500 mt-1">Selamat datang kembali, <span className="font-semibold text-slate-700">{currentUser.name}</span> 👋</p>
+        <div className="space-y-6 pb-16 animate-in fade-in duration-300">
+            {/* ROW 1: HEADER (compact, no greeting) */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <h1 className="text-[32px] font-bold text-[#111827] tracking-tight">Dashboard</h1>
+                
+                <div className="flex items-center gap-3">
+                    <div className="text-right">
+                        <p className="text-[13px] text-[#6B7280]">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
-                        <div className="text-slate-500 text-right">
-                            <p className="font-medium text-slate-700">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                            <p className="capitalize">{currentUser.role.replace('_', ' ')}</p>
-                        </div>
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200">
-                            {currentUser.name.charAt(0)}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Quick Action Bar (Role Sensitive) */}
-                <div className="bg-slate-50 border-t border-slate-200 px-6 py-3 flex gap-3 overflow-x-auto">
-                    {['management', 'backoffice_admin'].includes(currentUser.role) && (
-                        <>
-                            <button onClick={() => navigate('/work-orders')} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap">
-                                <Plus className="w-4 h-4 text-blue-600" /> Input WO
-                            </button>
-                            <button onClick={() => navigate('/projects')} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap">
-                                <Plus className="w-4 h-4 text-emerald-600" /> Tambah Project
-                            </button>
-                        </>
-                    )}
-                    {currentUser.role === 'team_leader' && (
-                        <>
-                            <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap">
-                                <FileText className="w-4 h-4 text-amber-600" /> Ajukan Termin
-                            </button>
-                             <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap">
-                                <CheckCircle2 className="w-4 h-4 text-blue-600" /> Buat SKP
-                            </button>
-                        </>
-                    )}
-                    {currentUser.role === 'finance' && (
-                        <>
-                             <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap">
-                                <CreditCard className="w-4 h-4 text-emerald-600" /> Proses Pembayaran
-                            </button>
-                        </>
-                    )}
-                     {currentUser.role === 'engineer' && (
-                        <>
-                            <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap">
-                                <UploadCloud className="w-4 h-4 text-blue-600" /> Upload Evidence
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* SECTION 2: FINANCIAL KPI ROW */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {/* 1. Total Budget */}
-                <div className="kpi-gradient-blue rounded-lg border border-l-[3px] border-l-blue-400 p-4 flex flex-col justify-center h-[90px] relative overflow-hidden group">
-                    <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
-                    <div className="flex items-center gap-2 mb-1 relative z-10">
-                        <Wallet className="w-4 h-4 text-blue-200" />
-                        <span className="text-xs font-bold text-white/90 uppercase tracking-wider">Total Budget</span>
-                    </div>
-                    <div className="font-mono text-lg font-bold text-white relative z-10">{formatRupiah(totalBudget)}</div>
-                    <div className="text-[11px] text-white/70 mt-0.5 relative z-10">{activeProjects.length} Proyek Aktif</div>
-                </div>
-
-                {/* 2. Budget Terpakai */}
-                 <div className="kpi-gradient-amber rounded-lg border border-l-[3px] border-l-amber-400 p-4 flex flex-col justify-center h-[90px] relative overflow-hidden group">
-                    <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
-                    <div className="flex items-center gap-2 mb-1 relative z-10">
-                         <CreditCard className="w-4 h-4 text-amber-200" />
-                        <span className="text-xs font-bold text-white/90 uppercase tracking-wider">Terpakai</span>
-                    </div>
-                    <div className="font-mono text-lg font-bold text-white relative z-10">{formatRupiah(budgetTerpakai)}</div>
-                    <div className="text-[11px] text-white/70 mt-0.5 relative z-10">{terpakaiPercent.toFixed(1)}% dari total budget</div>
-                    {/* Micro Progress */}
-                    <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/20 backdrop-blur-sm z-10">
-                        <div className="h-full bg-gradient-to-r from-amber-400 to-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.8)]" style={{ width: `${terpakaiPercent}%` }}></div>
-                    </div>
-                </div>
-
-                {/* 3. Sisa Budget */}
-                 <div className="kpi-gradient-emerald rounded-lg border border-l-[3px] border-l-emerald-400 p-4 flex flex-col justify-center h-[90px] relative overflow-hidden group">
-                    <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
-                    <div className="flex items-center justify-between mb-1 relative z-10">
-                        <div className="flex items-center gap-2">
-                             <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                            <span className="text-xs font-bold text-white/90 uppercase tracking-wider">Sisa Budget</span>
-                        </div>
-                        <span className={clsx("text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm backdrop-blur-sm", {
-                            'bg-emerald-400/20 text-emerald-100 border border-emerald-400/30': sisaPercent > 40,
-                            'bg-amber-400/20 text-amber-100 border border-amber-400/30': sisaPercent <= 40 && sisaPercent > 20,
-                            'bg-red-400/20 text-red-100 border border-red-400/30': sisaPercent <= 20
-                        })}>{sisaPercent.toFixed(1)}%</span>
-                    </div>
-                    <div className="font-mono text-lg font-bold text-white relative z-10">{formatRupiah(sisaBudget)}</div>
-                    <div className="text-[11px] text-emerald-200 mt-0.5 font-medium relative z-10">Tersedia untuk termin</div>
-                </div>
-
-                {/* 4. Menunggu Approval */}
-                 <div 
-                    className="kpi-gradient-yellow rounded-lg border border-l-[3px] border-l-yellow-400 p-4 flex flex-col justify-center h-[90px] cursor-pointer hover:border-yellow-300 transition-all duration-300 relative overflow-hidden group"
-                    onClick={() => { /* scroll to Need Action */ }}
-                >
-                    <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
-                    <div className="flex items-center gap-2 mb-1 relative z-10">
-                        <Clock className="w-4 h-4 text-yellow-200" />
-                        <span className="text-xs font-bold text-white/90 uppercase tracking-wider">Menunggu Approval</span>
-                        {pendingApprovals.count > 0 && (
-                            <div className="w-2 h-2 rounded-full bg-yellow-300 animate-pulse ml-auto shadow-[0_0_8px_rgba(250,204,21,0.8)]"></div>
-                        )}
-                    </div>
-                    <div className="text-lg font-bold text-white flex items-baseline gap-1 relative z-10">
-                        {pendingApprovals.count} <span className="text-sm font-normal text-white/80">Pengajuan</span>
-                    </div>
-                    <div className="text-[11px] text-yellow-200 mt-0.5 font-mono font-medium relative z-10">{formatRupiah(pendingApprovals.amount)} pending</div>
-                </div>
-
-                {/* 5. Rata-rata Progress */}
-                 <div className="kpi-gradient-purple rounded-lg border border-l-[3px] border-l-purple-400 p-4 flex items-center justify-between h-[90px] relative overflow-hidden group">
-                     <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Activity className="w-4 h-4 text-purple-200" />
-                            <span className="text-xs font-bold text-white/90 uppercase tracking-wider">Avg Progress</span>
-                        </div>
-                        <div className="text-lg font-bold text-white">{avgProgress}%</div>
-                        <div className="text-[11px] text-white/70 mt-0.5">{activeSitesCount} sites active</div>
-                    </div>
-                    {/* Circle visual */}
-                    <div className="relative w-12 h-12 flex items-center justify-center rounded-full border-[3px] border-white/20 bg-black/10 backdrop-blur-sm shadow-sm z-10">
-                         <svg className="absolute inset-0 w-full h-full -rotate-90">
-                            <circle cx="21" cy="21" r="21" className="stroke-current text-white drop-shadow-[0_0_4px_rgba(255,255,255,0.6)]" strokeWidth="3" fill="none" strokeDasharray="132" strokeDashoffset={132 - (132 * avgProgress) / 100} />
-                         </svg>
-                         <span className="text-[10px] font-bold text-white">{avgProgress}%</span>
+                    <div className="px-3 py-1 bg-[#EFF6FF] text-[#1D4ED8] text-[11px] rounded-full uppercase font-semibold tracking-wider">
+                        {currentUser.role.replace('_', ' ')}
                     </div>
                 </div>
             </div>
 
-            {/* SECTION 2.5: TAB 1 STAGE SUMMARY (site_master) */}
-            {activeTab === 'overview' && (
-            <div className="mb-6">
-                <h3 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-emerald-500" />
-                    Status Lapangan <span className="text-xs font-normal text-slate-500">({stageSummary.total} Total Records)</span>
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_process' }); }} className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 text-center leading-tight hover:underline">Menunggu<br/>Permit</span>
-                        <span className="text-lg font-bold text-slate-700">{stageSummary.menungguPermit}</span>
-                    </div>
-                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_ready' }); }} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-emerald-300 transition-colors">
-                        <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider mb-1 text-center leading-tight hover:underline">Permit<br/>Ready</span>
-                        <span className="text-lg font-bold text-emerald-700">{stageSummary.permitReady}</span>
-                    </div>
-                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'akses_ready' }); }} className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
-                        <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider mb-1 text-center leading-tight hover:underline">Akses<br/>Ready</span>
-                        <span className="text-lg font-bold text-blue-700">{stageSummary.aksesReady}</span>
-                    </div>
-                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'implementasi' }); }} className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                        <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider mb-1 hover:underline">Implementasi</span>
-                        <span className="text-lg font-bold text-indigo-700">{stageSummary.implementasi}</span>
-                    </div>
-                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'issue_hold' }); }} className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm relative overflow-hidden group cursor-pointer hover:border-amber-400 transition-colors">
-                        {stageSummary.issues > 0 && <div className="absolute inset-0 bg-red-100/50 animate-pulse mix-blend-multiply pointer-events-none"></div>}
-                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1 relative z-10 pointer-events-none group-hover:underline">
-                            Issue ⚡
-                        </span>
-                        <span className="text-lg font-bold text-amber-700 relative z-10 pointer-events-none">{stageSummary.issues}</span>
-                    </div>
-                    <div onClick={() => { setSearchParams({ tab: 'map', stage: 'completed' }); }} className="bg-emerald-500 border border-emerald-600 rounded-lg p-3 flex flex-col justify-center items-center h-[70px] shadow-sm text-white relative cursor-pointer hover:bg-emerald-600 transition-colors group">
-                        <span className="text-[10px] font-semibold text-emerald-100 uppercase tracking-wider mb-1 pointer-events-none group-hover:underline">Selesai</span>
-                        <span className="text-lg font-bold text-white pointer-events-none">{stageSummary.selesai}</span>
-                        <CheckCircle2 className="w-8 h-8 absolute -right-2 -bottom-2 text-white/20 pointer-events-none" />
-                    </div>
-                </div>
-            </div>
-            )}
-
-            {/* SECTION 3: TAB 1 STRIP & MAP WIDGET & OVERVIEW PER TIPE (site_master driven) */}
-            {activeTab === 'overview' && (
-                <>
-                {/* STRIP */}
-                <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md px-4 py-2 flex items-center gap-4 text-sm font-medium text-slate-600 overflow-x-auto shadow-sm backdrop-blur-sm mb-6">
-                    <div className="flex items-center gap-2 whitespace-nowrap px-3 py-1 bg-white rounded-md border border-[var(--glass-border)] shadow-sm">
-                        <Users className="w-4 h-4 text-[var(--coral-500)]" />
-                        <span className="font-bold text-[var(--text-primary)]">{teams.length}</span> Teams Active
-                    </div>
-                </div>
-
-                {/* OVERVIEW PER TIPE ROW */}
-                <div>
-                    <h3 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-blue-500" />
-                            Overview per Tipe
-                        </div>
-                        <span className="text-xs font-normal text-slate-500 hover:text-blue-600 cursor-pointer flex items-center">
-                            Lihat Semua Tipe <ChevronRight className="w-3 h-3 ml-1" />
-                        </span>
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                        {projectTypes.map((t) => {
-                            const summary = getTypeSummary(t.id);
-                            return (
-                                <Link to={`/projects/type/${t.id.toLowerCase()}/sites`} key={t.id} className="bg-white border text-left border-[var(--glass-border)] rounded-xl p-4 shadow-sm hover:shadow-md transition-all hover:border-[var(--blue-300)] group flex flex-col justify-between h-[120px]">
-                                    <div>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-xs font-bold text-[var(--text-secondary)] tracking-wider">TIPE</span>
-                                            <span className={clsx("w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-110 group-hover:rotate-3", t.color)}>
-                                                <Building2 className="w-4 h-4" />
-                                            </span>
-                                        </div>
-                                        <h4 className="text-lg font-black text-[var(--text-primary)]">{t.label}</h4>
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <div className="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold text-slate-600 border border-slate-200">
-                                            {summary.importedCount} Master
-                                        </div>
-                                        {summary.activeCount > 0 && (
-                                            <div className="bg-blue-50 px-2 py-1 rounded text-[10px] font-bold text-blue-600 border border-blue-200 flex items-center gap-1 shrink-0">
-                                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
-                                                {summary.activeCount} Aktif
-                                            </div>
-                                        )}
-                                    </div>
-                                </Link>
-                            );
-                        })}
-                    </div>
-                </div>
-                </>
-            )}
-            {/* SECTION 5: DASHBOARD TABS */}
-            <div className="flex bg-[var(--navy-900)] text-slate-300 px-6 pt-1 sticky top-16 z-30 shadow-md">
+            {/* TABS (Directly under header) */}
+            <div className="flex border-b border-slate-200 mt-2">
                 <button
-                    onClick={() => {
-                        setSearchParams({ tab: 'overview' });
-                    }}
+                    onClick={() => setSearchParams({ tab: 'overview' })}
                     className={clsx(
-                        "px-6 py-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2",
+                        "px-6 py-3 font-semibold text-sm transition-all flex items-center gap-2",
                         activeTab === 'overview'
-                        ? 'border-[var(--blue-400)] text-white bg-slate-800/50 rounded-t-lg'
-                        : 'border-transparent hover:text-white hover:bg-slate-800/30 rounded-t-lg'
+                        ? 'bg-white shadow-sm text-[#1D4ED8] border-b-2 border-[#2563EB]'
+                        : 'text-[#6B7280] hover:text-gray-900 border-b-2 border-transparent'
                     )}
                 >
-                    <Building2 className="w-4 h-4" />
+                    <Activity className="w-4 h-4" />
                     Overview
                 </button>
                 <button
-                    onClick={() => {
-                        setSearchParams({ tab: 'map' });
-                    }}
+                    onClick={() => setSearchParams({ tab: 'map' })}
                     className={clsx(
-                        "px-6 py-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2",
+                        "px-6 py-3 font-semibold text-sm transition-all flex items-center gap-2",
                         activeTab === 'map'
-                        ? 'border-[var(--blue-400)] text-white bg-slate-800/50 rounded-t-lg'
-                        : 'border-transparent hover:text-white hover:bg-slate-800/30 rounded-t-lg'
+                        ? 'bg-white shadow-sm text-[#1D4ED8] border-b-2 border-[#2563EB]'
+                        : 'text-[#6B7280] hover:text-gray-900 border-b-2 border-transparent'
                     )}
                 >
                     <MapPin className="w-4 h-4" />
@@ -541,7 +242,7 @@ const Dashboard = () => {
 
             {/* TAB CONTENT: PETA SITES */}
             {activeTab === 'map' && (
-                <div className="h-[calc(100vh-140px)] w-full relative -mx-6 -mb-16 -mt-6">
+                <div className="h-[calc(100vh-200px)] w-full relative -mx-0 rounded-lg overflow-hidden border border-slate-200 mt-6">
                     <MapWidget 
                         height="100%" 
                         presetStage={searchParams.get('stage') || undefined} 
@@ -551,171 +252,298 @@ const Dashboard = () => {
 
             {/* TAB CONTENT: OVERVIEW */}
             {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-300">
-
-                    {/* LEFT COLUMN (60%) */}
-                    <div className="lg:col-span-7 space-y-6">
-                    {/* Action Needed */}
-                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm">
-                        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4 text-red-500" />
-                                Butuh Tindakan Segera
-                            </h3>
-                            {actionNeededList.length > 0 && (
-                                <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{actionNeededList.length} Tasks</span>
-                            )}
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                            {actionNeededList.length === 0 ? (
-                                <div className="p-6 text-center text-sm text-slate-500 italic">
-                                    Tidak ada tugas yang membutuhkan tindakan Anda saat ini.
-                                </div>
-                            ) : (
-                                actionNeededList.map(item => (
-                                    <div key={item.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded uppercase", getBadgeClass(item.type))}>{item.type}</span>
-                                                <span className="font-semibold text-slate-800 text-sm">{item.siteName}</span>
-                                                <span className="text-slate-400 text-xs px-2">·</span>
-                                                <span className="text-slate-600 text-sm font-medium">{item.title}</span>
-                                            </div>
-                                            <div className="text-xs text-slate-500 flex items-center gap-1">
-                                                <Clock className="w-3 h-3 text-amber-500" /> {item.statusText}
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => navigate(item.link)}
-                                            className={clsx("px-3 py-1.5 rounded text-xs font-bold transition-colors whitespace-nowrap", item.btnClass)}
-                                        >
-                                            {item.btnText}
-                                        </button>
-                                    </div>
-                                ))
-                            )}
+                <div className="space-y-8 animate-in fade-in duration-300 mt-6">
+                    
+                    {/* ROW 1: STATUS LAPANGAN */}
+                    <div>
+                        <h3 className="text-[11px] font-semibold text-[#9CA3AF] tracking-[0.08em] uppercase mb-4">
+                            Status Lapangan
+                        </h3>
+                        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                            {/* Menunggu Permit — slate/gray gradient */}
+                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_process' }); }}
+                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #64748B 0%, #475569 100%)', boxShadow: '0 4px 14px rgba(71,85,105,0.35)' }}>
+                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.menungguPermit}</div>
+                                <p className="text-white/70 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Menunggu<br/>Permit</p>
+                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.menungguPermit}</p>
+                            </div>
+                            {/* Permit Ready — amber/orange gradient */}
+                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_ready' }); }}
+                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', boxShadow: '0 4px 14px rgba(245,158,11,0.4)' }}>
+                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.permitReady}</div>
+                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Permit<br/>Ready</p>
+                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.permitReady}</p>
+                            </div>
+                            {/* Akses Ready — blue gradient */}
+                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'akses_ready' }); }}
+                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)', boxShadow: '0 4px 14px rgba(59,130,246,0.4)' }}>
+                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.aksesReady}</div>
+                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Akses<br/>Ready</p>
+                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.aksesReady}</p>
+                            </div>
+                            {/* Implementasi — violet/purple gradient */}
+                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'implementasi' }); }}
+                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)', boxShadow: '0 4px 14px rgba(139,92,246,0.4)' }}>
+                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.implementasi}</div>
+                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Imple-<br/>mentasi</p>
+                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.implementasi}</p>
+                            </div>
+                            {/* Issue — red/rose gradient */}
+                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'issue_hold' }); }}
+                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #F87171 0%, #DC2626 100%)', boxShadow: '0 4px 14px rgba(239,68,68,0.4)' }}>
+                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.issues}</div>
+                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Issue<br/>⚡ Hold</p>
+                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.issues}</p>
+                            </div>
+                            {/* Selesai — emerald green gradient */}
+                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'completed' }); }}
+                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #34D399 0%, #059669 100%)', boxShadow: '0 4px 14px rgba(16,185,129,0.4)' }}>
+                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.selesai}</div>
+                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Selesai<br/>✓ Done</p>
+                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.selesai}</p>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Recent Activity Feed */}
-                     <div className="bg-white border border-slate-200 rounded-lg shadow-sm">
-                        <div className="px-4 py-3 border-b border-slate-100">
-                            <h3 className="font-bold text-slate-800">Aktivitas Terbaru</h3>
-                        </div>
-                        <div className="p-4">
-                            <ul className="space-y-4">
-                                {activityFeed.map((log) => {
-                                    const user = people.find(p => p.id === log.userId);
-                                    const initial = user ? user.name.charAt(0) : '?';
-                                    return (
-                                        <li key={log.id} className="flex gap-3 text-sm border-b border-slate-50 pb-3 last:border-0 last:pb-0">
-                                            <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold shrink-0">
-                                                {initial}
-                                            </div>
-                                            <div className="flex-1">
-                                                <div>
-                                                    <span className="font-semibold text-slate-800">{user?.name || 'Unknown'}</span>{' '}
-                                                    <span className="text-slate-600">{log.action}</span>
-                                                    {' · '}
-                                                    <span className="font-medium text-slate-700">{log.target}</span>
-                                                </div>
-                                                <div className="text-xs text-slate-400 mt-0.5">{log.timestamp}</div>
-                                            </div>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        </div>
-                     </div>
-                </div>
+                    {/* ROW 2: FINANCIAL SUMMARY */}
+                    <div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <ModernKPICard
+                                title="Total Nilai Kontrak"
+                                value={financials.totalHarga > 0 ? formatRupiah(financials.totalHarga) : '—'}
+                                icon={Wallet}
+                                iconClass="bg-blue-50 text-blue-600"
+                                subtitle={financials.totalHarga > 0 ? 'Seluruh tipe pekerjaan' : 'Data harga belum diset'}
+                            />
 
-                {/* RIGHT COLUMN (40%) */}
-                <div className="lg:col-span-5 space-y-6">
-                    {/* Active Projects List */}
-                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm">
-                         <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="font-bold text-slate-800">Proyek Aktif</h3>
-                            <Link to="/projects" className="text-xs font-medium text-blue-600 hover:text-blue-700">Lihat Semua →</Link>
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                            {activeProjects.slice(0, 4).map(p => {
-                                 const pSites = sites.filter(s => s.projectId === p.id);
-                                 const pBudget = p.budget || 0;
-                                 // mock cost
-                                 const pCost = pBudget * 0.4; 
-                                 const usedPct = pBudget > 0 ? (pCost / pBudget) * 100 : 0;
-                                 
-                                return (
-                                    <div key={p.id} className="p-4 hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => navigate(`/projects/${p.id}/dashboard`)}>
-                                        <div className="flex items-start justify-between mb-2">
-                                            <div>
-                                                <h4 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name}</h4>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded uppercase", getBadgeClass(p.type))}>{p.type}</span>
-                                                    <span className="text-xs text-slate-500">{pSites.length} sites</span>
-                                                </div>
-                                            </div>
-                                            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                                        </div>
-                                        {/* Progress */}
-                                        <div>
-                                            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                                                <span>Budget Used</span>
-                                                <span className="font-mono">{usedPct.toFixed(0)}%</span>
-                                            </div>
-                                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-500" style={{width: `${usedPct}%`}}></div>
-                                            </div>
-                                        </div>
+                            <ModernKPICard
+                                title="Termin Terbayar"
+                                value={financials.terminTerbayar > 0 ? formatRupiah(financials.terminTerbayar) : '—'}
+                                icon={CheckCircle2}
+                                iconClass="bg-emerald-50 text-emerald-600"
+                                subtitle={financials.totalHarga > 0 ? `${financials.pctTerbayar}% dari total kontrak` : 'Data harga belum diset'}
+                            />
+
+                            <ModernKPICard
+                                title="Menunggu Approval"
+                                value={
+                                    <div className="flex items-center gap-2">
+                                        {financials.menungguApprovalCount}
+                                        {financials.menungguApprovalCount > 0 && (
+                                            <span className="relative flex h-2.5 w-2.5 mx-1">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                                            </span>
+                                        )}
                                     </div>
+                                }
+                                icon={Clock}
+                                iconClass={financials.menungguApprovalCount > 0 ? "bg-amber-500 text-white" : "bg-slate-50 text-slate-400"}
+                                subtitle={financials.totalHarga > 0 ? 'Pengajuan termin menunggu review' : 'Data harga belum diset'}
+                                trend={financials.menungguApprovalCount > 0 ? { direction: 'down', label: 'Action Needed', colorClass: 'bg-amber-100 text-amber-700' } : undefined}
+                                onClick={() => {/* Mock interaction */}}
+                                isActive={false}
+                            />
+
+                            <ModernKPICard
+                                title="Sisa Tagih"
+                                value={
+                                    <span className="text-blue-600">
+                                        {financials.totalHarga > 0 ? formatRupiah(financials.sisaTagih) : '—'}
+                                    </span>
+                                }
+                                icon={CreditCard}
+                                iconClass="bg-indigo-50 text-indigo-600"
+                                subtitle={financials.totalHarga > 0 ? 'Belum ditagihkan' : 'Data harga belum diset'}
+                            />
+                        </div>
+                    </div>
+
+                    {/* ROW 3: OVERVIEW PER TIPE */}
+                    <div>
+                        <h3 className="text-[11px] font-semibold text-[#9CA3AF] tracking-[0.08em] uppercase mb-4 mt-8">
+                            Tipe Pekerjaan
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                            {projectTypes.map((t) => {
+                                const summary = getTypeSummary(t.id);
+                                return (
+                                    <Link to={`/projects/type/${t.id.toLowerCase()}/sites`} key={t.id} className={clsx(
+                                        "rounded-[12px] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] hover:shadow-md hover:-translate-y-0.5 transition-all group flex flex-col justify-between h-[130px]",
+                                        summary.importedCount === 0 ? "bg-[#FAFAFA]" : "bg-white"
+                                    )}>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <h4 className="text-[16px] font-bold text-[#111827]">{t.label}</h4>
+                                                <span className="text-[13px] text-[#6B7280]">{summary.importedCount} Sites</span>
+                                            </div>
+                                            <span className={clsx("w-9 h-9 rounded-full flex items-center justify-center shadow-sm", t.bg, t.color)}>
+                                                <Building2 className="w-[18px] h-[18px]" strokeWidth={2.5} />
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="mt-auto">
+                                            {summary.importedCount > 0 ? (
+                                                <>
+                                                    <div className="text-[11px] text-[#9CA3AF] mb-1.5 truncate">
+                                                        {summary.permit} Permit • {summary.impl} Impl
+                                                    </div>
+                                                    <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                                                        {summary.awal > 0 && <div style={{width: `${(summary.awal/summary.importedCount)*100}%`}} className="bg-[#94A3B8] h-full" />}
+                                                        {summary.permit > 0 && <div style={{width: `${(summary.permit/summary.importedCount)*100}%`}} className="bg-[#F59E0B] h-full" />}
+                                                        {summary.akses > 0 && <div style={{width: `${(summary.akses/summary.importedCount)*100}%`}} className="bg-[#3B82F6] h-full" />}
+                                                        {summary.impl > 0 && <div style={{width: `${(summary.impl/summary.importedCount)*100}%`}} className="bg-[#8B5CF6] h-full" />}
+                                                        {summary.selesai > 0 && <div style={{width: `${(summary.selesai/summary.importedCount)*100}%`}} className="bg-[#10B981] h-full" />}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="text-[11px] text-[#9CA3AF]">Belum ada site</div>
+                                            )}
+                                        </div>
+                                    </Link>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* Recent Work Orders */}
-                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm">
-                         <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="font-bold text-slate-800">Work Orders</h3>
-                            {['management', 'backoffice_admin'].includes(currentUser.role) && <Link to="/work-orders" className="text-xs font-medium text-blue-600 hover:text-blue-700">+ Input WO</Link>}
+                    {/* ROW 4: TWO-COLUMN LAYOUT */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                        {/* LEFT COLUMN (60%): Butuh Tindakan & Aktivitas */}
+                        <div className="lg:col-span-7 space-y-6">
+                            
+                            {/* Butuh Tindakan Segera */}
+                            <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden">
+                                <div className="px-5 py-4 flex items-center justify-between">
+                                    <h3 className="font-bold text-[14px] text-[#111827] flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-[#EF4444] animate-ping opacity-75 shrink-0" />
+                                        Butuh Tindakan Segera
+                                    </h3>
+                                    {actionNeededList.length > 0 && (
+                                        <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[11px] font-bold">
+                                            {actionNeededList.length} items
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex flex-col">
+                                    {actionNeededList.length === 0 ? (
+                                        <div className="p-8 text-center flex flex-col items-center justify-center">
+                                            <CheckCircle2 className="w-8 h-8 text-[#10B981] mb-2" />
+                                            <span className="text-[14px] font-medium text-[#111827]">Semua site dalam kondisi normal</span>
+                                            <span className="text-[13px] text-[#6B7280]">Tidak ada tindakan mendesak saat ini</span>
+                                        </div>
+                                    ) : (
+                                        actionNeededList.map((item) => {
+                                            const isCritical = item.title.includes('> 21 hari') || item.title.includes('issue_hold') || item.title.toLowerCase().includes('issue');
+                                            const borderColor = isCritical ? 'border-l-[#EF4444]' : 'border-l-[#F59E0B]';
+                                            return (
+                                                <div key={item.id} className={clsx("p-4 flex items-center justify-between hover:bg-[#F9FAFB] transition-colors border-l-[3px] border-b border-b-slate-50 cursor-pointer group", borderColor)}>
+                                                    <div>
+                                                        <div className="font-semibold text-[#111827] text-[14px] mb-0.5">{item.siteName}</div>
+                                                        <div className="text-[12px] text-[#6B7280]">
+                                                            {item.title} · {item.type}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[13px] font-medium text-[#2563EB] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                                        Lihat <span className="text-[16px] leading-none mb-0.5">→</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Aktivitas Terbaru */}
+                            <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden">
+                                <div className="px-5 py-4">
+                                    <h3 className="font-bold text-[14px] text-[#111827]">Aktivitas Terbaru</h3>
+                                </div>
+                                <div className="px-5 pb-5">
+                                    <ul className="flex flex-col">
+                                        {activityFeed.slice(0, 5).map((log, idx) => {
+                                            const user = people.find(p => p.id === log.userId);
+                                            const userName = user ? user.name : 'Sistem';
+                                            const initial = userName.charAt(0);
+                                            return (
+                                                <li key={log.id} className="flex gap-3 py-3 relative">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0 z-10">
+                                                        {initial}
+                                                    </div>
+                                                    <div className={clsx("flex-1 pb-3", idx < 4 ? "border-b border-slate-100 w-[80%]" : "")}>
+                                                        <div className="text-[13px] leading-snug">
+                                                            <span className="font-semibold text-[#111827]">{userName}</span>{' '}
+                                                            <span className="text-[#374151]">{log.action}</span>{' '}
+                                                            <span className="font-medium text-[#374151]">{log.target}</span>
+                                                        </div>
+                                                        <div className="text-[11px] text-[#6B7280] mt-1">{log.timestamp}</div>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            </div>
+
                         </div>
-                        <div className="p-0 overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500">
-                                        <th className="px-4 py-2 font-semibold">WO Number</th>
-                                        <th className="px-4 py-2 font-semibold">Status</th>
-                                        <th className="px-4 py-2 font-semibold">Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {workOrders.slice(0, 4).map(wo => (
-                                         <tr key={wo.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/work-orders/${wo.id}`)}>
-                                             <td className="px-4 py-2 flex flex-col">
-                                                 <span className="font-mono font-bold text-slate-700 hover:text-blue-600 transition-colors">{wo.woNumber}</span>
-                                                 <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{wo.pemberiKerja}</span>
-                                             </td>
-                                             <td className="px-4 py-2">
-                                                 <span className={clsx(
-                                                    "inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border",
-                                                    wo.status === 'Unassigned' ? 'bg-slate-50 text-slate-600 border-slate-200' :
-                                                    wo.status === 'Pending SPK Approval' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                    wo.status === 'SPK Created' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                                    'bg-blue-50 text-blue-700 border-blue-200'
-                                                )}>
-                                                    {wo.status}
-                                                </span>
-                                             </td>
-                                             <td className="px-4 py-2 text-xs text-slate-500">{new Date(wo.tanggalWo).toLocaleDateString('id-ID', { month: 'short', day: 'numeric'})}</td>
-                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+
+                        {/* RIGHT COLUMN (40%): Pengajuan Menunggu */}
+                        <div className="lg:col-span-5 space-y-6">
+                            <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden">
+                                <div className="px-5 py-4 flex justify-between items-center">
+                                    <h3 className="font-bold text-[14px] text-[#111827] flex items-center gap-2">
+                                        Pengajuan Termin
+                                        {pendingPengajuanList.length > 0 && <div className="w-2 h-2 rounded-full bg-[#F59E0B]" />}
+                                    </h3>
+                                </div>
+                                <div className="flex flex-col">
+                                    {pendingPengajuanList.length === 0 ? (
+                                        <div className="p-8 text-center text-[13px] text-[#6B7280] bg-[#FAFAFA]">
+                                            Tidak ada pengajuan yg menunggu review.
+                                        </div>
+                                    ) : (
+                                        pendingPengajuanList.slice(0, 6).map((item, idx) => {
+                                            // Extract Step number if exists, e.g., "Termin 1 (100%)" or "T1"
+                                            const isTermin = item.title.toLowerCase().includes('termin');
+                                            const badgeText = isTermin ? `T${item.title.match(/\d+/)?.[0] || '?'}` : 'REQ';
+
+                                            return (
+                                                <div key={`${item.id}-${idx}`} className="p-4 hover:bg-[#F9FAFB] transition-colors border-t border-slate-50 group flex items-start justify-between gap-3">
+                                                    <div className="flex items-start gap-3 overflow-hidden">
+                                                        <div className="shrink-0 mt-0.5 bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                                            {badgeText}
+                                                        </div>
+                                                        <div className="overflow-hidden">
+                                                            <div className="font-semibold text-[#111827] text-[13px] truncate">
+                                                                {item.siteId} · {item.siteName}
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 mt-1 text-[12px] text-[#6B7280] whitespace-nowrap">
+                                                                <span className="font-medium text-[#374151]">{formatRupiah(item.amount)}</span>
+                                                                <span>·</span>
+                                                                <span>Diajukan {new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => navigate(`/sites/${item.siteId}?tab=costs`)}
+                                                        className="shrink-0 text-[13px] font-medium text-[#2563EB] opacity-0 group-hover:opacity-100 transition-opacity hover:underline"
+                                                    >
+                                                        Review <span className="text-[14px] leading-none">→</span>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                        <div className="px-4 py-2 border-t border-slate-100 text-center">
-                            <Link to="/work-orders" className="text-xs text-slate-500 hover:text-slate-800">Lihat Semua WOs</Link>
-                        </div>
-                    </div>
+
                     </div>
                 </div>
             )}
