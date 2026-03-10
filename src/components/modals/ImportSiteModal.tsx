@@ -226,7 +226,7 @@ const ImportSiteModal: React.FC<ImportSiteModalProps> = ({ isOpen, onClose, onIm
                                     // Simulated existing record update
                                     { unique_key: 'sm1', site_id: 'sm1', site_name: 'Existing Site Updated', region: 'R03 Jakarta & Banten', po_tsel: '4200052176', longitude: 106.8, latitude: -6.2 }
                                 ];
-                                onImportExcel(mockParsed, selectedFile.name);
+                                onImportExcel(mockParsed, selectedFile!.name);
                             }}
                             disabled={!selectedFile}
                             className={clsx(

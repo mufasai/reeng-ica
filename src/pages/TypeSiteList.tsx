@@ -12,6 +12,7 @@ import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
 import { 
   filterTerms,
   combatTerms,
+  terminPengajuanRecords,
   type ProjectType,
   teams,
   type SiteMaster,
@@ -140,6 +141,64 @@ const TypeSiteList = () => {
   };
 
   const statCards = calculateStats();
+
+  // --- FINANCIAL HELPERS ---
+  const formatRupiah = (amount: number | null): string => {
+    if (amount === null || amount === 0) return '—';
+    if (amount >= 1_000_000_000) return `Rp ${(amount / 1_000_000_000).toFixed(1).replace('.', ',')}B`;
+    if (amount >= 1_000_000)     return `Rp ${(amount / 1_000_000).toFixed(1).replace('.', ',')}Jt`;
+    if (amount >= 1_000)         return `Rp ${(amount / 1_000).toFixed(0)}K`;
+    return `Rp ${amount.toLocaleString('id-ID')}`;
+  };
+
+  const formatFull = (amount: number | null): string =>
+    amount ? `Rp ${amount.toLocaleString('id-ID')}` : '—';
+
+  // Calculate financial totals for FILTER sites
+  const calculateFinancials = () => {
+    if (upperType !== 'FILTER') return null;
+    const siteIds = matchedSites.map(s => s.site_id || s.id);
+
+    // Total Harga: sum of site.budget (the contract value field) for matched sites
+    // Budget ≈ 70% of nilai kontrak TI — using site.budget as-is for now as per spec
+    const totalHarga = matchedSites.reduce((sum, s) => {
+      const boqVal = (s as any).nilai_kontrak || (s as any).budget || 0;
+      return sum + boqVal;
+    }, 0);
+
+    // Paid termins for all matching sites
+    const paidRecords = terminPengajuanRecords.filter(p =>
+      siteIds.includes(p.site_id) && p.status === 'paid'
+    );
+    const budgetTerpakai = paidRecords.reduce((sum, p) => sum + p.nominal, 0);
+
+    // Submitted records (menunggu)
+    const submittedRecords = terminPengajuanRecords.filter(p =>
+      siteIds.includes(p.site_id) && p.status === 'submitted'
+    );
+    const budgetMenunggu = submittedRecords.reduce((sum, p) => sum + p.nominal, 0);
+
+    const sisaBudget = totalHarga > 0 ? totalHarga - budgetTerpakai : null;
+
+    // Per-termin breakdown
+    const perTermin: Record<string, number> = {};
+    ['T1','T2a','T2b','T2c','T3','T4'].forEach(k => {
+      perTermin[k] = terminPengajuanRecords
+        .filter(p => siteIds.includes(p.site_id) && p.status === 'paid' && p.termin_key === k)
+        .reduce((sum, p) => sum + p.nominal, 0);
+    });
+
+    const totalTerbayar = budgetTerpakai;
+    const pct = totalHarga > 0 && budgetTerpakai > 0
+      ? ((budgetTerpakai / totalHarga) * 100).toFixed(1)
+      : null;
+
+    return { totalHarga: totalHarga || null, budgetTerpakai: budgetTerpakai || null,
+             budgetMenunggu: budgetMenunggu || null, sisaBudget,
+             totalTerbayar: totalTerbayar || null, perTermin, pct };
+  };
+
+  const fin = calculateFinancials();
 
   // 4. Calculate Per-Termin Distribution Matrix
   const distributionMatrix = useMemo(() => {
@@ -342,40 +401,133 @@ const TypeSiteList = () => {
               </div>
           </div>
 
-          {/* KPI CARDS */}
+          {/* KPI CARDS — single scrollable row of 8 */}
           {matchedSites.length > 0 && (
-            <div className="kpi-row relative z-10 mb-2">
-              <div className="kpi blue group">
-                <MapPin className="kpi-icon-overlay" />
-                <div className="kpi-lbl">Total Sites</div>
-                <div className="kpi-val">{statCards.totalSites}</div>
-                <div className="kpi-desc">{statCards.totalSites} active, {statCards.completedSites} completed</div>
-              </div>
-              <div className="kpi violet group">
-                <Layers className="kpi-icon-overlay" />
-                <div className="kpi-lbl">Total Teams</div>
-                <div className="kpi-val">{statCards.totalTeams}</div>
-                <div className="kpi-desc">Unique teams assigned</div>
-              </div>
-              <div className="kpi green group">
-                <FolderKanban className="kpi-icon-overlay" />
-                <div className="kpi-lbl">Total People</div>
-                <div className="kpi-val">{statCards.totalPeople}</div>
-                <div className="kpi-desc">Across all {upperType} teams</div>
-              </div>
-              <div className="kpi amber group">
-                <List className="kpi-icon-overlay" />
-                <div className="kpi-lbl">Menunggu Aksi</div>
-                <div className="kpi-val amber flex items-center gap-2">
-                    {statCards.actionNeededCount} 
+            <div className="relative">
+              <div
+                className="flex gap-3 overflow-x-auto pb-1"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {/* ── Operational Cards (4) ── */}
+                <div className="kpi blue group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
+                  <MapPin className="kpi-icon-overlay" />
+                  <div className="kpi-lbl">Total Sites</div>
+                  <div className="kpi-val">{statCards.totalSites}</div>
+                  <div className="kpi-desc">{statCards.totalSites} active, {statCards.completedSites} completed</div>
+                </div>
+                <div className="kpi violet group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
+                  <Layers className="kpi-icon-overlay" />
+                  <div className="kpi-lbl">Total Teams</div>
+                  <div className="kpi-val">{statCards.totalTeams}</div>
+                  <div className="kpi-desc">Unique teams assigned</div>
+                </div>
+                <div className="kpi green group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
+                  <FolderKanban className="kpi-icon-overlay" />
+                  <div className="kpi-lbl">Total People</div>
+                  <div className="kpi-val">{statCards.totalPeople}</div>
+                  <div className="kpi-desc">Across all {upperType} teams</div>
+                </div>
+                <div className="kpi amber group shrink-0" style={{ minWidth: 150, maxWidth: 185 }}>
+                  <List className="kpi-icon-overlay" />
+                  <div className="kpi-lbl">Menunggu Aksi</div>
+                  <div className="kpi-val amber flex items-center gap-2">
+                    {statCards.actionNeededCount}
                     {statCards.actionNeededCount > 0 && <span className="pulse"></span>}
+                  </div>
+                  <div className="kpi-hint flex-1" title={statCards.mostUrgentAction}>
+                    {statCards.actionNeededCount > 0 ? (
+                      <span className="truncate w-full block">{statCards.mostUrgentAction.length > 30 ? statCards.mostUrgentAction.substring(0, 30) + '...' : statCards.mostUrgentAction}</span>
+                    ) : <span className="text-slate-400 font-normal truncate">No immediate action</span>}
+                  </div>
                 </div>
-                <div className="kpi-hint flex-1" title={statCards.mostUrgentAction}>
-                  {statCards.actionNeededCount > 0 ? (
-                    <span className="truncate w-full block">{statCards.mostUrgentAction.length > 30 ? statCards.mostUrgentAction.substring(0, 30) + '...' : statCards.mostUrgentAction}</span>
-                  ) : <span className="text-slate-400 font-normal truncate">No immediate action</span>}
-                </div>
+
+                {/* ── Divider ── */}
+                {upperType === 'FILTER' && fin && (
+                  <div className="shrink-0 flex items-stretch py-1">
+                    <div className="w-px bg-[var(--glass-border)] mx-1 rounded-full" />
+                  </div>
+                )}
+
+                {/* ── Financial Cards (4) — FILTER only ── */}
+                {upperType === 'FILTER' && fin && (
+                  <>
+                    {/* Total Harga */}
+                    <div
+                      className="kpi blue group shrink-0 cursor-default"
+                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(59,130,246,0.04)' }}
+                      title={fin.totalHarga ? `Total nilai kontrak: ${formatFull(fin.totalHarga)}\nIncl. 70% dari nilai kontrak TI` : 'Belum ada data harga'}
+                    >
+                      <div className="kpi-lbl">Total Harga</div>
+                      <div className="kpi-val" style={{ fontSize: fin.totalHarga && fin.totalHarga >= 1e9 ? 18 : undefined }}>
+                        {fin.totalHarga ? formatRupiah(fin.totalHarga) : '—'}
+                      </div>
+                      <div className="kpi-desc">
+                        {fin.totalHarga ? 'Incl. 70% dari nilai kontrak TI' : 'Belum ada data harga'}
+                      </div>
+                    </div>
+
+                    {/* Budget Terpakai */}
+                    <div
+                      className="kpi amber group shrink-0 cursor-default"
+                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(249,115,22,0.04)' }}
+                      title={fin.budgetTerpakai ? `Terbayar: ${formatFull(fin.budgetTerpakai)}\nMenunggu: ${formatFull(fin.budgetMenunggu)}` : 'Belum ada pembayaran'}
+                    >
+                      <div className="kpi-lbl">Budget Terpakai</div>
+                      <div className="kpi-val">{fin.budgetTerpakai ? formatRupiah(fin.budgetTerpakai) : '—'}</div>
+                      <div className="kpi-desc">
+                        {fin.pct ? `${fin.pct}% dari total harga` : 'Belum ada pembayaran'}
+                      </div>
+                    </div>
+
+                    {/* Sisa Budget */}
+                    <div
+                      className="kpi green group shrink-0 cursor-default"
+                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(16,185,129,0.04)' }}
+                      title={fin.sisaBudget !== null ? `Sisa: ${formatFull(fin.sisaBudget)}` : 'Belum ada data harga'}
+                    >
+                      <div className="kpi-lbl">Sisa Budget</div>
+                      <div
+                        className="kpi-val"
+                        style={{ color: fin.sisaBudget !== null && fin.sisaBudget < 0 ? 'var(--red-400, #ef4444)' : undefined }}
+                      >
+                        {fin.sisaBudget !== null ? formatRupiah(fin.sisaBudget) : '—'}
+                      </div>
+                      <div className="kpi-desc">
+                        {fin.sisaBudget !== null
+                          ? (fin.sisaBudget < 0 ? '⚠️ Over budget' : 'Tersedia untuk termin berikutnya')
+                          : 'Belum ada data harga'}
+                      </div>
+                    </div>
+
+                    {/* Total Terbayar */}
+                    <div
+                      className="kpi green group shrink-0 cursor-default"
+                      style={{ minWidth: 155, maxWidth: 190, background: 'rgba(20,184,166,0.05)', borderTopColor: 'teal' }}
+                      title={Object.entries(fin.perTermin)
+                        .filter(([,v]) => v > 0)
+                        .map(([k,v]) => `${k}: Rp ${v.toLocaleString('id-ID')}`)
+                        .join('\n') || 'Belum ada termin terbayar'}
+                    >
+                      <div className="kpi-lbl">Total Terbayar</div>
+                      <div className="kpi-val">{fin.totalTerbayar ? formatRupiah(fin.totalTerbayar) : '—'}</div>
+                      <div className="kpi-desc" style={{ fontSize: 10 }}>
+                        {Object.entries(fin.perTermin).filter(([,v]) => v > 0).length > 0
+                          ? Object.entries(fin.perTermin)
+                              .filter(([,v]) => v > 0)
+                              .map(([k,v]) => `${k}: ${formatRupiah(v)}`)
+                              .join('  •  ')
+                          : 'Belum ada termin terbayar'}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
+
+              {/* Right-edge scroll hint gradient */}
+              <div
+                className="pointer-events-none absolute right-0 top-0 h-full w-16 rounded-r-xl"
+                style={{ background: 'linear-gradient(to right, transparent, var(--page-bg, #f8fafc))' }}
+              />
             </div>
           )}
       </div>
@@ -492,14 +644,6 @@ const TypeSiteList = () => {
 
           <div className="stepper-wrap !pt-2 pb-0">
              <div className="flex justify-end px-5 pt-3">
-                 <button className="flex items-center gap-1 px-3 py-1.5 bg-[#F0F5FF] text-[#2563EB] text-xs font-semibold rounded-md border border-[#DBEAFE] hover:bg-[#E0E7FF] transition-colors" onClick={(e) => {
-                    const el = e.currentTarget.parentElement?.parentElement?.parentElement?.querySelector('.expanded-wrap');
-                    if (el) {
-                        el.classList.toggle('open');
-                    }
-                 }}>
-                 Detail <span className="text-[10px]">↕</span>
-                 </button>
              </div>
             <div className="stepper">
               {distributionMatrix.map((col, idx) => {
@@ -582,90 +726,6 @@ const TypeSiteList = () => {
             </div>
           </div>
 
-          {/* Expanded detail */}
-          <div className="expanded-wrap" id="expandedDetail">
-            <div className="expanded-grid">
-              {distributionMatrix.filter(col => col.paid > 0 || col.approved > 0 || col.pending > 0 || col.inProgress > 0 || col.locked > 0).map((col) => (
-                <div key={col.step} className="exp-col">
-                  <div className="exp-col-title">
-                    {col.title.split(' ')[0]} {col.title.split(' ')[1]}
-                    <span className="exp-pct">{col.title.split('(')[1]?.replace(')','')}</span>
-                  </div>
-                  <div className={`exp-row ${col.paid === 0 ? 'zero' : ''}`}>
-                    <div className="lbl"><div className="exp-dot paid"></div>Dibayarkan</div>
-                    <div className={`ct ${col.paid > 0 ? 'em !text-[#047857]' : '!text-[#94A3B8]'}`}>{col.paid}</div>
-                  </div>
-                  <div className={`exp-row ${col.approved === 0 ? 'zero' : ''}`}>
-                    <div className="lbl"><div className="exp-dot approved"></div>Approved</div>
-                    <div className={`ct ${col.approved > 0 ? 'em !text-[#16A34A]' : '!text-[#94A3B8]'}`}>{col.approved}</div>
-                  </div>
-                  <div className={`exp-row ${col.pending === 0 ? 'zero' : ''}`}>
-                    <div className="lbl"><div className="exp-dot action"></div>Menunggu Aksi</div>
-                    <div className={`ct ${col.pending > 0 ? 'am !text-[#B45309]' : '!text-[#94A3B8]'}`}>{col.pending}</div>
-                  </div>
-                  <div className={`exp-row ${col.inProgress === 0 ? 'zero' : ''}`}>
-                    <div className="lbl"><div className="exp-dot inactive !bg-[var(--blue-500)]"></div>In Progress</div>
-                    <div className={`ct ${col.inProgress > 0 ? '!text-[var(--blue-600)]' : '!text-[#94A3B8]'}`}>{col.inProgress}</div>
-                  </div>
-                  <div className={`exp-row ${col.locked === 0 ? 'zero' : ''} border-b-0`}>
-                    <div className="lbl"><div className="exp-dot inactive"></div>Belum Aktif</div>
-                    <div className={`ct ${col.locked > 0 ? 'gr !text-[#64748B]' : '!text-[#94A3B8]'}`}>{col.locked}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* SITE-LEVEL STATUS TABLE */}
-           <div className="px-6 py-6 border-t border-slate-200">
-               <h3 className="text-sm font-bold text-slate-800 mb-4">Site-level Termin Status</h3>
-               <div className="overflow-x-auto">
-                   <table className="w-full text-left text-sm whitespace-nowrap">
-                       <thead>
-                           <tr className="border-b border-slate-200">
-                               <th className="pb-2 font-semibold text-slate-500">Site Name</th>
-                               <th className="pb-2 font-semibold text-slate-500 text-center">T1</th>
-                               <th className="pb-2 font-semibold text-slate-500 text-center">T2</th>
-                               <th className="pb-2 font-semibold text-slate-500 text-center">T3</th>
-                               <th className="pb-2 font-semibold text-slate-500 text-center">T4</th>
-                           </tr>
-                       </thead>
-                       <tbody>
-                           {matchedSites.map(site => {
-                               const terms = upperType === 'FILTER' ? filterTerms.filter(t => t.siteId === site.id) : combatTerms.filter(t => t.siteId === site.id);
-                               
-                               const renderTermStatus = (stepId: number) => {
-                                   if (upperType === 'FILTER') {
-                                       const term = terms.find(t => t.step === stepId);
-                                       if (!term) return <span className="text-slate-400" title="Locked">🔒</span>;
-                                       if (term.status === 'paid' || term.status === 'dibayarkan') return <span className="text-emerald-500 font-bold" title="Paid">✓</span>;
-                                       if (term.status === 'approved' || term.status === 'diterima') return <span className="text-blue-500 font-bold" title="Approved">●</span>;
-                                       if (term.status === 'pengajuan' || term.status === 'pending_review' || term.status === 'submitted') return <span className="text-amber-500 font-bold" title="Menunggu Aksi">⚡</span>;
-                                       return <span className="text-blue-400 font-bold" title="In Progress">●</span>;
-                                   } else {
-                                       // Combine 4-6 into 4
-                                       const term = stepId === 4 ? terms.find(t => t.step >= 4) : terms.find(t => t.step === stepId);
-                                       if (!term) return <span className="text-slate-400" title="Locked">🔒</span>;
-                                       if (term.status === 'completed') return <span className="text-emerald-500 font-bold" title="Paid">✓</span>;
-                                       if (term.status === 'in_progress' && term.subSteps.some((s: any) => s.status === 'pengajuan' || s.status === 'pending_review')) return <span className="text-amber-500 font-bold" title="Menunggu Aksi">⚡</span>;
-                                       return <span className="text-blue-500 font-bold" title="In Progress">●</span>;
-                                   }
-                               };
-
-                               return (
-                                   <tr key={site.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                                       <td className="py-2.5 font-medium text-slate-700 max-w-[200px] truncate" title={site.site_name}>{site.site_name}</td>
-                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(1)}</td>
-                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(2)}</td>
-                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(3)}</td>
-                                       <td className="py-2.5 text-center text-lg leading-none">{renderTermStatus(4)}</td>
-                                   </tr>
-                               );
-                           })}
-                       </tbody>
-                   </table>
-               </div>
-           </div>
         </div>
       )}
 

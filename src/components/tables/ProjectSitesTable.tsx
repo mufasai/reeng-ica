@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { type SiteMaster, teams, workOrders } from '../../data/mockData';
+import { type SiteMaster, teams, workOrders, filterTerms, combatTerms } from '../../data/mockData';
 import { useState, useMemo } from 'react';
 import { 
     TableContainer, 
@@ -81,7 +81,72 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
         }
   };
 
+  const renderTerminDots = (site: SiteMaster) => {
+      const isFilter = site.project_type === 'FILTER';
+      const terms = isFilter ? filterTerms.filter(t => t.siteId === site.id) : combatTerms.filter(t => t.siteId === site.id);
+      
+      const stageOrder = ['imported', 'assigned', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'bast', 'invoice', 'completed'];
+      const stageIndex = stageOrder.indexOf(site.stage || 'imported');
+      
+      if (terms.length === 0 || stageIndex < 3) {
+          return (
+              <div className="flex items-center gap-1 text-slate-300 font-bold" title="Belum ada data termin">
+                  <span>—</span><span className="text-[10px]">·</span>
+                  <span>—</span><span className="text-[10px]">·</span>
+                  <span>—</span><span className="text-[10px]">·</span>
+                  <span>—</span>
+              </div>
+          );
+      }
 
+      const renderDot = (step: number) => {
+          let term;
+          let title = `T${step}: `;
+          
+          if (isFilter) {
+              term = terms.find(t => t.step === step);
+              if (!term) return { char: '🔒', color: 'text-slate-400', title: title + 'Terkunci' };
+              
+              const pct = step === 1 ? '30%' : (step === 2 ? '50%' : '10%');
+              title = `T${step} (${pct}): `;
+              
+              if (term.status === 'paid' || term.status === 'dibayarkan' || term.status === 'approved' || term.status === 'diterima') return { char: '✓', color: 'text-emerald-500 font-bold', title: title + 'Dibayarkan/Approved' };
+              if (term.status === 'pengajuan' || term.status === 'pending_review' || term.status === 'submitted') return { char: '●', color: 'text-blue-500', title: title + 'Menunggu approval' };
+              if (term.status === 'open' || term.status === 'rejected') return { char: '⚡', color: 'text-amber-500 font-bold', title: title + 'Siap diajukan' };
+              return { char: '●', color: 'text-blue-400', title: title + 'In Progress' };
+          } else {
+              term = step === 4 ? terms.find(t => t.step >= 4) : terms.find(t => t.step === step);
+              if (!term) return { char: '🔒', color: 'text-slate-400', title: title + 'Terkunci' };
+              
+              if (term.status === 'completed') return { char: '✓', color: 'text-emerald-500 font-bold', title: title + 'Selesai' };
+              if (term.status === 'in_progress') {
+                  const hasPending = term.subSteps.some((s:any) => s.status === 'pengajuan' || s.status === 'pending_review');
+                  if (hasPending) return { char: '●', color: 'text-blue-500', title: title + 'Menunggu approval' };
+                  return { char: '⚡', color: 'text-amber-500 font-bold', title: title + 'Siap diajukan' };
+              }
+              return { char: '●', color: 'text-blue-400', title: title + 'In Progress' };
+          }
+      };
+
+      const d1 = renderDot(1);
+      const d2 = renderDot(2);
+      const d3 = renderDot(3);
+      const d4 = renderDot(4);
+
+      const fullTitle = `${d1.title}\n${d2.title}\n${d3.title}\n${d4.title}`;
+
+      return (
+          <div className="flex items-center gap-1 cursor-help w-[80px]" title={fullTitle}>
+              <span className={clsx("w-2.5 h-2.5 flex items-center justify-center text-[10px] leading-none", d1.color)}>{d1.char}</span>
+              <span className="text-slate-300 text-[10px]">·</span>
+              <span className={clsx("w-2.5 h-2.5 flex items-center justify-center text-[10px] leading-none", d2.color)}>{d2.char}</span>
+              <span className="text-slate-300 text-[10px]">·</span>
+              <span className={clsx("w-2.5 h-2.5 flex items-center justify-center text-[10px] leading-none", d3.color)}>{d3.char}</span>
+              <span className="text-slate-300 text-[10px]">·</span>
+              <span className={clsx("w-2.5 h-2.5 flex items-center justify-center text-[10px] leading-none", d4.color)}>{d4.char}</span>
+          </div>
+      );
+  };
 
   return (
     <TableContainer>
@@ -102,6 +167,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                <TableHead>Region</TableHead>
                <TableHead>Team</TableHead>
                <TableHead>Stage</TableHead>
+               <TableHead className="w-[80px]">Termin</TableHead>
                <TableHead>Last Updated</TableHead>
                <TableHead className="text-right">Actions</TableHead>
            </TableHeader>
@@ -151,6 +217,9 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                <span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border whitespace-nowrap", stageProps.color)}>
                                    {stageProps.label}
                                </span>
+                           </TableCell>
+                           <TableCell>
+                               {renderTerminDots(site)}
                            </TableCell>
                            <TableCell className="text-xs text-[var(--text-secondary)]">
                                 {site.stage_updated_at ? new Date(site.stage_updated_at).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year:'numeric'}) : '—'}

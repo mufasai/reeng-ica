@@ -23,6 +23,35 @@ export interface WorkOrder {
   createdBy?: string;
 }
 
+export interface TerminPengajuan {
+  id: string; // auto
+  site_id: string; // -> site reference
+  termin_key: 'T1' | 'T2a' | 'T2b' | 'T2c' | 'T3' | 'T4';
+  nominal: number;
+  status: 'submitted' | 'approved' | 'paid' | 'rejected';
+  catatan?: string;
+  submitted_by: string; // -> users.id
+  submitted_at: string; // datetime
+  approved_by?: string; // -> users.id nullable
+  approved_at?: string; // datetime nullable
+  paid_at?: string; // datetime nullable
+  documents: string[]; // json array of file IDs
+}
+
+export const terminPengajuanRecords: TerminPengajuan[] = [
+    {
+        id: 'tp-1',
+        site_id: 'JKT010',
+        termin_key: 'T1',
+        nominal: 45000000,
+        status: 'submitted',
+        catatan: 'Permit sudah turun sesuai standar operasional',
+        submitted_by: 'u_lead',
+        submitted_at: '2024-03-05T10:00:00Z',
+        documents: ['file-1', 'file-2']
+    }
+];
+
 export const workOrders: WorkOrder[] = [
   {
     id: 'wo-1',
@@ -407,7 +436,49 @@ export interface FilterTerm {
     paidAt?: string;
 }
 
-export const filterTerms: FilterTerm[] = [];
+export const filterTerms: FilterTerm[] = [
+    {
+        id: 'ft-1',
+        siteId: 'JKT010',
+        step: 1,
+        name: 'Termin 1 (30%)',
+        percentage: 30,
+        status: 'approved',
+        amountRequest: 45000000,
+        amountPaid: 0,
+        submittedAt: '2024-02-15T10:00:00Z'
+    },
+    {
+        id: 'ft-2',
+        siteId: 'JKT010',
+        step: 2,
+        name: 'Termin 2 (50%)',
+        percentage: 50,
+        status: 'open',
+        amountRequest: 0,
+        amountPaid: 0,
+    },
+    {
+        id: 'ft-3',
+        siteId: 'JKT010',
+        step: 3,
+        name: 'Termin 3 (10%)',
+        percentage: 10,
+        status: 'open',
+        amountRequest: 0,
+        amountPaid: 0,
+    },
+    {
+        id: 'ft-4',
+        siteId: 'JKT010',
+        step: 4,
+        name: 'Termin 4 (10%)',
+        percentage: 10,
+        status: 'open',
+        amountRequest: 0,
+        amountPaid: 0,
+    },
+];
 
 export interface CombatSubStep {
     id: string;
@@ -523,6 +594,10 @@ export interface SiteMaster {
     notes?: string;
     extra_data?: Record<string, any>;
 
+    impl_cico_done?: boolean;
+    impl_rfs_done?: boolean;
+    impl_dokumen_done?: boolean;
+
     longitude?: number;
     latitude?: number;
 
@@ -583,10 +658,13 @@ export const siteMasterRecords: SiteMaster[] = [
         mitra: 'Smartelco',
         project_type: 'FILTER',
         status: 'assigned',
-        stage: 'permit_process',
-        stage_updated_at: '2024-02-12T08:30:00Z',
-        stage_notes: 'Pengurusan permit sedang berjalan',
+        stage: 'permit_ready',
+        stage_updated_at: '2024-03-01T14:00:00Z',
+        stage_notes: 'Permit TPAS sudah turun',
         ineom_registered: true,
+        impl_cico_done: true, // For testing T2a unlock
+        impl_rfs_done: false,
+        impl_dokumen_done: false,
         work_order_id: 'wo-1', // Linked to WO-2024-001
         batch_ref: 'EPROC20240210001_Smartelco_BoQ_Filter_Batch1',
         imported_by: 'u_adm',
@@ -616,6 +694,9 @@ export const siteMasterRecords: SiteMaster[] = [
         stage: 'implementasi',
         stage_updated_at: '2024-02-28T14:00:00Z',
         ineom_registered: true,
+        impl_cico_done: true,
+        impl_rfs_done: true,
+        impl_dokumen_done: true,
         work_order_id: 'wo-2', // Linked to WO-2024-002
         project_site_id: 's2', // Linked to actual Site 2
         batch_ref: 'EPROC20240215002_Smartelco_BoQ_Combat_Batch1',

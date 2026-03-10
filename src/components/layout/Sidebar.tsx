@@ -5,14 +5,17 @@ import {
   Users, 
   Settings, 
   Menu,
-  Database
+  Database,
+  ChevronRight
 } from 'lucide-react';
 import clsx from 'clsx';
 import { USERS, type UserRole, getActiveSiteCountsByType, projects, type ProjectType, siteMasterRecords } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
+import { useSidebar } from '../../context/SidebarContext';
 
 const Sidebar = () => {
   const { currentUser, switchRole } = useAuth();
+  const { collapsed, toggle } = useSidebar();
 
   // OVERVIEW & OTHER PERMISSIONS
   const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
@@ -46,242 +49,263 @@ const Sidebar = () => {
   }
   
   const showDataMaster = dataMasterItems.length > 0;
-
-  // SYSTEM (Management Only)
   const showSystem = allowedSidebarItems.includes('options');
 
+  const sidebarW = collapsed ? 'w-[56px]' : 'w-64';
+
+  // Reusable NavLink renderer
+  const renderNavLink = (path: string, icon: any, label: string, badge?: number, end?: boolean) => {
+    const Icon = icon;
+    return (
+      <NavLink
+        key={path}
+        to={path}
+        end={end}
+        className={({ isActive }) =>
+          clsx(
+            'flex items-center gap-3 rounded-lg mx-1 transition-all duration-150 group relative',
+            collapsed ? 'justify-center px-2 py-2.5' : 'px-4 py-2 text-[13px]',
+            isActive
+              ? 'bg-[var(--navy-800)] text-[var(--blue-400)] font-semibold border-l-2 border-[var(--blue-500)]'
+              : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] font-medium border-l-2 border-transparent'
+          )
+        }
+        title={collapsed ? label : undefined}
+      >
+        {({ isActive }) => (
+          <>
+            <Icon className={clsx('w-4 h-4 shrink-0 transition-colors', isActive ? 'text-[var(--blue-400)]' : 'text-slate-400 group-hover:text-white')} />
+            {!collapsed && <span className="flex-1 truncate">{label}</span>}
+            {!collapsed && badge && (
+              <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]">
+                {badge}
+              </span>
+            )}
+            {collapsed && badge && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full ring-2 ring-[var(--navy-900)]" />
+            )}
+            {/* Tooltip for collapsed mode */}
+            {collapsed && (
+              <span className="absolute left-full ml-3 px-2 py-1 bg-[var(--navy-700)] text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                {label}
+              </span>
+            )}
+          </>
+        )}
+      </NavLink>
+    );
+  };
+
+  const types: { id: ProjectType; label: string; colorClass: string }[] = [
+    { id: 'BLACKSITE', label: 'Blacksite', colorClass: 'bg-red-500' },
+    { id: 'COMBAT', label: 'Combat', colorClass: 'bg-amber-500' },
+    { id: 'FILTER', label: 'Filter', colorClass: 'bg-emerald-500' },
+    { id: 'L2H', label: 'L2H', colorClass: 'bg-blue-600' },
+    { id: 'REFINEN', label: 'Refinen', colorClass: 'bg-purple-600' },
+  ];
+  const typeCounts = getActiveSiteCountsByType(currentUser, projects, siteMasterRecords);
+  const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
+
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-[var(--navy-900)] text-white flex flex-col z-50 transition-all duration-300 border-r border-[var(--navy-800)]">
+    <aside className={clsx(
+      'fixed left-0 top-0 h-screen bg-[var(--navy-900)] text-white flex flex-col z-50',
+      'transition-[width] duration-300 ease-in-out border-r border-[var(--navy-800)]',
+      sidebarW
+    )}>
       {/* Brand */}
-      <div className="h-[60px] flex items-center px-6 border-b border-[var(--navy-800)] bg-[var(--navy-900)] shrink-0">
-        <div className="flex items-center gap-3">
+      <div className={clsx(
+        'h-[60px] flex items-center border-b border-[var(--navy-800)] bg-[var(--navy-900)] shrink-0',
+        collapsed ? 'justify-center px-2' : 'px-6'
+      )}>
+        {!collapsed && (
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 bg-[var(--blue-600)] rounded flex items-center justify-center shadow-lg shadow-[var(--blue-glow)] shrink-0">
+              <span className="font-bold text-lg text-white">R</span>
+            </div>
+            <span className="font-bold text-base tracking-tight text-white truncate">Reengineering</span>
+          </div>
+        )}
+        {collapsed && (
           <div className="w-8 h-8 bg-[var(--blue-600)] rounded flex items-center justify-center shadow-lg shadow-[var(--blue-glow)]">
             <span className="font-bold text-lg text-white">R</span>
           </div>
-          <span className="font-bold text-lg tracking-tight text-white">Reengineering</span>
-        </div>
-        <button className="ml-auto text-slate-400 hover:text-white transition-colors">
-            <Menu className="w-5 h-5" />
+        )}
+        <button
+          onClick={toggle}
+          className={clsx(
+            'text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-[var(--navy-700)]',
+            collapsed ? 'absolute right-1 top-3' : 'ml-auto'
+          )}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed
+            ? <ChevronRight className="w-4 h-4" />
+            : <Menu className="w-5 h-5" />
+          }
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-6 space-y-1 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar" style={{ paddingTop: '16px', paddingBottom: '16px' }}>
         
         {/* User Profile Summary */}
-        <div className="px-6 mb-6">
+        {!collapsed && (
+          <div className="px-4 mb-5">
             <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--navy-800)] border border-[var(--navy-700)]">
-                <div className="w-10 h-10 rounded-full bg-[var(--navy-700)] text-white flex items-center justify-center text-xs font-bold ring-2 ring-[var(--navy-700)]">
-                    {currentUser.name.charAt(0)}
-                </div>
-                <div className="overflow-hidden">
-                    <p className="text-sm font-medium truncate text-white">{currentUser.name}</p>
-                    <p className="text-xs text-slate-400 uppercase tracking-wide truncate">{currentUser.role.replace('_', ' ')}</p>
-                </div>
+              <div className="w-8 h-8 rounded-full bg-[var(--navy-700)] text-white flex items-center justify-center text-xs font-bold ring-2 ring-[var(--navy-700)] shrink-0">
+                {currentUser.name.charAt(0)}
+              </div>
+              <div className="overflow-hidden min-w-0">
+                <p className="text-sm font-medium truncate text-white">{currentUser.name}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide truncate">{currentUser.role.replace('_', ' ')}</p>
+              </div>
             </div>
             {/* Dev Helper: Role Switcher */}
-            <div className="mt-4 pt-4 border-t border-[var(--navy-700)] opacity-70 hover:opacity-100 transition-opacity">
-                <label className="text-[10px] uppercase text-amber-500/70 font-bold tracking-wider mb-1 flex items-center gap-1">
-                    <Settings className="w-3 h-3" /> Switch Role (Dev)
-                </label>
-                <select 
-                    className="w-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500/90 rounded px-2 py-1 outline-none focus:border-amber-500/50"
-                    value={currentUser.role}
-                    onChange={(e) => switchRole(e.target.value as UserRole)}
-                >
-                    {USERS.map(u => (
-                        <option key={u.id} value={u.role} className="bg-[var(--navy-800)] text-slate-300">{u.name} ({u.role})</option>
-                    ))}
-                </select>
+            <div className="mt-3 pt-3 border-t border-[var(--navy-700)] opacity-70 hover:opacity-100 transition-opacity">
+              <label className="text-[10px] uppercase text-amber-500/70 font-bold tracking-wider mb-1 flex items-center gap-1">
+                <Settings className="w-3 h-3" /> Switch Role (Dev)
+              </label>
+              <select
+                className="w-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500/90 rounded px-2 py-1 outline-none focus:border-amber-500/50"
+                value={currentUser.role}
+                onChange={(e) => switchRole(e.target.value as UserRole)}
+              >
+                {USERS.map(u => (
+                  <option key={u.id} value={u.role} className="bg-[var(--navy-800)] text-slate-300">{u.name} ({u.role})</option>
+                ))}
+              </select>
             </div>
-        </div>
+          </div>
+        )}
 
+        {/* Collapsed: avatar only */}
+        {collapsed && (
+          <div className="flex justify-center mb-4 relative group">
+            <div
+              className="w-8 h-8 rounded-full bg-[var(--navy-700)] text-white flex items-center justify-center text-xs font-bold ring-2 ring-[var(--navy-700)] cursor-default"
+              title={`${currentUser.name} (${currentUser.role})`}
+            >
+              {currentUser.name.charAt(0)}
+            </div>
+          </div>
+        )}
+
+        {/* ── Section label helper ── */}
+        {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-2 pb-[6px]">Overview</p>}
+        {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
 
         {/* 1. OVERVIEW */}
-        <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-4 pb-[6px]">Overview</p>
-        <div className="px-2 space-y-1">
-            {overviewItems.map((item) => (
-            <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/'}
-                className={({ isActive }) =>
-                clsx(
-                    'flex items-center gap-3 px-4 py-2 text-[13px] rounded-lg mx-1 transition-all duration-150 group',
-                    isActive
-                    ? 'bg-[var(--navy-800)] text-[var(--blue-400)] font-semibold border-l-2 border-[var(--blue-500)]'
-                    : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] font-medium border-l-2 border-transparent'
-                )
-                }
-            >
-                {({ isActive }) => (
-                    <>
-                        <item.icon className={clsx("w-4 h-4 transition-colors", isActive ? "text-[var(--blue-400)]" : "text-slate-400 group-hover:text-white")} />
-                        <span className="flex-1">{item.label}</span>
-                        {(item as any).badge && (
-                            <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]">
-                                {(item as any).badge}
-                            </span>
-                        )}
-                    </>
-                )}
-            </NavLink>
-            ))}
+        <div className="px-1 space-y-0.5">
+          {overviewItems.map((item) => renderNavLink(item.path, item.icon, item.label, item.badge, item.path === '/'))}
         </div>
 
-        {/* 2. PEKERJAAN */}
-        <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-6 pb-[6px]">Pekerjaan</p>
-        
-        {/* SEMUA SITES */}
-        <div className="px-2 mb-2">
-            <NavLink
-                to="/all-sites"
+        {/* ── PEKERJAAN ── */}
+        {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">Pekerjaan</p>}
+        {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
+
+        {/* Semua Sites */}
+        <div className="px-1 mb-1">
+          <NavLink
+            to="/all-sites"
+            className={({ isActive }) => clsx(
+              'flex items-center rounded-lg mx-0 transition-all duration-150 group relative',
+              collapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-4 py-2 text-[13px]',
+              isActive
+                ? 'bg-[var(--navy-800)] text-white font-bold border-l-2 border-blue-600'
+                : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] border-l-2 border-transparent font-medium'
+            )}
+            title={collapsed ? 'Semua Sites' : undefined}
+          >
+            {({ isActive: _ia }) => (
+              <>
+                <Database className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-white" />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 mx-3 truncate">Semua Sites</span>
+                    <span className="text-[11px] px-1.5 py-0.5 rounded border bg-[var(--navy-700)] text-white border-[var(--navy-600)]">
+                      [{siteMasterRecords.length}]
+                    </span>
+                  </>
+                )}
+                {collapsed && (
+                  <span className="absolute left-full ml-3 px-2 py-1 bg-[var(--navy-700)] text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                    Semua Sites [{siteMasterRecords.length}]
+                  </span>
+                )}
+              </>
+            )}
+          </NavLink>
+        </div>
+
+        {/* Project Type Links */}
+        <div className="px-1 space-y-0.5">
+          {types.map((type) => {
+            const count = typeCounts[type.id] || 0;
+            if (isRestricted && count === 0) return null;
+            const path = `/projects/type/${type.id.toLowerCase()}/sites`;
+            return (
+              <NavLink
+                key={type.id}
+                to={path}
                 className={({ isActive }) => clsx(
-                    'flex items-center justify-between px-4 py-2 text-[13px] rounded-lg mx-1 transition-all duration-150 group',
-                    isActive
+                  'flex items-center rounded-lg transition-all duration-150 group relative',
+                  collapsed ? 'justify-center px-2 py-2.5 mx-0' : 'justify-between px-4 py-2 text-[13px] mx-2',
+                  isActive
                     ? 'bg-[var(--navy-800)] text-white font-bold border-l-2 border-blue-600'
                     : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] border-l-2 border-transparent font-medium'
                 )}
-            >
+                title={collapsed ? `${type.label} [${count}]` : undefined}
+              >
                 {({ isActive }) => (
-                    <>
-                        <div className="flex items-center gap-3">
-                            <span className="truncate">Semua Sites</span>
-                        </div>
+                  <>
+                    <div className={clsx('w-2 h-2 rounded-full shrink-0', type.colorClass, isActive && 'ring-2 ring-white/20')} />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 mx-3 truncate">{type.label}</span>
                         <span className={clsx(
-                            "text-[11px] px-1.5 py-0.5 rounded border",
-                            isActive 
-                                ? "bg-blue-600/20 text-blue-400 border-blue-500/30 font-bold" 
-                                : "bg-[var(--navy-700)] text-white border-[var(--navy-600)]"
+                          'text-[11px] px-1.5 py-0.5 rounded border',
+                          isActive
+                            ? 'bg-blue-600/20 text-blue-400 border-blue-500/30 font-bold'
+                            : count > 0
+                              ? 'bg-[var(--navy-700)] text-white border-[var(--navy-600)]'
+                              : 'border-transparent text-slate-500'
                         )}>
-                            [{siteMasterRecords.length}]
+                          [{count}]
                         </span>
-                    </>
+                      </>
+                    )}
+                    {collapsed && (
+                      <span className="absolute left-full ml-3 px-2 py-1 bg-[var(--navy-700)] text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                        {type.label} [{count}]
+                      </span>
+                    )}
+                  </>
                 )}
-            </NavLink>
+              </NavLink>
+            );
+          })}
         </div>
-        
-        {(() => {
-            const types: { id: ProjectType; label: string; colorClass: string }[] = [
-                { id: 'BLACKSITE', label: 'Blacksite', colorClass: 'bg-red-500' },
-                { id: 'COMBAT', label: 'Combat', colorClass: 'bg-amber-500' },
-                { id: 'FILTER', label: 'Filter', colorClass: 'bg-emerald-500' },
-                { id: 'L2H', label: 'L2H', colorClass: 'bg-blue-600' },
-                { id: 'REFINEN', label: 'Refinen', colorClass: 'bg-purple-600' }
-            ];
-
-            // Get counts based on user role and team assignments
-            // Using the global mock arrays projects and siteMasterRecords
-            // In a real app these would come from AuthContext or a hook
-            // For now, we need to import them at the top of Sidebar.tsx
-            const typeCounts = getActiveSiteCountsByType(currentUser, projects, siteMasterRecords);
-            const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
-
-            return types.map((type) => {
-                const count = typeCounts[type.id] || 0;
-                
-                // If restricted, only show types that have >0 sites assigned to them
-                if (isRestricted && count === 0) return null;
-
-                const path = `/projects/type/${type.id.toLowerCase()}/sites`;
-                
-                return (
-                    <NavLink
-                        key={type.id}
-                        to={path}
-                        className={({ isActive }) => clsx(
-                            'flex items-center justify-between px-4 py-2 text-[13px] rounded-lg mx-3 transition-all duration-150 group',
-                            isActive
-                            ? 'bg-[var(--navy-800)] text-white font-bold border-l-2 border-blue-600'
-                            : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] border-l-2 border-transparent font-medium'
-                        )}
-                    >
-                        {({ isActive }) => (
-                            <>
-                                <div className="flex items-center gap-3">
-                                    <div className={clsx("w-2 h-2 rounded-full", type.colorClass, isActive && "ring-2 ring-white/20 shadow-[0_0_8px_currentColor]")}></div>
-                                    <span className="truncate">{type.label}</span>
-                                </div>
-                                <span className={clsx(
-                                    "text-[11px] px-1.5 py-0.5 rounded border",
-                                    isActive 
-                                        ? "bg-blue-600/20 text-blue-400 border-blue-500/30 font-bold" 
-                                        : count > 0 
-                                            ? "bg-[var(--navy-700)] text-white border-[var(--navy-600)]" 
-                                            : "border-transparent text-slate-500"
-                                )}>
-                                    [{count}]
-                                </span>
-                            </>
-                        )}
-                    </NavLink>
-                );
-            });
-        })()}
 
         {/* 3. DATA & DOKUMEN */}
         {showDataMaster && (
-            <>
-                <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-6 pb-[6px]">Data & Dokumen</p>
-                <div className="px-2 space-y-1">
-                    {dataMasterItems.map((item) => (
-                    <NavLink
-                        key={item.path}
-                        to={item.path}
-                        className={({ isActive }) =>
-                        clsx(
-                            'flex items-center gap-3 px-4 py-2 text-[13px] rounded-lg mx-1 transition-all duration-150 group',
-                            isActive
-                            ? 'bg-[var(--navy-800)] text-[var(--blue-400)] font-semibold border-l-2 border-[var(--blue-500)]'
-                            : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] font-medium border-l-2 border-transparent'
-                        )
-                        }
-                    >
-                        {({ isActive }) => (
-                            <>
-                                <item.icon className={clsx("w-4 h-4 transition-colors", isActive ? "text-[var(--blue-400)]" : "text-slate-400 group-hover:text-white")} />
-                                <span className="flex-1">{item.label}</span>
-                                {item.badge && (
-                                    <span className={clsx(
-                                        "text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]",
-                                        "bg-amber-500" // Always amber based on spec: "number of unassigned sites in amber"
-                                    )}>
-                                        [{item.badge}]
-                                    </span>
-                                )}
-                            </>
-                        )}
-                    </NavLink>
-                    ))}
-                </div>
-            </>
+          <>
+            {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">Data & Dokumen</p>}
+            {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
+            <div className="px-1 space-y-0.5">
+              {dataMasterItems.map((item) => renderNavLink(item.path, item.icon, item.label, item.badge))}
+            </div>
+          </>
         )}
 
         {/* 4. SYSTEM */}
         {showSystem && (
-            <>
-                <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-6 pt-6 pb-[6px]">System</p>
-                <div className="px-2 space-y-1">
-                    <NavLink
-                        to="/system"
-                        className={({ isActive }) =>
-                        clsx(
-                            'flex items-center gap-3 px-4 py-2 text-[13px] rounded-lg mx-1 transition-all duration-150 group',
-                            isActive
-                            ? 'bg-[var(--navy-800)] text-[var(--blue-400)] font-semibold border-l-2 border-[var(--blue-500)]'
-                            : 'text-slate-400 hover:text-white hover:bg-[var(--navy-800)] font-medium border-l-2 border-transparent'
-                        )
-                        }
-                    >
-                        {({ isActive }) => (
-                            <>
-                                <Settings className={clsx("w-4 h-4 transition-colors", isActive ? "text-[var(--blue-400)]" : "text-slate-400 group-hover:text-white")} />
-                                <span>Options</span>
-                            </>
-                        )}
-                    </NavLink>
-                </div>
-            </>
+          <>
+            {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">System</p>}
+            {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
+            <div className="px-1 space-y-0.5">
+              {renderNavLink('/system', Settings, 'Options')}
+            </div>
+          </>
         )}
       </nav>
     </aside>

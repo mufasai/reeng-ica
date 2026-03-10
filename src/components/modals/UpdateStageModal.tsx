@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Upload, CheckCircle2, AlertTriangle, ChevronRight, File, XCircle } from 'lucide-react';
+import { X, Upload, AlertTriangle, ChevronRight, File, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { STAGE_ORDER } from '../../data/mockData';
 
@@ -237,7 +237,7 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         <select 
                             required 
                             className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm"
-                            value={formData.team_id || ''}
+                            value={(formData.team_id as string) || ''}
                             onChange={(e) => handleFormChange('team_id', e.target.value)}
                         >
                             <option value="">Pilih tim lapangan...</option>
@@ -272,7 +272,7 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         <input 
                             type="date" 
                             required={isReq}
-                            value={formData[field] || ''}
+                            value={(formData[field] as string) || ''}
                             onChange={(e) => handleFormChange(field, e.target.value)}
                             className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm"
                         />
@@ -290,7 +290,7 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         <input 
                             type="datetime-local" 
                             required={r}
-                            value={formData[field] || ''}
+                            value={(formData[field] as string) || ''}
                             onChange={(e) => handleFormChange(field, e.target.value)}
                             className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm"
                         />
@@ -302,15 +302,15 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         <label className="block text-sm font-semibold text-slate-700">Approval Chain <span className="text-red-500">*</span></label>
                         <div className="space-y-2">
                             <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                                <input type="checkbox" checked={formData.tpas_approved || false} onChange={e => handleFormChange('tpas_approved', e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
+                                <input type="checkbox" checked={(formData.tpas_approved as boolean) || false} onChange={e => handleFormChange('tpas_approved', e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
                                 TPAS Approved *
                             </label>
                             <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                                <input type="checkbox" checked={formData.tp_approved || false} onChange={e => handleFormChange('tp_approved', e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
+                                <input type="checkbox" checked={(formData.tp_approved as boolean) || false} onChange={e => handleFormChange('tp_approved', e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
                                 TP Approved *
                             </label>
                             <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                                <input type="checkbox" checked={formData.caf_approved || false} onChange={e => handleFormChange('caf_approved', e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
+                                <input type="checkbox" checked={(formData.caf_approved as boolean) || false} onChange={e => handleFormChange('caf_approved', e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
                                 CAF Approved <span className="text-slate-400 text-xs ml-1">(Jika TP sewa pihak lain)</span>
                             </label>
                         </div>
@@ -323,7 +323,7 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         <select 
                             required 
                             className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm"
-                            value={formData.tower_provider || ''}
+                            value={(formData.tower_provider as string) || ''}
                             onChange={(e) => handleFormChange('tower_provider', e.target.value)}
                         >
                             <option value="">Pilih provider...</option>
@@ -380,7 +380,7 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                             type={tt} 
                             placeholder={place[field]}
                             required={rtext}
-                            value={formData[field] || ''}
+                            value={(formData[field] as string) || ''}
                             onChange={(e) => handleFormChange(field, e.target.value)}
                             className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm"
                         />
@@ -404,7 +404,7 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                             <input 
                                 type="checkbox" 
                                 required
-                                checked={formData[field] || false}
+                                checked={(formData[field] as boolean) || false}
                                 onChange={(e) => handleFormChange(field, e.target.checked)}
                                 className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 w-4 h-4" 
                             />

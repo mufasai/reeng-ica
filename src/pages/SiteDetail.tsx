@@ -8,15 +8,19 @@ import { useState, useMemo, useRef } from 'react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import FilterPaymentSection from '../components/sections/FilterPaymentSection';
+import PaymentPromptCard, { STAGE_TERMIN_MAP } from '../components/sections/PaymentPromptCard';
 import CombatPaymentSection from '../components/sections/CombatPaymentSection';
 import BuatSKPModal from '../components/modals/BuatSKPModal';
 import TerimaSKPModal from '../components/modals/TerimaSKPModal';
 import UpdateStageModal from '../components/modals/UpdateStageModal';
+import AddMaterialModal from '../components/modals/AddMaterialModal';
+import PengajuanTerminModal from '../components/modals/PengajuanTerminModal';
 import {
     sites, projects, teams, people, 
     siteMaterials, siteEvidence, siteCosts, filterTerms, combatTerms, skpRecords,
     siteMasterRecords, siteBoQRecords, siteStageLogs, mockSiteFiles,
-    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type ProjectFile, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile
+    terminPengajuanRecords,
+    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan
 } from '../data/mockData';
 import {
     TableContainer,
@@ -339,9 +343,10 @@ interface MaterialsSectionProps {
     canMarkReceived: boolean;
     onAddSkp: () => void;
     onMarkReceived: (id: string) => void;
+    onAddMaterial: () => void;
 }
 
-const MaterialsSection = ({ materials, skps, siteBoQs, canAddSkp, canMarkReceived, onAddSkp, onMarkReceived }: MaterialsSectionProps) => {
+const MaterialsSection = ({ materials, skps, siteBoQs, canAddSkp, canMarkReceived, onAddSkp, onMarkReceived, onAddMaterial }: MaterialsSectionProps) => {
     const [activeTab, setActiveTab] = useState<'material' | 'skp'>('material');
     const [searchTerm, setSearchTerm] = useState('');
     const [boqSearchTerm, setBoqSearchTerm] = useState('');
@@ -391,6 +396,12 @@ const MaterialsSection = ({ materials, skps, siteBoQs, canAddSkp, canMarkReceive
                       <h3 className="font-semibold text-slate-700 flex items-center gap-2">
                           <FileText className="w-4 h-4 text-slate-400" /> Material List
                       </h3>
+                      <button 
+                          onClick={onAddMaterial}
+                          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm font-medium"
+                      >
+                          <Plus className="w-3 h-3" /> Tambah Material
+                      </button>
                   </div>
                   <FilterBar
                       searchValue={boqSearchTerm}
@@ -658,6 +669,7 @@ const SiteDetail = () => {
   // SKP Modals State
   const [isSkpModalOpen, setIsSkpModalOpen] = useState(false);
   const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
+  const [isAddMaterialModalOpen, setIsAddMaterialModalOpen] = useState(false);
   const [selectedSkpId, setSelectedSkpId] = useState<string>('');
   const [localSkps, setLocalSkps] = useState<SKP[]>(skpRecords.filter(s => s.siteId === id));
 
@@ -709,9 +721,9 @@ const SiteDetail = () => {
 
   // Filtered Data
   const materials = siteMaterials.filter(m => m.siteId === id);
-  const siteBoQs = siteBoQRecords.filter(b => b.siteId === id || b.siteId === site?.projectId);
+  const siteBoQsSource = siteBoQRecords.filter(b => b.siteId === id || b.siteId === site?.projectId);
+  const [localBoQs, setLocalBoQs] = useState<SiteBoQ[]>(siteBoQsSource);
   const costs = siteCosts.filter(c => c.siteId === id);
-  const filteredTerms = filterTerms.filter(f => f.siteId === id);
   const filteredCombatTerms = combatTerms.filter(c => c.siteId === id);
 
   // Local State for Mocked File Uploads
@@ -722,6 +734,13 @@ const SiteDetail = () => {
   const [localStage, setLocalStage] = useState<string>(defaultStage);
   const [localStageLogs, setLocalStageLogs] = useState<SiteStageLog[]>(siteStageLogs.filter(s => s.site_master_id === id || s.site_master_id === site?.id).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
   const [isUpdateStageModalOpen, setIsUpdateStageModalOpen] = useState(false);
+  
+  // Pengajuan Modal state
+  const [localPengajuan, setLocalPengajuan] = useState<TerminPengajuan[]>(terminPengajuanRecords.filter(t => t.site_id === id || t.site_id === site?.id));
+  const [isPengajuanModalOpen, setIsPengajuanModalOpen] = useState(false);
+  const [pengajuanData, setPengajuanData] = useState<{terminKey: 'T1'|'T2a'|'T2b'|'T2c'|'T3'|'T4', nominal: number, docs: SiteFile[]}>({
+     terminKey: 'T1', nominal: 0, docs: [] 
+  });
 
   // File Input Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -797,6 +816,21 @@ const SiteDetail = () => {
 
   const handleReceiveSkpSubmit = (receivedData: any) => {
       setLocalSkps(localSkps.map(s => s.id === receivedData.skpId ? { ...s, status: 'Received', receivedEvidenceUrl: receivedData.receivedEvidenceUrl } : s));
+  };
+
+  const handleAddMaterialSubmit = (newMaterials: any[]) => {
+      const generatedBoQs: SiteBoQ[] = newMaterials.map((m, i) => ({
+          id: `boq-new-${Date.now()}-${i}`,
+          siteId: site.id,
+          siteType: project?.type || 'FILTER',
+          itemCode: m.source === 'ocr' ? 'OCR-Scanned' : 'Manual-Input',
+          description: m.spesifikasi ? `${m.nama_material} - ${m.spesifikasi}` : m.nama_material,
+          quantity: m.jumlah,
+          unit: m.satuan || 'pcs',
+          type: 'material'
+      }));
+      setLocalBoQs([ ...generatedBoQs, ...localBoQs ]);
+      setIsAddMaterialModalOpen(false);
   };
 
   const handleUpdateStage = (newStage: string, notes?: string, payload?: Record<string, unknown>) => {
@@ -884,6 +918,45 @@ const SiteDetail = () => {
       alert('Stage berhasil diupdate');
   };
 
+  const handleAjukanTermin = (terminKey: 'T1'|'T2a'|'T2b'|'T2c'|'T3'|'T4', nominal: number, contextKeys: string[]) => {
+      // Find relevant docs from localFiles based on context
+      const relevantDocs = localFiles.filter(f => contextKeys.some(c => f.stage_context?.includes(c)));
+      setPengajuanData({ terminKey, nominal, docs: relevantDocs });
+      setIsPengajuanModalOpen(true);
+  };
+
+  const handleSubmitPengajuan = (payload: any) => {
+      console.log('Submitting pengajuan termin:', payload);
+      const newPengajuan: TerminPengajuan = {
+           id: `tp-new-${Date.now()}`,
+           site_id: site.id,
+           termin_key: payload.terminKey,
+           nominal: payload.nominal,
+           catatan: payload.note,
+           status: 'submitted',
+           submitted_by: currentUser?.id || 'User',
+           submitted_at: new Date().toISOString(),
+           documents: [...payload.existingDocIds, ...payload.files.map((f: File) => `new-${f.name}`)]
+      };
+      setLocalPengajuan([...localPengajuan, newPengajuan]);
+      setIsPengajuanModalOpen(false);
+      alert(`Pengajuan ${payload.terminKey} berhasil diajukan!`);
+  };
+
+  const handleApproveTermin = (pengajuanId: string, nominal: number, terminKey: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const confirm = window.confirm(`Setujui pengajuan ${terminKey} sebesar Rp ${nominal.toLocaleString('id-ID')} untuk site ${site.id}?`);
+      if (!confirm) return;
+      setLocalPengajuan(localPengajuan.map(p => p.id === pengajuanId ? { ...p, status: 'approved', approved_at: new Date().toISOString(), approved_by: currentUser?.id } : p));
+  };
+
+  const handleRejectTermin = (pengajuanId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const reason = window.prompt("Alasan penolakan:");
+      if (!reason) return;
+      setLocalPengajuan(localPengajuan.map(p => p.id === pengajuanId ? { ...p, status: 'rejected', catatan: reason } : p));
+  };
+
   // --- STEPPER LOGIC ---
   const STAGE_GROUPS = [
     { label: 'Assigned', keys: ['assigned'] },
@@ -903,6 +976,15 @@ const SiteDetail = () => {
   const daysInStage = latestLogForStage 
     ? Math.floor((new Date().getTime() - new Date(latestLogForStage.created_at).getTime()) / (1000 * 3600 * 24))
     : 0;
+
+  // Compute whether any termin is unlocked & not yet submitted → drives tab badge
+  const STAGE_ORDER_IDX = ['imported','assigned','permit_process','permit_ready','akses_process','akses_ready','implementasi','rfi_done','rfs_done','dokumen_done','bast','invoice','completed'];
+  const hasActionNeeded = STAGE_TERMIN_MAP.some(def => {
+    const ci = STAGE_ORDER_IDX.indexOf(localStage);
+    const ti = STAGE_ORDER_IDX.indexOf(def.stage);
+    if (ci === -1 || ti === -1 || ci < ti) return false;
+    return !localPengajuan.some(p => p.termin_key === def.terminKey && ['submitted','approved','paid'].includes(p.status));
+  });
 
   return (
     <div className="break-words space-y-8 animate-in fade-in duration-500 pb-12">
@@ -991,6 +1073,17 @@ const SiteDetail = () => {
             </div>
         </div>
 
+        {/* Payment Prompt Card — only for FILTER sites when action needed */}
+        {project.type === 'FILTER' && (
+            <PaymentPromptCard
+                site={site}
+                localStage={localStage}
+                localPengajuan={localPengajuan}
+                localFiles={localFiles}
+                onAjukan={handleAjukanTermin}
+            />
+        )}
+
         <InfoSection
             site={site}
             project={project}
@@ -999,6 +1092,8 @@ const SiteDetail = () => {
             canViewCosts={can('view_financials')}
             canManageUsers={can('manage_data')}
         />
+
+
 
         <div className="space-y-8 w-full">
             {/* Tabs */}
@@ -1012,9 +1107,14 @@ const SiteDetail = () => {
                     {can('view_financials') && (
                          <button
                             onClick={() => setActiveTab('costs')}
-                            className={clsx("pb-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'costs' ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+                            className={clsx("pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5", activeTab === 'costs' ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-500 hover:text-slate-700")}
                         >
                             Costs & Payments
+                            {project.type === 'FILTER' && hasActionNeeded && (
+                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full border border-amber-300 leading-none">
+                                    ⚡
+                                </span>
+                            )}
                         </button>
                     )}
                 </div>
@@ -1029,7 +1129,7 @@ const SiteDetail = () => {
                         <MaterialsSection 
                             materials={materials} 
                             skps={localSkps}
-                            siteBoQs={siteBoQs}
+                            siteBoQs={localBoQs}
                             canAddSkp={can('manage_data') || (currentUser?.role === 'team_leader')}
                             canMarkReceived={can('manage_data') || (currentUser?.role === 'team_leader') || (currentUser?.role === 'engineer')}
                             onAddSkp={() => setIsSkpModalOpen(true)}
@@ -1037,6 +1137,7 @@ const SiteDetail = () => {
                                 setSelectedSkpId(skpId);
                                 setIsReceiveModalOpen(true);
                             }}
+                            onAddMaterial={() => setIsAddMaterialModalOpen(true)}
                         />
 
                         <FilesSection
@@ -1052,7 +1153,14 @@ const SiteDetail = () => {
                     <div className="space-y-6">
                         <div className="w-full">
                             {project.type === 'FILTER' ? (
-                                <FilterPaymentSection terms={filteredTerms} isTermin1Enabled={localSkps.some(s => s.status === 'Received')} />
+                                <FilterPaymentSection 
+                                    site={site}
+                                    localStage={localStage}
+                                    localPengajuan={localPengajuan}
+                                    handleAjukanTermin={handleAjukanTermin}
+                                    handleApproveTermin={handleApproveTermin}
+                                    handleRejectTermin={handleRejectTermin}
+                                />
                             ) : project.type === 'COMBAT' ? (
                                  <CombatPaymentSection terms={filteredCombatTerms} isTermin1Enabled={localSkps.some(s => s.status === 'Received')} />
                             ) : null}
@@ -1148,6 +1256,22 @@ const SiteDetail = () => {
             siteId={site.id}
             currentStage={localStage}
             onUpdateStage={handleUpdateStage}
+        />
+        <AddMaterialModal
+            isOpen={isAddMaterialModalOpen}
+            onClose={() => setIsAddMaterialModalOpen(false)}
+            siteId={site.id}
+            onSubmit={handleAddMaterialSubmit}
+        />
+        <PengajuanTerminModal
+            isOpen={isPengajuanModalOpen}
+            onClose={() => setIsPengajuanModalOpen(false)}
+            siteId={site.id}
+            siteName={site.name}
+            terminKey={pengajuanData.terminKey}
+            nominal={pengajuanData.nominal}
+            prefillDocs={pengajuanData.docs}
+            onSubmit={handleSubmitPengajuan}
         />
 
         {/* Hidden File Inputs for Document Uploads */}

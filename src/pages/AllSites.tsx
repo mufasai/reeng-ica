@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-    Search, Filter, MapPin, 
+    Search, Filter, 
     ArrowRight, AlertCircle, RefreshCw, FileSpreadsheet
 } from 'lucide-react';
 import clsx from 'clsx';
-import { siteMasterRecords, type ProjectType, type SiteStage } from '../data/mockData';
+import { siteMasterRecords, type ProjectType } from '../data/mockData';
 import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
 
 const STAGE_COLORS: Record<string, string> = {
@@ -47,7 +47,7 @@ const AllSites = () => {
     // Derived distinct values for dropdowns
     const availableStages = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => s.stage))), []);
     const availableClusters = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => s.cluster).filter(Boolean))), []);
-    const availableTeams = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => s.team_assigned).filter(Boolean))), []);
+    const availableTeams = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => (s as any).team_assigned).filter(Boolean))), []);
 
     // Filter Logic
     const filteredSites = useMemo(() => {
@@ -55,13 +55,13 @@ const AllSites = () => {
             if (filterType !== 'All' && site.project_type !== filterType) return false;
             if (filterStage !== 'All' && site.stage !== filterStage) return false;
             if (filterCluster !== 'All' && site.cluster !== filterCluster) return false;
-            if (filterTeam !== 'All' && site.team_assigned !== filterTeam) return false;
+            if (filterTeam !== 'All' && (site as any).team_assigned !== filterTeam) return false;
             
             if (searchTerm) {
                 const term = searchTerm.toLowerCase();
                 if (!site.site_id.toLowerCase().includes(term) && 
                     !site.site_name.toLowerCase().includes(term) &&
-                    !(site.custom_po || '').toLowerCase().includes(term)) {
+                    !((site as any).custom_po || '').toLowerCase().includes(term)) {
                     return false;
                 }
             }
@@ -98,7 +98,7 @@ const AllSites = () => {
             // Mock "days in stage" logic to identify stuck sites
             if (s.stage !== 'imported' && s.stage_updated_at) {
                  const daysDiff = Math.floor((new Date().getTime() - new Date(s.stage_updated_at).getTime()) / (1000 * 3600 * 24));
-                 if (daysDiff > 14 || s.stage_notes?.toLowerCase().includes('issue') || s.stage === 'issue_hold') {
+                 if (daysDiff > 14 || s.stage_notes?.toLowerCase().includes('issue') || (s.stage as string) === 'issue_hold') {
                      actions++;
                  }
             }
@@ -240,8 +240,8 @@ const AllSites = () => {
                                             <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[150px]">{site.cluster || '—'}</td>
                                             <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[150px]">{site.region || '—'}</td>
                                             <td className="px-4 py-3 text-xs">
-                                                {site.team_assigned ? (
-                                                     <span className="font-medium text-slate-700">{site.team_assigned}</span>
+                                                {(site as any).team_assigned ? (
+                                                     <span className="font-medium text-slate-700">{(site as any).team_assigned}</span>
                                                 ) : (
                                                     <span className="text-slate-400 italic">Unassigned</span>
                                                 )}
