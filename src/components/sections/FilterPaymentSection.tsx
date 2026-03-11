@@ -48,7 +48,7 @@ const FilterPaymentSection = ({
     handleRejectTermin,
 }: FilterPaymentSectionProps) => {
     const { currentUser } = useAuth();
-    const isManagement = currentUser?.role === 'management' || currentUser?.role === 'backoffice_admin';
+    const isManagement = ['director', 'operational', 'admin'].includes(currentUser?.role ?? '');
     const [selectedStep, setSelectedStep] = useState<string | null>(null);
     const [expandedRiwayat, setExpandedRiwayat] = useState(true);
 

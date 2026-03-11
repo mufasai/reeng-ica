@@ -162,7 +162,7 @@ export const files: ProjectFile[] = [
     { id: 'f3', projectId: 'p2', title: 'Combat Drill Manual', originalName: 'manual_v1.pdf', size: '5.1 MB', type: 'PDF', uploadedAt: '2024-02-01', uploadedBy: 'u_lead' },
 ];
 
-export type UserRole = 'engineer' | 'team_leader' | 'finance' | 'management' | 'backoffice_admin';
+export type UserRole = 'director' | 'operational' | 'admin' | 'finance' | 'field';
 
 export interface User {
     id: string;
@@ -172,11 +172,11 @@ export interface User {
 }
 
 export const USERS: User[] = [
-    { id: 'u_eng', name: 'Field Engineer', role: 'engineer' },
-    { id: 'u_lead', name: 'Team Leader', role: 'team_leader' },
+    { id: 'u_field', name: 'Field Engineer', role: 'field' },
+    { id: 'u_ops', name: 'Operational Staff', role: 'operational' },
     { id: 'u_fin', name: 'Finance Staff', role: 'finance' },
-    { id: 'u_mgr', name: 'Director', role: 'management' },
-    { id: 'u_adm', name: 'Backoffice Admin', role: 'backoffice_admin' },
+    { id: 'u_dir', name: 'Director', role: 'director' },
+    { id: 'u_adm', name: 'Admin Backoffice', role: 'admin' },
 ];
 
 export interface TeamMember {
@@ -249,18 +249,18 @@ export const sites: Site[] = [
 
 export const people: Person[] = [
     { 
-        id: 'u1', name: 'John Doe', role: 'management', 
-        ktp: '3171234567890001', email: 'management@demo.com', phone: '081234567890', 
+        id: 'u1', name: 'John Doe', role: 'director', 
+        ktp: '3171234567890001', email: 'director@demo.com', phone: '081234567890', 
         vendor: 'Internal', joinedAt: '2023-01-15', avatar: 'https://i.pravatar.cc/150?u=u1'
     },
     { 
-        id: 'u2', name: 'Budi Engineer', role: 'engineer', 
+        id: 'u2', name: 'Budi Field', role: 'field', 
         ktp: '3171234567890002', email: 'budi@demo.com', phone: '081234567891', 
         vendor: 'Vendor X', deviceId: 'DEV-001', imei1: '123456789012345', imei2: '123456789012346',
         joinedAt: '2023-03-10', photoKtp: 'ktp_budi.jpg', photoSelfie: 'selfie_budi.jpg'
     },
     { 
-        id: 'u3', name: 'Bob Johnson', role: 'team_leader', 
+        id: 'u3', name: 'Bob Operational', role: 'operational', 
         ktp: '3171234567890003', email: 'bob.j@vendor-y.com', phone: '081234567892', 
         vendor: 'Vendor Y', deviceId: 'DEV-002', imei1: '987654321098765', 
         joinedAt: '2023-02-20' 
@@ -271,13 +271,13 @@ export const people: Person[] = [
         vendor: 'Internal', joinedAt: '2023-01-10' 
     },
     { 
-        id: 'u5', name: 'Charlie Field', role: 'engineer', 
+        id: 'u5', name: 'Charlie Field 2', role: 'field', 
         ktp: '3171234567890005', email: 'charlie.f@vendor-x.com', phone: '081234567894', 
         vendor: 'Vendor X', deviceId: 'DEV-003', imei1: '112233445566778',
         joinedAt: '2023-06-01' 
     },
     { 
-        id: 'u6', name: 'Admin Backoffice', role: 'backoffice_admin', 
+        id: 'u6', name: 'Admin Backoffice', role: 'admin', 
         ktp: '3171234567890006', email: 'backoffice@demo.com', phone: '081234567895', 
         vendor: 'Internal', joinedAt: '2023-01-01' 
     },
@@ -871,7 +871,7 @@ export const getActiveSiteCountsByType = (currentUser: User, _allProjects: Proje
         .map(t => t.id);
 
     // Is the user restricted?
-    const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
+    const isRestricted = currentUser.role === 'field';
 
     masters.forEach(site => {
         // Find assigned team from work_order

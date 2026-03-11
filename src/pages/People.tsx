@@ -21,7 +21,7 @@ interface PersonModalProps {
 const PersonModal = ({ isOpen, onClose, person, onSave }: PersonModalProps) => {
     const [formData, setFormData] = useState<Partial<Person>>(
         person || {
-            name: '', ktp: '', email: '', phone: '', role: 'engineer', vendor: '',
+            name: '', ktp: '', email: '', phone: '', role: 'field', vendor: '',
             deviceId: '', imei1: '', imei2: ''
         }
     );
@@ -41,7 +41,7 @@ const PersonModal = ({ isOpen, onClose, person, onSave }: PersonModalProps) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const roles: UserRole[] = ['engineer', 'team_leader', 'finance', 'management'];
+    const roles: UserRole[] = ['director', 'operational', 'admin', 'finance', 'field'];
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -154,14 +154,14 @@ const PersonModal = ({ isOpen, onClose, person, onSave }: PersonModalProps) => {
 // --- MAIN PAGE COMPONENT ---
 
 const People = () => {
-    const { currentUser } = useAuth();
+    const { can } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [peopleData, setPeopleData] = useState<Person[]>(initialPeople);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPerson, setEditingPerson] = useState<Person | null>(null);
 
-    // RBAC Redirect
-    if (currentUser.role !== 'management') {
+    // RBAC Redirect — only director, operational, admin can access People
+    if (!can('people.view')) {
         return <Navigate to="/" replace />;
     }
 
@@ -275,9 +275,11 @@ const People = () => {
                                             <div className="flex flex-col gap-1">
                                                 <span className={clsx(
                                                     "inline-flex w-fit px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border",
-                                                    person.role === 'management' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                                    person.role === 'engineer' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                    person.role === 'team_leader' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                    person.role === 'director'    ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                    person.role === 'operational' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                    person.role === 'admin'       ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                    person.role === 'finance'     ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                    person.role === 'field'       ? 'bg-slate-50 text-slate-600 border-slate-200' :
                                                     'bg-slate-50 text-slate-700 border-slate-200'
                                                 )}>
                                                     {person.role.replace('_', ' ')}

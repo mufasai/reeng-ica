@@ -71,8 +71,8 @@ const TerminDetail = () => {
     const isDibayarkan = localStatus === 'dibayarkan' || localStatus === 'paid';
 
     // Role-based visibility
-    const canReview = currentUser?.role === 'backoffice_admin';
-    const canApprove = currentUser?.role === 'management';
+    const canReview = currentUser?.role === 'admin';
+    const canApprove = currentUser?.role === 'director';
     const canPay = currentUser?.role === 'finance';
 
     return (

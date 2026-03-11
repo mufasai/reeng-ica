@@ -35,7 +35,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
   // RBAC Filter: Which sites can I see?
   const visibleSites = useMemo(() => {
       return sites.filter(site => {
-        if (currentUser.role === 'management' || currentUser.role === 'finance' || currentUser.role === 'backoffice_admin') return true;
+        if (currentUser.role !== 'field') return true;
         if (!site.work_order_id) return false;
         
         // Check if user is in the team assigned to this site

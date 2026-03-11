@@ -51,8 +51,8 @@ const TypeSiteList = () => {
   const matchedSites = useMemo(() => {
     let baseSites = siteMasterRecords.filter(s => s.project_type === upperType);
 
-    // Role-based filtering
-    if (['engineer', 'team_leader'].includes(currentUser.role)) {
+    // Role-based filtering — field role only sees their team's sites
+    if (currentUser.role === 'field') {
       const userTeamIds = teams
         .filter(t => t.members.some(m => m.personId === currentUser.id))
         .map(t => t.id);
@@ -408,7 +408,7 @@ const TypeSiteList = () => {
           {matchedSites.length > 0 && (
             <div className="relative">
               <div
-                className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide"
+                className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {/* ── Operational Cards (4) ── */}
@@ -416,52 +416,41 @@ const TypeSiteList = () => {
                     title="Total Sites"
                     value={statCards.totalSites}
                     icon={MapPin}
-                    iconClass="bg-blue-100 text-blue-600"
+                    iconClass="bg-blue-600 text-white"
                     subtitle={`${statCards.completedSites} completed`}
-                    minWidth={200}
+                    minWidth={185}
+                    compact
                 />
                 
                 <ModernKPICard
                     title="Total Teams"
                     value={statCards.totalTeams}
                     icon={Layers}
-                    iconClass="bg-violet-100 text-violet-600"
+                    iconClass="bg-violet-600 text-white"
                     subtitle="Unique teams assigned"
-                    minWidth={200}
+                    minWidth={185}
+                    compact
                 />
                 
                 <ModernKPICard
                     title="Total People"
                     value={statCards.totalPeople}
                     icon={FolderKanban}
-                    iconClass="bg-emerald-100 text-emerald-600"
+                    iconClass="bg-emerald-600 text-white"
                     subtitle={`Across all ${upperType} teams`}
-                    minWidth={200}
+                    minWidth={185}
+                    compact
                 />
                 
                 <ModernKPICard
                     title="Menunggu Aksi"
-                    value={
-                        <div className="flex items-center gap-2">
-                            {statCards.actionNeededCount}
-                            {statCards.actionNeededCount > 0 && (
-                                <span className="relative flex h-2.5 w-2.5 mx-1">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                                </span>
-                            )}
-                        </div>
-                    }
+                    value={statCards.actionNeededCount}
                     icon={AlertCircle}
-                    iconClass={statCards.actionNeededCount > 0 ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-400"}
-                    subtitle={
-                        statCards.actionNeededCount > 0 
-                            ? <span className="truncate w-full block">{statCards.mostUrgentAction}</span>
-                            : "No immediate action"
-                    }
-                    trend={statCards.actionNeededCount > 0 ? { direction: 'down', label: 'Urgent', colorClass: 'bg-amber-100 text-amber-700' } : undefined}
+                    iconClass={statCards.actionNeededCount > 0 ? "bg-amber-500 text-white" : "bg-slate-400 text-white"}
+                    trend={statCards.actionNeededCount > 0 ? { direction: 'down', label: 'Butuh Tindakan' } : undefined}
                     titleTooltip={statCards.mostUrgentAction}
-                    minWidth={200}
+                    minWidth={185}
+                    compact
                 />
 
                 {/* ── Divider ── */}
@@ -478,41 +467,42 @@ const TypeSiteList = () => {
                         title="Total Harga"
                         value={fin.totalHarga ? formatRupiah(fin.totalHarga) : '—'}
                         icon={CheckCircle2}
-                        iconClass="bg-blue-50 text-blue-600"
+                        iconClass="bg-blue-600 text-white"
                         subtitle={fin.totalHarga ? 'Incl. 70% kontrak TI' : 'Belum ada data harga'}
                         titleTooltip={fin.totalHarga ? `Total: ${formatFull(fin.totalHarga)}\nIncl. 70% dari nilai kontrak TI` : 'Belum ada data harga'}
-                        minWidth={200}
+                        minWidth={185}
+                        compact
                     />
 
                     <ModernKPICard
                         title="Budget Terpakai"
                         value={fin.budgetTerpakai ? formatRupiah(fin.budgetTerpakai) : '—'}
                         icon={FileSpreadsheet}
-                        iconClass="bg-orange-50 text-orange-600"
+                        iconClass="bg-orange-500 text-white"
                         subtitle={fin.pct ? `${fin.pct}% dari total` : 'Belum ada pembayaran'}
                         titleTooltip={fin.budgetTerpakai ? `Terbayar: ${formatFull(fin.budgetTerpakai)}\nMenunggu: ${formatFull(fin.budgetMenunggu)}` : 'Belum ada pembayaran'}
-                        minWidth={200}
+                        minWidth={185}
+                        compact
                     />
 
                     <ModernKPICard
                         title="Sisa Budget"
-                        value={
-                            <span className={fin.sisaBudget !== null && fin.sisaBudget < 0 ? 'text-red-500' : ''}>
-                                {fin.sisaBudget !== null ? formatRupiah(fin.sisaBudget) : '—'}
-                            </span>
-                        }
+                        value={fin.sisaBudget !== null ? formatRupiah(fin.sisaBudget) : '—'}
                         icon={CheckCircle2}
-                        iconClass="bg-emerald-50 text-emerald-600"
-                        subtitle={fin.sisaBudget !== null ? (fin.sisaBudget < 0 ? '⚠️ Over budget' : 'Tersedia utk termin lain') : 'Belum ada data harga'}
+                        iconClass={fin.sisaBudget !== null && fin.sisaBudget < 0 ? "bg-red-500 text-white" : "bg-emerald-500 text-white"}
+                        trend={fin.sisaBudget !== null && fin.sisaBudget < 0 ? { direction: 'down', label: 'Over budget' } : undefined}
+                        subtitle={fin.sisaBudget !== null ? (fin.sisaBudget < 0 ? 'Over budget' : 'Tersedia') : 'Belum ada data'}
                         titleTooltip={fin.sisaBudget !== null ? `Sisa: ${formatFull(fin.sisaBudget)}` : 'Belum ada data harga'}
-                        minWidth={200}
+                        minWidth={185}
+                        compact
                     />
 
                     <ModernKPICard
                         title="Total Terbayar"
                         value={fin.totalTerbayar ? formatRupiah(fin.totalTerbayar) : '—'}
                         icon={List}
-                        iconClass="bg-teal-50 text-teal-600"
+                        iconClass="bg-teal-600 text-white"
+                        trend={fin.totalTerbayar ? { direction: 'up', label: 'Terbayar' } : undefined}
                         subtitle={
                             Object.entries(fin.perTermin).filter(([,v]) => v > 0).length > 0
                               ? Object.entries(fin.perTermin)
@@ -522,7 +512,8 @@ const TypeSiteList = () => {
                               : 'Belum ada termin terbayar'
                         }
                         titleTooltip={Object.entries(fin.perTermin).filter(([,v]) => v > 0).map(([k,v]) => `${k}: Rp ${v.toLocaleString('id-ID')}`).join('\n') || 'Belum ada termin terbayar'}
-                        minWidth={200}
+                        minWidth={185}
+                        compact
                     />
                   </>
                 )}

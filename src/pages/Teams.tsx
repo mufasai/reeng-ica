@@ -232,7 +232,7 @@ const TeamDetailModal = ({ isOpen, onClose, team }: TeamDetailModalProps) => {
 
 // --- MAIN PAGE ---
 const Teams = () => {
-    const { currentUser } = useAuth();
+    const { can } = useAuth();
     const [teams, setTeams] = useState<Team[]>(initialTeams);
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -253,8 +253,8 @@ const Teams = () => {
         });
     }, [teams, searchTerm, statusFilter]);
 
-    // RBAC
-    if (currentUser.role !== 'management') return <Navigate to="/" replace />;
+    // RBAC — director, operational, admin can manage teams
+    if (!can('teams.view')) return <Navigate to="/" replace />;
 
     const totalPages = Math.ceil(filteredTeams.length / itemsPerPage);
     const paginatedTeams = filteredTeams.slice(

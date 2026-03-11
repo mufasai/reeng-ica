@@ -15,6 +15,8 @@ import TerminDetail from './pages/TerminDetail';
 import TerminReview from './pages/TerminReview';
 import TerminPayment from './pages/TerminPayment';
 import Sites from './pages/Sites';
+import UserManagement from './pages/UserManagement';
+
 
 function App() {
   return (
@@ -43,6 +45,9 @@ function App() {
           <Route path="reports" element={<Navigate to="/" replace />} />
           <Route path="all-sites" element={<Navigate to="/sites" replace />} />
           <Route path="site-master" element={<Navigate to="/sites" replace />} />
+          <Route path="options/users" element={<UserManagement />} />
+          <Route path="system" element={<Navigate to="/options/users" replace />} />
+          <Route path="termin-payment" element={<TerminPayment />} />
         </Route>
       </Routes>
     </BrowserRouter>

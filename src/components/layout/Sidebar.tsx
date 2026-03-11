@@ -6,7 +6,8 @@ import {
   Settings, 
   Menu,
   Database,
-  ChevronRight
+  ChevronRight,
+  CreditCard,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { USERS, type UserRole, getActiveSiteCountsByType, projects, type ProjectType, siteMasterRecords } from '../../data/mockData';
@@ -17,13 +18,13 @@ const Sidebar = () => {
   const { currentUser, switchRole } = useAuth();
   const { collapsed, toggle } = useSidebar();
 
-  // OVERVIEW & OTHER PERMISSIONS
+  // Navigation config per confirmed RBAC matrix
   const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
-    engineer:        ['dashboard', 'sites'],
-    team_leader:     ['dashboard', 'sites'],
-    backoffice_admin:['dashboard', 'sites', 'people', 'teams'],
-    finance:         ['dashboard', 'sites'], 
-    management:      ['dashboard', 'sites', 'people', 'teams', 'options'],
+    director:    ['dashboard', 'sites', 'people', 'teams', 'options'],
+    operational: ['dashboard', 'sites', 'people', 'teams', 'options'],
+    admin:       ['dashboard', 'sites', 'people', 'teams', 'options'],
+    finance:     ['dashboard', 'sites', 'pembayaran'],
+    field:       [],  // field role has no full sidebar — own sites view only
   };
 
   const allowedSidebarItems = ROLE_SIDEBAR_CONFIG[currentUser.role] || [];
@@ -31,21 +32,23 @@ const Sidebar = () => {
   const overviewItems: { icon: any, label: string, path: string, badge?: number }[] = [];
   
   if (allowedSidebarItems.includes('dashboard')) {
-      overviewItems.push({ icon: LayoutDashboard, label: 'Dashboard', path: '/' });
+    overviewItems.push({ icon: LayoutDashboard, label: 'Dashboard', path: '/' });
   }
 
   // DATA & DOKUMEN
   const dataMasterItems: { icon: any, label: string, path: string, badge?: number }[] = [];
-
   if (allowedSidebarItems.includes('people')) {
-      dataMasterItems.push({ icon: Users, label: 'People', path: '/people' });
+    dataMasterItems.push({ icon: Users, label: 'People', path: '/people' });
   }
   if (allowedSidebarItems.includes('teams')) {
-      dataMasterItems.push({ icon: Users, label: 'Teams', path: '/teams' });
+    dataMasterItems.push({ icon: Users, label: 'Teams', path: '/teams' });
   }
-  
+
   const showDataMaster = dataMasterItems.length > 0;
   const showSystem = allowedSidebarItems.includes('options');
+  const showPembayaran = allowedSidebarItems.includes('pembayaran');
+  const isFieldRole = currentUser.role === 'field';
+  const isFinanceRole = currentUser.role === 'finance';
 
   const sidebarW = collapsed ? 'w-[56px]' : 'w-64';
 
@@ -100,7 +103,62 @@ const Sidebar = () => {
     { id: 'REFINEN', label: 'Refinen', colorClass: 'bg-purple-600' },
   ];
   const typeCounts = getActiveSiteCountsByType(currentUser, projects, siteMasterRecords);
-  const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
+  const isRestricted = isFieldRole;
+
+  if (isFieldRole) {
+    // Field role: show minimal "Site Saya" view instead of full sidebar
+    return (
+      <aside className={clsx(
+        'fixed left-0 top-0 h-screen bg-[var(--navy-900)] text-white flex flex-col z-50',
+        'transition-[width] duration-300 ease-in-out border-r border-[var(--navy-800)]',
+        sidebarW
+      )}>
+        {/* Brand */}
+        <div className={clsx('h-[60px] flex items-center border-b border-[var(--navy-800)] shrink-0', collapsed ? 'justify-center px-2' : 'px-6')}>
+          {!collapsed && (
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 bg-[var(--blue-600)] rounded flex items-center justify-center shadow-lg shrink-0">
+                <span className="font-bold text-lg text-white">R</span>
+              </div>
+              <span className="font-bold text-base tracking-tight text-white truncate">Reengineering</span>
+            </div>
+          )}
+          {collapsed && <div className="w-8 h-8 bg-[var(--blue-600)] rounded flex items-center justify-center"><span className="font-bold text-lg text-white">R</span></div>}
+          <button onClick={toggle} className={clsx('text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-[var(--navy-700)]', collapsed ? 'absolute right-1 top-3' : 'ml-auto')}>
+            {collapsed ? <ChevronRight className="w-4 h-4" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+        <nav className="flex-1 overflow-y-auto custom-scrollbar p-4">
+          {!collapsed && (
+            <div className="mb-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--navy-800)] border border-[var(--navy-700)]">
+                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                  {currentUser.name.charAt(0)}
+                </div>
+                <div className="overflow-hidden min-w-0">
+                  <p className="text-sm font-medium truncate text-white">{currentUser.name}</p>
+                  <p className="text-xs text-emerald-400 uppercase tracking-wide">Field</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mt-3 px-1">Akses terbatas ke site tim Anda.</p>
+            </div>
+          )}
+          {renderNavLink('/', LayoutDashboard, 'Dashboard', undefined, true)}
+          {/* Dev Role Switcher */}
+          {!collapsed && (
+            <div className="mt-4 pt-3 border-t border-[var(--navy-700)] opacity-70 hover:opacity-100 transition-opacity">
+              <label className="text-[10px] uppercase text-amber-500/70 font-bold tracking-wider mb-1 flex items-center gap-1">
+                <Settings className="w-3 h-3" /> Switch Role (Dev)
+              </label>
+              <select className="w-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500/90 rounded px-2 py-1 outline-none" value={currentUser.role} onChange={(e) => switchRole(e.target.value as UserRole)}>
+                {USERS.map(u => (<option key={u.id} value={u.role} className="bg-[var(--navy-800)] text-slate-300">{u.name} ({u.role})</option>))}
+              </select>
+            </div>
+          )}
+        </nav>
+      </aside>
+    );
+  }
 
   return (
     <aside className={clsx(
@@ -134,10 +192,7 @@ const Sidebar = () => {
           )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed
-            ? <ChevronRight className="w-4 h-4" />
-            : <Menu className="w-5 h-5" />
-          }
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
 
@@ -153,7 +208,7 @@ const Sidebar = () => {
               </div>
               <div className="overflow-hidden min-w-0">
                 <p className="text-sm font-medium truncate text-white">{currentUser.name}</p>
-                <p className="text-xs text-slate-400 uppercase tracking-wide truncate">{currentUser.role.replace('_', ' ')}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide truncate">{currentUser.role}</p>
               </div>
             </div>
             {/* Dev Helper: Role Switcher */}
@@ -186,17 +241,19 @@ const Sidebar = () => {
           </div>
         )}
 
-        {/* ── Section label helper ── */}
+        {/* ── OVERVIEW ── */}
         {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-2 pb-[6px]">Overview</p>}
         {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
-
-        {/* 1. OVERVIEW */}
         <div className="px-1 space-y-0.5">
           {overviewItems.map((item) => renderNavLink(item.path, item.icon, item.label, item.badge, item.path === '/'))}
         </div>
 
         {/* ── PEKERJAAN ── */}
-        {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">Pekerjaan</p>}
+        {!collapsed && (
+          <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">
+            Pekerjaan{isFinanceRole ? <span className="ml-1 text-slate-600 normal-case font-normal">(read only)</span> : ''}
+          </p>
+        )}
         {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
 
         {/* Sites */}
@@ -284,7 +341,18 @@ const Sidebar = () => {
           })}
         </div>
 
-        {/* 3. DATA & DOKUMEN */}
+        {/* ── PEMBAYARAN (Finance only) ── */}
+        {showPembayaran && (
+          <>
+            {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">Pembayaran</p>}
+            {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
+            <div className="px-1 space-y-0.5">
+              {renderNavLink('/termin-payment', CreditCard, 'Pengajuan Termin')}
+            </div>
+          </>
+        )}
+
+        {/* ── DATA & DOKUMEN ── */}
         {showDataMaster && (
           <>
             {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">Data & Dokumen</p>}
@@ -295,13 +363,13 @@ const Sidebar = () => {
           </>
         )}
 
-        {/* 4. SYSTEM */}
+        {/* ── SYSTEM ── */}
         {showSystem && (
           <>
             {!collapsed && <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase px-4 pt-5 pb-[6px]">System</p>}
             {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
             <div className="px-1 space-y-0.5">
-              {renderNavLink('/system', Settings, 'Options')}
+              {renderNavLink('/options/users', Settings, 'Options')}
             </div>
           </>
         )}
@@ -310,6 +378,4 @@ const Sidebar = () => {
   );
 };
 
-
 export default Sidebar;
-

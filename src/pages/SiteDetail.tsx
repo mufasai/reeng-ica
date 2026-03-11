@@ -1000,7 +1000,7 @@ const SiteDetail = () => {
                 </div>
             </div>
             <div className="flex gap-2">
-                 {['backoffice_admin', 'management'].includes(currentUser?.role || '') && (
+                 {can('site.update_stage') && (
                     <button 
                         onClick={() => setIsUpdateStageModalOpen(true)}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded shadow-sm transition-colors"
@@ -1008,7 +1008,7 @@ const SiteDetail = () => {
                         Update Stage
                     </button>
                 )}
-                {can('manage_data') && (
+                {can('site.edit_data') && (
                     <button className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-white text-sm font-medium rounded shadow-sm transition-colors">
                         Edit Site
                     </button>
