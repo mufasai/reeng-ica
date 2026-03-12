@@ -143,6 +143,7 @@ export interface Site {
   startDate?: string;
   endDate?: string;
   import_source?: string;
+  extra_data?: Record<string, any>;
 }
 
 export interface ProjectFile {
@@ -179,9 +180,23 @@ export const USERS: User[] = [
     { id: 'u_adm', name: 'Admin Backoffice', role: 'admin' },
 ];
 
+export interface Certification {
+    id: string;
+    person_id: string; // -> people.id
+    nama_sertifikat: string; // e.g., 'TKPK 1', 'BFA', 'BES'
+    expired_date?: string; // date nullable
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface TeamMember {
-    personId: string;
-    role: 'manager' | 'engineer' | 'team_leader';
+    id: string;
+    team_id: string; // -> teams.id
+    person_id: string; // -> people.id
+    jabatan: string; // Leader | Engineer | Member | Transport | SITAC | Lainnya
+    is_field_leader: boolean;
+    joined_date?: string;
+    left_date?: string;
 }
 
 export interface TerminDocument {
@@ -196,17 +211,38 @@ export interface TerminDocument {
 export interface Team {
     id: string;
     name: string;
-    projectId: string;
-    status: 'active' | 'inactive';
-    members: TeamMember[]; 
+    coordinator_id?: string; // -> people.id
+    project_type: ProjectType;
+    regional?: string;
+    status_aktif: boolean;
+    members?: TeamMember[]; // Keeping for legacy/convenience, though ideally queried from TeamMember table
 }
 
 export interface Person {
     id: string;
     name: string;
-    role: UserRole;
-    // Extended fields
-    ktp: string;
+    role: UserRole; // Keeping for system access role
+    
+    // New Extended fields
+    nik?: string;
+    tempat_lahir?: string;
+    tanggal_lahir?: string;
+    agama?: string;
+    jenis_kelamin?: 'Laki-laki' | 'Perempuan';
+    no_ktp?: string;
+    alamat?: string;
+    nama_kontak_darurat?: string;
+    no_kontak_darurat?: string;
+    pendidikan_terakhir?: string;
+    nama_sekolah?: string;
+    jurusan?: string;
+    tahun_lulus?: number;
+    regional?: string;
+    foto_ktp_url?: string;
+    foto_diri_url?: string;
+    status_aktif: boolean;
+
+    // Legacy fields (keeping for backward compatibility if used elsewhere)
     email: string;
     phone: string;
     vendor: string;
@@ -214,11 +250,6 @@ export interface Person {
     imei1?: string;
     imei2?: string;
     avatar?: string;
-    // Photos
-    photoKtp?: string;
-    photoSelfie?: string;
-    photoNda?: string;
-    photoSelfieNda?: string;
     joinedAt?: string;
 }
 
@@ -250,60 +281,65 @@ export const sites: Site[] = [
 export const people: Person[] = [
     { 
         id: 'u1', name: 'John Doe', role: 'director', 
-        ktp: '3171234567890001', email: 'director@demo.com', phone: '081234567890', 
-        vendor: 'Internal', joinedAt: '2023-01-15', avatar: 'https://i.pravatar.cc/150?u=u1'
+        no_ktp: '3171234567890001', email: 'director@demo.com', phone: '081234567890', 
+        vendor: 'Internal', joinedAt: '2023-01-15', avatar: 'https://i.pravatar.cc/150?u=u1', status_aktif: true
     },
     { 
         id: 'u2', name: 'Budi Field', role: 'field', 
-        ktp: '3171234567890002', email: 'budi@demo.com', phone: '081234567891', 
+        no_ktp: '3171234567890002', email: 'budi@demo.com', phone: '081234567891', 
         vendor: 'Vendor X', deviceId: 'DEV-001', imei1: '123456789012345', imei2: '123456789012346',
-        joinedAt: '2023-03-10', photoKtp: 'ktp_budi.jpg', photoSelfie: 'selfie_budi.jpg'
+        joinedAt: '2023-03-10', foto_ktp_url: 'ktp_budi.jpg', foto_diri_url: 'selfie_budi.jpg', status_aktif: true
     },
     { 
         id: 'u3', name: 'Bob Operational', role: 'operational', 
-        ktp: '3171234567890003', email: 'bob.j@vendor-y.com', phone: '081234567892', 
+        no_ktp: '3171234567890003', email: 'bob.j@vendor-y.com', phone: '081234567892', 
         vendor: 'Vendor Y', deviceId: 'DEV-002', imei1: '987654321098765', 
-        joinedAt: '2023-02-20' 
+        joinedAt: '2023-02-20', status_aktif: true 
     },
     { 
         id: 'u4', name: 'Alice Finance', role: 'finance', 
-        ktp: '3171234567890004', email: 'finance@demo.com', phone: '081234567893', 
-        vendor: 'Internal', joinedAt: '2023-01-10' 
+        no_ktp: '3171234567890004', email: 'finance@demo.com', phone: '081234567893', 
+        vendor: 'Internal', joinedAt: '2023-01-10', status_aktif: true 
     },
     { 
         id: 'u5', name: 'Charlie Field 2', role: 'field', 
-        ktp: '3171234567890005', email: 'charlie.f@vendor-x.com', phone: '081234567894', 
+        no_ktp: '3171234567890005', email: 'charlie.f@vendor-x.com', phone: '081234567894', 
         vendor: 'Vendor X', deviceId: 'DEV-003', imei1: '112233445566778',
-        joinedAt: '2023-06-01' 
+        joinedAt: '2023-06-01', status_aktif: true 
     },
     { 
         id: 'u6', name: 'Admin Backoffice', role: 'admin', 
-        ktp: '3171234567890006', email: 'backoffice@demo.com', phone: '081234567895', 
-        vendor: 'Internal', joinedAt: '2023-01-01' 
+        no_ktp: '3171234567890006', email: 'backoffice@demo.com', phone: '081234567895', 
+        vendor: 'Internal', joinedAt: '2023-01-01', status_aktif: true 
     },
 ];
 
 export const teams: Team[] = [
     { 
-        id: 't1', projectId: 'p1', name: 'Team Alpha (Budi)', status: 'active',
+        id: 't1', project_type: 'FILTER', name: 'Team Alpha (Budi)', status_aktif: true, regional: 'Jakarta', coordinator_id: 'u1',
         members: [
-            { personId: 'u2', role: 'engineer' }, // Budi
-            { personId: 'u3', role: 'team_leader' }
+            { id: 'tm1', team_id: 't1', person_id: 'u2', jabatan: 'Engineer', is_field_leader: false }, // Budi
+            { id: 'tm2', team_id: 't1', person_id: 'u3', jabatan: 'Leader', is_field_leader: true }
         ] 
     },
     { 
-        id: 't3', projectId: 'p1', name: 'Team Beta', status: 'active',
+        id: 't3', project_type: 'FILTER', name: 'Team Beta', status_aktif: true, regional: 'Jakarta', coordinator_id: 'u1',
         members: [
-            { personId: 'u5', role: 'engineer' }, // Charlie
-            { personId: 'u3', role: 'team_leader' }
+            { id: 'tm3', team_id: 't3', person_id: 'u5', jabatan: 'Engineer', is_field_leader: false }, // Charlie
+            { id: 'tm4', team_id: 't3', person_id: 'u3', jabatan: 'Leader', is_field_leader: true }
         ] 
     },
     { 
-        id: 't2', projectId: 'p2', name: 'Bravo Team (Combat)', status: 'active',
-        members: [
-            { personId: 'u_lead', role: 'team_leader' }
-        ] 
+        id: 't2', name: 'Bravo Team (Combat)', status_aktif: true, project_type: 'COMBAT', regional: 'Jawa Barat'
     }, 
+];
+
+export const teamMembersRecords: TeamMember[] = [
+    { id: 'tm1', team_id: 't1', person_id: 'u2', jabatan: 'Engineer', is_field_leader: false, joined_date: '2023-03-15' },
+    { id: 'tm2', team_id: 't1', person_id: 'u3', jabatan: 'Leader', is_field_leader: true, joined_date: '2023-03-10' },
+    { id: 'tm3', team_id: 't3', person_id: 'u5', jabatan: 'Engineer', is_field_leader: false, joined_date: '2023-06-05' },
+    { id: 'tm4', team_id: 't3', person_id: 'u3', jabatan: 'Leader', is_field_leader: true, joined_date: '2023-06-01' },
+    { id: 'tm5', team_id: 't2', person_id: 'u_lead', jabatan: 'Leader', is_field_leader: true, joined_date: '2023-01-05' },
 ];
 
 export const termins: Termin[] = [
@@ -604,6 +640,9 @@ export interface SiteMaster {
     work_order_id?: string; // Link to Work Order
     project_site_id?: string; // Link to Execution Site
 
+    team_id?: string;
+    field_leader_id?: string; // -> people.id, the field leader assigned to THIS specific site
+
     batch_ref: string;
     imported_by: string; // ID of the user
     imported_at: string; // Timestamp
@@ -637,6 +676,24 @@ export const siteMasterRecords: SiteMaster[] = [
         imported_at: '2024-02-10T10:00:00Z',
         latitude: -6.2479,
         longitude: 106.5844,
+        extra_data: {
+            permit_start_date: '2026-02-10',
+            permit_expiry_date: '2026-06-10',
+            tpas_status: true,
+            tp_status: true,
+            caf_status: null,
+            akses_provider: 'Tower Bersama',
+            akses_kunci: 'Gembok Tsel',
+            akses_pic: 'Andi',
+            akses_telp: '0812-3456-7890',
+            impl_plan: '2026-03-10',
+            impl_aktual: null,
+            impl_ci: null,
+            impl_co: null,
+            impl_rfi: null,
+            impl_rfs: null,
+            impl_dok: null
+        }
     },
     {
         id: 'sm2',
@@ -671,6 +728,24 @@ export const siteMasterRecords: SiteMaster[] = [
         imported_at: '2024-02-10T10:05:00Z',
         latitude: -6.2255,
         longitude: 106.8016,
+        extra_data: {
+            permit_start_date: '2026-02-15',
+            permit_expiry_date: '2026-03-20', // Expiring soon
+            tpas_status: true,
+            tp_status: false,
+            caf_status: true,
+            akses_provider: 'TBG',
+            akses_kunci: 'Padlock Numeric',
+            akses_pic: 'Junaedi',
+            akses_telp: '0813-1030-0199',
+            impl_plan: '2026-03-15',
+            impl_aktual: '2026-03-15',
+            impl_ci: '08:00',
+            impl_co: '17:30',
+            impl_rfi: true,
+            impl_rfs: false,
+            impl_dok: null
+        }
     },
     {
         id: 'sm3',
@@ -866,9 +941,11 @@ export const getActiveSiteCountsByType = (currentUser: User, _allProjects: Proje
     };
 
     // Which teams does this user belong to?
-    const userTeamIds = teams
-        .filter(t => t.members.some(m => m.personId === currentUser.id))
-        .map(t => t.id);
+    const userTeamIds = Array.from(new Set(
+        teamMembersRecords
+            .filter(tm => tm.person_id === currentUser.id)
+            .map(tm => tm.team_id)
+    ));
 
     // Is the user restricted?
     const isRestricted = currentUser.role === 'field';

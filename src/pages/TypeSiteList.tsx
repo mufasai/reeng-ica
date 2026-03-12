@@ -17,10 +17,10 @@ import {
   combatTerms,
   terminPengajuanRecords,
   type ProjectType,
-  teams,
   type SiteMaster,
   siteMasterRecords,
-  workOrders
+  workOrders,
+  teamMembersRecords
 } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
 import ProjectSitesTable from '../components/tables/ProjectSitesTable';
@@ -53,9 +53,9 @@ const TypeSiteList = () => {
 
     // Role-based filtering — field role only sees their team's sites
     if (currentUser.role === 'field') {
-      const userTeamIds = teams
-        .filter(t => t.members.some(m => m.personId === currentUser.id))
-        .map(t => t.id);
+      const userTeamIds = teamMembersRecords
+        .filter(tm => tm.person_id === currentUser.id)
+        .map(tm => tm.team_id);
       
       // Filter based on assigned team via work order
       baseSites = baseSites.filter(s => {
@@ -97,10 +97,9 @@ const TypeSiteList = () => {
       // 3. Total People
       const uniquePeopleIds = new Set<string>();
       uniqueTeamIds.forEach(tId => {
-          const team = teams.find(t => t.id === tId);
-          if (team) {
-              team.members.forEach(m => uniquePeopleIds.add(m.personId));
-          }
+          teamMembersRecords
+              .filter(tm => tm.team_id === tId)
+              .forEach(tm => uniquePeopleIds.add(tm.person_id));
       });
       const totalPeople = uniquePeopleIds.size;
 

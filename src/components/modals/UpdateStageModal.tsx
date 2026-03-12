@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Upload, AlertTriangle, ChevronRight, File, XCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { STAGE_ORDER } from '../../data/mockData';
+import { STAGE_ORDER, teams, people, teamMembersRecords } from '../../data/mockData';
 
 interface UpdateStageModalProps {
     isOpen: boolean;
@@ -43,7 +43,7 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
         nextLabel: 'Assigned',
         helper: 'Tugaskan tim yang akan mengerjakan site ini.',
         fields: ['team_select'],
-        requiredFields: ['team_id'],
+        requiredFields: ['team_id'], // We'll handle field_leader validation softly or skip for now
         paymentNote: null
     },
     'assigned→permit_process': {
@@ -231,20 +231,65 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
     const renderField = (field: string) => {
         switch (field) {
             case 'team_select':
+                const selectedTeam = teams.find(t => t.id === formData.team_id);
+                const fieldLeadersInTeam = selectedTeam
+                    ? teamMembersRecords
+                        .filter(tm => tm.team_id === selectedTeam.id && tm.is_field_leader)
+                        .map(tm => people.find(p => p.id === tm.person_id))
+                        .filter(p => !!p)
+                    : [];
+
                 return (
-                    <div key={field} className="space-y-1">
-                        <label className="block text-sm font-medium text-slate-700">Tim <span className="text-red-500">*</span></label>
-                        <select 
-                            required 
-                            className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm"
-                            value={(formData.team_id as string) || ''}
-                            onChange={(e) => handleFormChange('team_id', e.target.value)}
-                        >
-                            <option value="">Pilih tim lapangan...</option>
-                            <option value="t1">Alpha Team (Jakarta)</option>
-                            <option value="t2">Beta Team (Bandung)</option>
-                            <option value="t3">Gamma Team (Surabaya)</option>
-                        </select>
+                    <div key={field} className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
+                        <div className="space-y-1">
+                            <label className="block text-sm font-medium text-slate-700">Tim Lapangan <span className="text-red-500">*</span></label>
+                            <select 
+                                required 
+                                className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm bg-white"
+                                value={(formData.team_id as string) || ''}
+                                onChange={(e) => {
+                                    handleFormChange('team_id', e.target.value);
+                                    handleFormChange('field_leader_id', ''); // Reset field leader when team changes
+                                }}
+                            >
+                                <option value="">Pilih tim lapangan...</option>
+                                {teams.filter(t => t.status_aktif).map(t => (
+                                    <option key={t.id} value={t.id}>{t.name} ({t.project_type})</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {selectedTeam && (
+                            <div className="pl-4 border-l-2 border-blue-200 space-y-3 pt-1">
+                                <div className="space-y-1.5 pt-1">
+                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Field Leader <span className="text-red-500">*</span></label>
+                                    
+                                    {fieldLeadersInTeam.length > 0 ? (
+                                        <select 
+                                            required
+                                            className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm bg-white"
+                                            value={(formData.field_leader_id as string) || ''}
+                                            onChange={(e) => handleFormChange('field_leader_id', e.target.value)}
+                                        >
+                                            <option value="">Pilih field leader...</option>
+                                            {fieldLeadersInTeam.map(fl => (
+                                                <option key={fl?.id} value={fl?.id}>{fl?.name}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <select disabled className="w-full px-3 py-2 border border-slate-200 rounded text-sm bg-slate-100 text-slate-500 cursor-not-allowed">
+                                                <option>— Belum ada field leader di tim ini</option>
+                                            </select>
+                                            <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+                                                <AlertTriangle className="w-4 h-4 shrink-0" />
+                                                <p>Tim ini belum memiliki field leader. Tambahkan terlebih dahulu di halaman Teams.</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             case 'permit_create_date':

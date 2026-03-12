@@ -4,11 +4,12 @@ import { Navigate } from 'react-router-dom';
 import { people as initialPeople, type Person, type UserRole } from '../data/mockData';
 import { 
     Search, Plus,  Edit2, Trash2, 
-    Download, Printer, 
+    Download, Printer, FileSpreadsheet,
     X, Camera, Smartphone, FileText, User, Briefcase
 } from 'lucide-react';
 import { Tooltip } from '../components/common/Tooltip';
 import clsx from 'clsx';
+import TeamPeopleImportModal from '../components/modals/TeamPeopleImportModal';
 
 // --- ADD/EDIT MODAL COMPONENT ---
 interface PersonModalProps {
@@ -21,7 +22,7 @@ interface PersonModalProps {
 const PersonModal = ({ isOpen, onClose, person, onSave }: PersonModalProps) => {
     const [formData, setFormData] = useState<Partial<Person>>(
         person || {
-            name: '', ktp: '', email: '', phone: '', role: 'field', vendor: '',
+            name: '', nik: '', email: '', phone: '', role: 'field', vendor: '',
             deviceId: '', imei1: '', imei2: ''
         }
     );
@@ -67,8 +68,8 @@ const PersonModal = ({ isOpen, onClose, person, onSave }: PersonModalProps) => {
                                 <input required name="name" value={formData.name} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. John Doe" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-slate-700">No. KTP <span className="text-red-500">*</span></label>
-                                <input required name="ktp" value={formData.ktp} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="16 digit NIK" />
+                                <label className="text-sm font-medium text-slate-700">NIK (No. Pegawai) <span className="text-red-500">*</span></label>
+                                <input required name="nik" value={formData.nik || ''} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="NIK Pegawai" />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-700">Email <span className="text-red-500">*</span></label>
@@ -158,6 +159,7 @@ const People = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [peopleData, setPeopleData] = useState<Person[]>(initialPeople);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [editingPerson, setEditingPerson] = useState<Person | null>(null);
 
     // RBAC Redirect — only director, operational, admin can access People
@@ -169,7 +171,7 @@ const People = () => {
     const filteredPeople = peopleData.filter(p => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.ktp.includes(searchTerm) ||
+        (p.nik || p.no_ktp || '').includes(searchTerm) ||
         p.role.includes(searchTerm)
     );
 
@@ -219,6 +221,11 @@ const People = () => {
                         <Plus className="w-4 h-4" /> Add Person
                     </button>
                     </Tooltip>
+                    <Tooltip content="Import dari Excel">
+                        <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all">
+                            <FileSpreadsheet className="w-4 h-4" /> Import Excel
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
 
@@ -245,7 +252,7 @@ const People = () => {
                                 <th className="py-4 px-6">Profile</th>
                                 <th className="py-4 px-6">Contact Info</th>
                                 <th className="py-4 px-6">Role & Vendor</th>
-                                <th className="py-4 px-6">Identity (KTP)</th>
+                                <th className="py-4 px-6">Identity (NIK/KTP)</th>
                                 <th className="py-4 px-6">Device Info</th>
                                 <th className="py-4 px-6 text-right">Actions</th>
                             </tr>
@@ -287,7 +294,7 @@ const People = () => {
                                                 <span className="text-xs text-slate-500">{person.vendor}</span>
                                             </div>
                                         </td>
-                                        <td className="py-4 px-6 font-mono text-slate-600">{person.ktp}</td>
+                                        <td className="py-4 px-6 font-mono text-slate-600">{person.nik || person.no_ktp || '-'}</td>
                                         <td className="py-4 px-6 text-xs text-slate-500 space-y-1">
                                             {person.deviceId && <div><span className="font-medium text-slate-400">ID:</span> {person.deviceId}</div>}
                                             {person.imei1 && <div><span className="font-medium text-slate-400">IMEI:</span> {person.imei1}</div>}
@@ -328,6 +335,17 @@ const People = () => {
                 onClose={() => setIsModalOpen(false)} 
                 person={editingPerson} 
                 onSave={handleSave}
+            />
+
+            <TeamPeopleImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                targetType="people"
+                onImportComplete={(results) => {
+                    console.log("Import Complete", results);
+                    alert(results.message);
+                    // Mock behavior: Refresh the page or append to peopleData
+                }}
             />
         </div>
     );

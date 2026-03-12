@@ -15,11 +15,12 @@ import TerimaSKPModal from '../components/modals/TerimaSKPModal';
 import UpdateStageModal from '../components/modals/UpdateStageModal';
 import AddMaterialModal from '../components/modals/AddMaterialModal';
 import PengajuanTerminModal from '../components/modals/PengajuanTerminModal';
+import MultiFileUploadModal, { type QueuedFile } from '../components/modals/MultiFileUploadModal';
 import {
     sites, projects, teams, people, 
     siteMaterials, siteEvidence, siteCosts, filterTerms, combatTerms, skpRecords,
     siteMasterRecords, siteBoQRecords, siteStageLogs, mockSiteFiles,
-    terminPengajuanRecords,
+    terminPengajuanRecords, teamMembersRecords,
     type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan
 } from '../data/mockData';
 import {
@@ -42,12 +43,13 @@ interface InfoSectionProps {
     site: Site;
     project: Project;
     team?: Team;
-    teamMembers: { id: string; name: string; role: string }[];
+    teamMembers: { id: string; name: string; role: string; isLeader?: boolean }[];
     canViewCosts: boolean;
     canManageUsers: boolean;
+    fieldLeader?: { id: string; name: string } | null;
 }
 
-const InfoSection = ({ site, project, team, teamMembers, canViewCosts, canManageUsers }: InfoSectionProps) => {
+const InfoSection = ({ site, project, team, teamMembers, canViewCosts, canManageUsers, fieldLeader }: InfoSectionProps) => {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
             {/* Left: General Info */}
@@ -91,21 +93,39 @@ const InfoSection = ({ site, project, team, teamMembers, canViewCosts, canManage
                         </button>
                     )}
                 </div>
-                <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 h-[180px]">
-                    {teamMembers.map(m => (
-                        <div key={m.id} className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold border border-blue-200 shrink-0">
-                                {m.name.charAt(0)}
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-medium text-slate-700 leading-tight">{m.name}</span>
-                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{m.role.replace('_', ' ')}</span>
-                            </div>
+                
+                <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-2 h-[180px]">
+                    {/* Field Leader summary */}
+                    <div className="mb-4">
+                        <div className={clsx("border rounded p-3 text-center", fieldLeader ? "bg-blue-50 border-blue-100" : "bg-red-50 border-red-100")}>
+                            <span className="block text-[10px] uppercase font-semibold mb-1 tracking-wider flex items-center justify-center gap-1 shadow-sm">
+                                {fieldLeader && <span title="Field Leader">👑</span>} Field Lead
+                            </span>
+                            <span className={clsx("block text-sm font-bold truncate", fieldLeader ? "text-blue-700" : "text-red-600")}>
+                                {fieldLeader ? fieldLeader.name : '⚠ Belum di-set'}
+                            </span>
                         </div>
-                    ))}
-                    {teamMembers.length === 0 && (
-                        <div className="text-sm text-slate-500 italic py-4 text-center">No team members assigned</div>
-                    )}
+                    </div>
+
+                    <div className="space-y-3">
+                        <span className="text-xs font-semibold text-slate-500 mb-1 block">Anggota Lapangan:</span>
+                        {teamMembers.map(m => (
+                            <div key={m.id} className="flex items-center gap-3 bg-white p-1 rounded-md border border-transparent hover:border-slate-100 transition-colors">
+                                <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border shrink-0", m.isLeader ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-blue-100 text-blue-700 border-blue-200")}>
+                                    {m.name.charAt(0)}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-sm font-medium text-slate-700 leading-tight truncate flex items-center gap-1.5">
+                                        {m.name}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-wider">{m.role.replace('_', ' ')}</span>
+                                </div>
+                            </div>
+                        ))}
+                        {teamMembers.length === 0 && (
+                            <div className="text-sm text-slate-500 italic py-4 text-center">No team members assigned</div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -713,11 +733,22 @@ const SiteDetail = () => {
       }
   }
 
-  const team = teams.find(t => t.id === site?.teamId);
-  const teamMembers = team ? people.filter(p => team.members.some(m => m.personId === p.id)).map(p => {
-      const memberRole = team.members.find(m => m.personId === p.id)?.role || 'engineer';
-      return { ...p, role: memberRole };
-  }) : [];
+  // Grab corresponding SiteMaster to check team_id and field_leader_id if not on site
+  const masterRecordForTeam = siteMasterRecords.find(sm => sm.site_id === id || sm.id === id);
+  const activeTeamId = site?.teamId || masterRecordForTeam?.team_id;
+  
+  const team = teams.find(t => t.id === activeTeamId);
+  const fieldLeader = masterRecordForTeam?.field_leader_id ? people.find(p => p.id === masterRecordForTeam.field_leader_id) || null : null;
+
+  const teamMembers = team 
+      ? teamMembersRecords
+          .filter(tm => tm.team_id === team.id && !tm.left_date) // active members only
+          .map(tm => {
+              const p = people.find(person => person.id === tm.person_id);
+              return p ? { id: p.id, name: p.name, role: tm.jabatan, isLeader: tm.is_field_leader } : null;
+          })
+          .filter(Boolean) as { id: string; name: string; role: string; isLeader: boolean }[]
+      : [];
 
   // Filtered Data
   const materials = siteMaterials.filter(m => m.siteId === id);
@@ -741,9 +772,10 @@ const SiteDetail = () => {
   const [pengajuanData, setPengajuanData] = useState<{terminKey: 'T1'|'T2a'|'T2b'|'T2c'|'T3'|'T4', nominal: number, docs: SiteFile[]}>({
      terminKey: 'T1', nominal: 0, docs: [] 
   });
+  
+  const [isMultiUploadOpen, setIsMultiUploadOpen] = useState(false);
 
   // File Input Refs
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   const proofInputRef = useRef<HTMLInputElement>(null);
   const materialInputRef = useRef<HTMLInputElement>(null);
@@ -753,34 +785,39 @@ const SiteDetail = () => {
   }
 
   // --- ACTIONS ---
-  const handleFileUpload = () => fileInputRef.current?.click();
+  const handleFileUpload = () => setIsMultiUploadOpen(true);
   const handleEvidenceUpload = () => evidenceInputRef.current?.click();
   const handleSubmitCost = () => alert("Submit Cost Modal would open");
   const handleUploadProof = (costId: string) => { proofInputRef.current?.click(); console.log('Uploading proof for cost:', costId); };
   const handleApproveCost = (costId: string) => alert(`Approve cost ${costId}`);
   const handleRejectCost = (costId: string) => alert(`Reject cost ${costId}`);
 
-  // Upload Handlers (Mock logic to update local component state)
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const fileList = e.target.files;
-      if (fileList && fileList.length > 0) {
-          const file = fileList[0];
-          const newFile: SiteFile = { 
-              id: `f-mock-${Date.now()}`, 
+  const handleMultiUploadSubmit = (queuedFiles: QueuedFile[]) => {
+      let filesToUpdate = [...localFiles];
+      
+      const newFiles: SiteFile[] = queuedFiles.map(q => {
+          // If action is 'replace', we need to remove the old file from 'filesToUpdate' first
+          if (q.isDuplicate && q.duplicateAction === 'replace') {
+              filesToUpdate = filesToUpdate.filter(f => f.filename !== q.file.name);
+          }
+          
+          return {
+              id: `f-mock-${Date.now()}-${q.id}`, 
               site_id: site.id, 
-              filename: file.name, 
-              original_name: file.name,
+              filename: (q.isDuplicate && q.duplicateAction === 'keep') ? `(1) ${q.file.name}` : q.file.name, 
+              original_name: q.file.name,
               file_url: '#',
-              mime_type: file.type || 'application/octet-stream',
-              file_size: file.size, 
+              mime_type: q.file.type || 'application/octet-stream',
+              file_size: q.file.size, 
               source: 'direct_upload',
+              stage_context: q.tag,
               uploaded_at: new Date().toISOString(), 
               uploaded_by: currentUser?.name || 'Current User' 
           };
-          setLocalFiles([newFile, ...localFiles]);
-          alert(`File ${file.name} uploaded successfully!`);
-      }
-      e.target.value = ''; // Reset input
+      });
+      
+      setLocalFiles([...newFiles, ...filesToUpdate]);
+      alert(`${newFiles.length} file(s) uploaded successfully!`);
   };
 
   const handleEvidenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -971,11 +1008,7 @@ const SiteDetail = () => {
   const currentGroupIndex = STAGE_GROUPS.findIndex(g => g.keys.includes(localStage));
   const activeIndex = currentGroupIndex === -1 && localStage === 'imported' ? -1 : currentGroupIndex;
 
-  // Find when current stage was entered
-  const latestLogForStage = localStageLogs.find(l => l.to_stage === localStage && l.from_stage !== localStage);
-  const daysInStage = latestLogForStage 
-    ? Math.floor((new Date().getTime() - new Date(latestLogForStage.created_at).getTime()) / (1000 * 3600 * 24))
-    : 0;
+    // (Stage entered logic removed as per design changes)
 
   // Compute whether any termin is unlocked & not yet submitted → drives tab badge
   const STAGE_ORDER_IDX = ['imported','assigned','permit_process','permit_ready','akses_process','akses_ready','implementasi','rfi_done','rfs_done','dokumen_done','bast','invoice','completed'];
@@ -1035,36 +1068,80 @@ const SiteDetail = () => {
                 {STAGE_GROUPS.map((group, idx) => {
                     const isPast = activeIndex > idx;
                     const isCurrent = activeIndex === idx;
+                    const isReached = isPast || isCurrent;
 
-                    // Find date achieved (if past)
-                    const logAchieved = localStageLogs.find(l => group.keys.includes(l.to_stage) && l.from_stage !== l.to_stage);
-                    const dateAchieved = logAchieved ? new Date(logAchieved.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '';
+                    const isPermitGroup = group.label === 'Permit';
+                    const eData = site.extra_data || {};
+                    const permitExpiry = eData.permit_expiry_date;
+                    
+                    // 1. Find the date this stage group was reached
+                    // We look for a log entry where 'to_stage' matches ANY of the keys in this group.
+                    // We take the Earliest or Latest? Let's take the Earliest log matching this group's keys
+                    // Or if they wanted specifically the exact node's stage, we check against localStageLogs.
+                    const groupLogs = localStageLogs.filter(log => group.keys.includes(log.to_stage));
+                    // Sort ascending to find when they FIRST entered any stage in this group
+                    groupLogs.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                    const reachedDate = groupLogs.length > 0 ? new Date(groupLogs[0].created_at) : null;
+
+                    let permitDaysText = null;
+                    let permitDaysColor = 'text-slate-500';
+                    let permitNodeColorOverride = null;
+                    let permitNodeTextOverride = null;
+                    
+                    if (isPermitGroup && permitExpiry) {
+                        const daysLeft = Math.floor((new Date(permitExpiry).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+                        if (daysLeft < 0) {
+                            permitDaysText = `✗ Kedaluwarsa ${new Date(permitExpiry).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year:'numeric'})}`;
+                            permitDaysColor = 'text-red-600 font-bold';
+                            permitNodeColorOverride = 'border-red-500 ring-4 ring-red-100 bg-red-50';
+                            permitNodeTextOverride = 'text-red-600';
+                        } else if (daysLeft <= 14) {
+                            permitDaysText = `⚠ Berlaku s/d ${new Date(permitExpiry).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year:'numeric'})}`;
+                            permitDaysColor = 'text-amber-600 font-bold';
+                            permitNodeColorOverride = 'border-amber-500 ring-4 ring-amber-100 bg-amber-50';
+                            permitNodeTextOverride = 'text-amber-600';
+                        } else {
+                            permitDaysText = `Berlaku s/d ${new Date(permitExpiry).toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year:'numeric'})}`;
+                            permitDaysColor = 'text-slate-500';
+                        }
+                    }
+
+                    // For non-permit nodes, purely visual without dates
+                    let nodeClass = "bg-white text-slate-300 border-slate-200";
+                    let textClass = "text-slate-400";
+                    if (isPast) {
+                        nodeClass = "bg-emerald-500 text-white border-emerald-500";
+                        textClass = "text-slate-700";
+                    } else if (isCurrent) {
+                        nodeClass = permitNodeColorOverride || "bg-white text-blue-600 border-blue-500 ring-4 ring-blue-100 animate-pulse";
+                        textClass = permitNodeTextOverride || "text-blue-700 font-bold";
+                    }
 
                     return (
                         <div key={idx} className="relative z-10 flex flex-col items-center">
-                            <div className={clsx(
-                                "w-8 h-8 rounded-full flex items-center justify-center border-[3px] shadow-sm mb-2 font-bold text-xs",
-                                isPast ? "bg-emerald-500 text-white border-emerald-500" :
-                                isCurrent ? "bg-white text-blue-600 border-blue-500 ring-4 ring-blue-100 animate-pulse" :
-                                "bg-white text-slate-400 border-slate-200"
-                            )}>
+                            <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center border-[3px] shadow-sm mb-2 font-bold text-xs", nodeClass)}>
                                 {isPast ? <CheckCircle2 className="w-5 h-5 text-white" /> : (idx + 1)}
                             </div>
-                            <span className={clsx(
-                                "text-xs font-semibold whitespace-nowrap",
-                                isCurrent ? "text-blue-700" : isPast ? "text-slate-700" : "text-slate-400"
-                            )}>
+                            <span className={clsx("text-xs font-semibold whitespace-nowrap", textClass)}>
                                 {group.label}
                             </span>
                             
                             {/* Meta texts beneath */}
-                            <div className="absolute top-14 w-32 text-center text-[10px]">
-                                {isPast && dateAchieved ? (
-                                    <span className="text-emerald-600">{dateAchieved}</span>
-                                ) : isCurrent ? (
-                                    <span className="text-blue-500 font-medium">{daysInStage} hr di stage ini</span>
-                                ) : (
-                                    <span className="text-transparent">.</span>
+                            <div className="absolute top-14 w-40 text-center flex flex-col items-center justify-center">
+                                {/* Line 1: Date reached */}
+                                {isReached && reachedDate && (
+                                    <span className="text-[10px] text-slate-500 whitespace-nowrap bg-white/80 px-1 rounded">
+                                        {reachedDate.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year:'numeric'})}
+                                    </span>
+                                )}
+
+                                {/* Line 2: Permit Expiry if applicable */}
+                                {(isReached || !isReached) && isPermitGroup && permitDaysText && ( // The user requirement said permitNodes ONLY show additional line, but pending doesn't show dates. If it's pending it should show nothing. So limit to isReached. Wait user said "Pending node: show nothing".
+                                    isReached ? (
+                                        <span className={clsx("text-[10px] mt-0.5 whitespace-nowrap bg-white/80 px-1 rounded", permitDaysColor)}>
+                                            {permitDaysText}
+                                        </span>
+                                    ) : null
                                 )}
                             </div>
                         </div>
@@ -1089,6 +1166,7 @@ const SiteDetail = () => {
             project={project}
             team={team}
             teamMembers={teamMembers}
+            fieldLeader={fieldLeader}
             canViewCosts={can('view_financials')}
             canManageUsers={can('manage_data')}
         />
@@ -1130,8 +1208,8 @@ const SiteDetail = () => {
                             materials={materials} 
                             skps={localSkps}
                             siteBoQs={localBoQs}
-                            canAddSkp={can('manage_data') || (currentUser?.role === 'team_leader')}
-                            canMarkReceived={can('manage_data') || (currentUser?.role === 'team_leader') || (currentUser?.role === 'engineer')}
+                            canAddSkp={can('manage_data') || (currentUser?.role === 'field')}
+                            canMarkReceived={can('manage_data') || (currentUser?.role === 'field')}
                             onAddSkp={() => setIsSkpModalOpen(true)}
                             onMarkReceived={(skpId) => {
                                 setSelectedSkpId(skpId);
@@ -1275,7 +1353,12 @@ const SiteDetail = () => {
         />
 
         {/* Hidden File Inputs for Document Uploads */}
-        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+        <MultiFileUploadModal
+            isOpen={isMultiUploadOpen}
+            onClose={() => setIsMultiUploadOpen(false)}
+            existingFiles={localFiles}
+            onSubmit={handleMultiUploadSubmit}
+        />
         <input type="file" ref={evidenceInputRef} className="hidden" accept="image/*" onChange={handleEvidenceChange} />
         <input type="file" ref={proofInputRef} className="hidden" accept="image/*,.pdf" onChange={(e) => handleGenericUpload(e, 'Payment Proof')} />
         <input type="file" ref={materialInputRef} className="hidden" onChange={(e) => handleGenericUpload(e, 'Material Document')} />

@@ -2,12 +2,13 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { 
-    teams as initialTeams, people as allPeople, 
+    teams as initialTeams, people as allPeople, teamMembersRecords,
     type Team, type TeamMember, type Person 
 } from '../data/mockData';
 import { 
-    Plus, Search, User, X, Users
+    Plus, Search, User, X, Users, FileSpreadsheet
 } from 'lucide-react';
+import TeamPeopleImportModal from '../components/modals/TeamPeopleImportModal';
 import { Tooltip } from '../components/common/Tooltip';
 import clsx from 'clsx';
 import {
@@ -34,28 +35,43 @@ interface TeamModalProps {
 
 const TeamModal = ({ isOpen, onClose, team, onSave }: TeamModalProps) => {
     const [formData, setFormData] = useState<Partial<Team>>(
-        team || { name: '', status: 'active', members: [] }
+        team || { name: '', status_aktif: true, members: [] }
     );
     const [searchTerm, setSearchTerm] = useState('');
 
     if (!isOpen) return null;
 
-    const availablePeople = allPeople.filter(p => !formData.members?.some(m => m.personId === p.id));
+    const teamSpecificMembers = useMemo(() => {
+        return teamMembersRecords.filter(tm => tm.team_id === team?.id);
+    }, [team?.id]);
+
+    const availablePeople = allPeople.filter(p => !teamSpecificMembers.some(m => m.person_id === p.id));
     const filteredAvailable = availablePeople.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const addMember = (person: Person) => {
-        const newMember: TeamMember = { personId: person.id, role: 'engineer' };
+        const newMember: TeamMember = {
+            id: `tm_${Date.now()}`,
+            team_id: team?.id || `t_temp`,
+            person_id: person.id,
+            jabatan: 'Engineer',
+            is_field_leader: false,
+            joined_date: new Date().toISOString().split('T')[0]
+        };
         setFormData({ ...formData, members: [...(formData.members || []), newMember] });
     };
 
     const removeMember = (personId: string) => {
-        setFormData({ ...formData, members: formData.members?.filter(m => m.personId !== personId) });
+        setFormData({ ...formData, members: formData.members?.filter(m => m.person_id !== personId) });
     };
 
-    const updateMemberRole = (personId: string, role: 'engineer' | 'team_leader') => {
+    const updateMemberRole = (personId: string, role: string) => {
         setFormData({
             ...formData,
-            members: formData.members?.map(m => m.personId === personId ? { ...m, role } : m)
+            members: formData.members?.map(m => m.person_id === personId ? { 
+                ...m, 
+                jabatan: role === 'team_leader' ? 'Leader' : 'Engineer',
+                is_field_leader: role === 'team_leader' 
+            } : m)
         });
     };
 
@@ -64,7 +80,8 @@ const TeamModal = ({ isOpen, onClose, team, onSave }: TeamModalProps) => {
         onSave({
             ...formData,
             id: team?.id || `t_${Date.now()}`,
-            projectId: formData.projectId || 'p1', // Default or select
+            project_type: formData.project_type || 'FILTER',
+            status_aktif: formData.status_aktif !== undefined ? formData.status_aktif : true
         } as Team);
     };
 
@@ -83,8 +100,8 @@ const TeamModal = ({ isOpen, onClose, team, onSave }: TeamModalProps) => {
                             <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. Installation Team A" />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Status</label>
-                            <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as 'active' | 'inactive'})} className="w-full p-2 border rounded bg-white">
+                            <label className="text-sm font-medium text-slate-700">Status Aktif</label>
+                            <select value={formData.status_aktif ? 'active' : 'inactive'} onChange={e => setFormData({...formData, status_aktif: e.target.value === 'active'})} className="w-full p-2 border rounded bg-white">
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
                             </select>
@@ -121,10 +138,10 @@ const TeamModal = ({ isOpen, onClose, team, onSave }: TeamModalProps) => {
                         {/* Selected Members List */}
                         <div className="space-y-2">
                             {formData.members?.map(m => {
-                                const person = allPeople.find(p => p.id === m.personId);
+                                const person = allPeople.find(p => p.id === m.person_id);
                                 if (!person) return null;
                                 return (
-                                    <div key={m.personId} className="flex items-center justify-between p-3 border rounded-lg bg-white shadow-sm">
+                                    <div key={m.person_id} className="flex items-center justify-between p-3 border rounded-lg bg-white shadow-sm">
                                         <div className="flex items-center gap-3">
                                              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">{person.name.charAt(0)}</div>
                                              <div>
@@ -134,14 +151,14 @@ const TeamModal = ({ isOpen, onClose, team, onSave }: TeamModalProps) => {
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <select 
-                                                value={m.role} 
-                                                onChange={(e) => updateMemberRole(m.personId, e.target.value as 'engineer' | 'team_leader')}
+                                                value={m.is_field_leader ? 'team_leader' : 'engineer'} 
+                                                onChange={(e) => updateMemberRole(m.person_id, e.target.value)}
                                                 className="text-xs border-none bg-slate-100 rounded px-2 py-1 outline-none cursor-pointer hover:bg-slate-200"
                                             >
                                                 <option value="engineer">Engineer</option>
                                                 <option value="team_leader">Team Leader</option>
                                             </select>
-                                            <button type="button" onClick={() => removeMember(m.personId)} className="text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                                            <button type="button" onClick={() => removeMember(m.person_id)} className="text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
                                         </div>
                                     </div>
                                 );
@@ -181,7 +198,7 @@ const TeamDetailModal = ({ isOpen, onClose, team }: TeamDetailModalProps) => {
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-slate-800">{team.name}</h2>
-                            <span className={clsx("text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded", team.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>{team.status}</span>
+                            <span className={clsx("text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded", team.status_aktif ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>{team.status_aktif ? 'Active' : 'Inactive'}</span>
                         </div>
                     </div>
                     <button onClick={onClose}><X className="w-6 h-6 text-slate-400 hover:text-slate-700" /></button>
@@ -189,7 +206,7 @@ const TeamDetailModal = ({ isOpen, onClose, team }: TeamDetailModalProps) => {
 
                 <div className="p-6">
                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <User className="w-4 h-4" /> Team Members ({team.members.length})
+                        <User className="w-4 h-4" /> Team Members ({teamMembersRecords.filter(tm => tm.team_id === team.id).length})
                     </h3>
                     <div className="overflow-hidden rounded-lg border border-slate-200">
                         <table className="w-full text-sm text-left">
@@ -203,15 +220,15 @@ const TeamDetailModal = ({ isOpen, onClose, team }: TeamDetailModalProps) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {team.members.map(m => {
-                                    const p = allPeople.find(person => person.id === m.personId);
+                                {teamMembersRecords.filter(tm => tm.team_id === team.id).map(m => {
+                                    const p = allPeople.find(person => person.id === m.person_id);
                                     if (!p) return null;
                                     return (
-                                        <tr key={m.personId} className="hover:bg-slate-50">
+                                        <tr key={m.person_id} className="hover:bg-slate-50">
                                             <td className="py-3 px-4 font-medium text-slate-800">{p.name}</td>
                                             <td className="py-3 px-4">
-                                                <span className={clsx("px-2 py-0.5 rounded textxs font-bold uppercase", m.role === 'team_leader' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
-                                                    {m.role.replace('_', ' ')}
+                                                <span className={clsx("px-2 py-0.5 rounded text-xs font-bold uppercase", m.is_field_leader ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
+                                                    {m.jabatan} {m.is_field_leader ? '👑' : ''}
                                                 </span>
                                             </td>
                                             <td className="py-3 px-4 text-slate-500 capitalize">{p.role.replace('_', ' ')}</td>
@@ -237,6 +254,7 @@ const Teams = () => {
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     
     // Filter State
     const [searchTerm, setSearchTerm] = useState('');
@@ -248,7 +266,7 @@ const Teams = () => {
     const filteredTeams = useMemo(() => {
         return teams.filter(t => {
             const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesStatus = statusFilter ? t.status === statusFilter : true;
+            const matchesStatus = statusFilter === 'active' ? t.status_aktif : (statusFilter === 'inactive' ? !t.status_aktif : true);
             return matchesSearch && matchesStatus;
         });
     }, [teams, searchTerm, statusFilter]);
@@ -294,16 +312,23 @@ const Teams = () => {
 
     return (
         <div className="p-8 space-y-6 animate-in fade-in duration-500">
-             <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">Teams</h1>
                     <p className="text-slate-500 text-sm">Manage field teams and memberships</p>
                 </div>
-                <Tooltip content="Create a new team">
-                <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all">
-                    <Plus className="w-4 h-4" /> Add Team
-                </button>
-                </Tooltip>
+                <div className="flex gap-2">
+                    <Tooltip content="Create a new team">
+                        <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all">
+                            <Plus className="w-4 h-4" /> Add Team
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Import dari Excel">
+                        <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all">
+                            <FileSpreadsheet className="w-4 h-4" /> Import Excel
+                        </button>
+                    </Tooltip>
+                </div>
             </div>
 
             <TableContainer>
@@ -325,7 +350,7 @@ const Teams = () => {
                         <TableHead sortable>Team Name</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Members</TableHead>
-                        <TableHead>Project ID</TableHead>
+                        <TableHead>Project Type</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableHeader>
                     <TableBody>
@@ -345,24 +370,24 @@ const Teams = () => {
                                     <TableCell className="font-medium text-slate-800">{team.name}</TableCell>
                                     <TableCell>
                                         <span className={clsx("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border", 
-                                            team.status === 'active' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
-                                            <div className={clsx("w-1.5 h-1.5 rounded-full", team.status === 'active' ? "bg-emerald-500" : "bg-slate-400")} />
-                                            {team.status === 'active' ? 'Active' : 'Inactive'}
+                                            team.status_aktif ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
+                                            <div className={clsx("w-1.5 h-1.5 rounded-full", team.status_aktif ? "bg-emerald-500" : "bg-slate-400")} />
+                                            {team.status_aktif ? 'Active' : 'Inactive'}
                                         </span>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex -space-x-2">
-                                            {team.members.slice(0, 4).map((m, i) => (
-                                                <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[10px] shadow-sm font-bold text-slate-600" title={m.role}>
-                                                    {allPeople.find(p => p.id === m.personId)?.name.charAt(0)}
+                                            {teamMembersRecords.filter(tm => tm.team_id === team.id).slice(0, 4).map((m, i) => (
+                                                <div key={i} className={clsx("w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] shadow-sm font-bold", m.is_field_leader ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600")} title={m.jabatan}>
+                                                    {allPeople.find(p => p.id === m.person_id)?.name.charAt(0) || '?'}
                                                 </div>
                                             ))}
-                                            {team.members.length > 4 && (
-                                                <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">+{team.members.length - 4}</div>
+                                            {teamMembersRecords.filter(tm => tm.team_id === team.id).length > 4 && (
+                                                <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">+{teamMembersRecords.filter(tm => tm.team_id === team.id).length - 4}</div>
                                             )}
                                         </div>
                                     </TableCell>
-                                    <TableCell className="font-mono text-xs">{team.projectId}</TableCell>
+                                    <TableCell className="font-mono text-xs">{team.project_type}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-2">
                                             <ActionButton type="view" onClick={() => handleView(team)} />
@@ -387,6 +412,15 @@ const Teams = () => {
 
             <TeamModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} team={selectedTeam} onSave={handleSave} />
             <TeamDetailModal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} team={selectedTeam} />
+            <TeamPeopleImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                targetType="teams"
+                onImportComplete={(results) => {
+                    console.log("Import Complete", results);
+                    alert(results.message);
+                }}
+            />
         </div>
     );
 };
