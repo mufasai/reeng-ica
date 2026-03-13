@@ -99,8 +99,8 @@ const Sidebar = () => {
     { id: 'BLACKSITE', label: 'Blacksite', colorClass: 'bg-red-500' },
     { id: 'COMBAT', label: 'Combat', colorClass: 'bg-amber-500' },
     { id: 'FILTER', label: 'Filter', colorClass: 'bg-emerald-500' },
-    { id: 'L2H', label: 'L2H', colorClass: 'bg-blue-600' },
-    { id: 'REFINEN', label: 'Refinen', colorClass: 'bg-purple-600' },
+    { id: 'L2H', label: 'L2H', colorClass: 'bg-purple-500' },
+    { id: 'RESCOPING', label: 'Rescoping', colorClass: 'bg-cyan-600' },
   ];
   const typeCounts = getActiveSiteCountsByType(currentUser, projects, siteMasterRecords);
   const isRestricted = isFieldRole;

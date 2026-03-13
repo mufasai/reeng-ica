@@ -52,7 +52,7 @@ const PROJECT_TYPES: { id: ProjectType; label: string }[] = [
     { id: 'COMBAT', label: 'Combat' },
     { id: 'BLACKSITE', label: 'Blacksite' },
     { id: 'L2H', label: 'L2H' },
-    { id: 'REFINEN', label: 'Refinen' }
+    { id: 'RESCOPING', label: 'Rescoping' }
 ];
 
 // Helper to determine color based on stage (handles issue notes mock logic)
@@ -386,7 +386,7 @@ const MapWidget: React.FC<MapWidgetProps> = ({ className = '', height = '100%', 
                                     <div className="flex items-center gap-2 text-[10px] font-medium text-slate-600">
                                         <div style={{width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '12px solid #CBD5E1'}}></div> L2H
                                     </div>
-                                    <div className="flex items-center gap-2 text-[10px] font-medium text-slate-600"><div style={{width: 12, height: 12, backgroundColor: '#CBD5E1', border: '1px solid #94A3B8'}}></div> REFINEN</div>
+                                    <div className="flex items-center gap-2 text-[10px] font-medium text-slate-600"><div style={{width: 12, height: 12, backgroundColor: '#0891B2', border: '1px solid #0E7490'}}></div> RESCOPING</div>
                                 </div>
                             </div>
                             {/* Colors Legend */}

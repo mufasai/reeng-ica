@@ -1,13 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { X, Upload, AlertTriangle, ChevronRight, File, XCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { STAGE_ORDER, teams, people, teamMembersRecords } from '../../data/mockData';
+import { teams, people, teamMembersRecords } from '../../data/mockData';
 
 interface UpdateStageModalProps {
     isOpen: boolean;
     onClose: () => void;
     siteId: string;
     siteName?: string;
+    projectType?: string;
     currentStage: string;
     onUpdateStage: (newStage: string, notes?: string, payload?: Record<string, unknown>) => void;
 }
@@ -26,7 +27,11 @@ const STAGE_LABELS: Record<string, string> = {
     'dokumen_done': 'Dokumen Submitted',
     'bast': 'BAST',
     'invoice': 'Invoice',
-    'completed': 'Selesai'
+    'completed': 'Selesai',
+    'survey': 'Survey',
+    'survey_nok': 'Survey NOK',
+    'erfin_process': 'ERFIN Diproses',
+    'erfin_ready': 'ERFIN Ready'
 };
 
 interface TransitionConfig {
@@ -53,6 +58,34 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
         requiredFields: ['permit_create_date'],
         paymentNote: null
     },
+    'assigned→survey': {
+        nextLabel: 'Survey',
+        helper: 'Catat tanggal survei hasil lapangan.',
+        fields: ['survey_date'],
+        requiredFields: ['survey_date'],
+        paymentNote: null
+    },
+    'survey→erfin_process': { // dynamic branch handled via render
+        nextLabel: 'Input Hasil Survey',
+        helper: 'Tentukan hasil survey. Jika OK lanjut ke ERFIN, jika NOK proses berhenti sementara.',
+        fields: ['survey_result_radio'],
+        requiredFields: ['survey_result'], // NOTE: reason handled dynamically
+        paymentNote: null
+    },
+    'erfin_process→erfin_ready': {
+        nextLabel: 'ERFIN Ready',
+        helper: 'Input data ERFIN yang sudah disetujui.',
+        fields: ['erfin_number', 'erfin_date', 'erfin_ready_date'],
+        requiredFields: ['erfin_number', 'erfin_date'],
+        paymentNote: null
+    },
+    'erfin_ready→permit_process': {
+        nextLabel: 'Permit Diproses',
+        helper: 'Catat tanggal pengajuan permit ke TPAS.',
+        fields: ['permit_create_date'],
+        requiredFields: ['permit_create_date'],
+        paymentNote: null
+    },
     'permit_process→permit_ready': {
         nextLabel: 'Permit Ready',
         helper: 'Konfirmasi semua approval sudah didapat dan upload dokumen permit.',
@@ -71,8 +104,8 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
     'akses_process→akses_ready': {
         nextLabel: 'Akses Ready',
         helper: 'Konfirmasi akses ke tower sudah bisa dilakukan.',
-        fields: ['konfirmasi_akses', 'file_upload'],
-        requiredFields: ['konfirmasi_akses'], // file optional
+        fields: ['konfirmasi_akses', 'akses_gedung_toggle', 'file_upload'],
+        requiredFields: ['konfirmasi_akses'], // file optional, gedung optional
         fileLabel: 'Foto kondisi site / bukti akses',
         paymentNote: null
     },
@@ -86,10 +119,10 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
     'implementasi→rfi_done': {
         nextLabel: 'RFI Selesai',
         helper: 'Radio Frequency Inspection selesai dilakukan.',
-        fields: ['co_tim', 'konfirmasi_rfi', 'file_upload'],
+        fields: ['co_tim', 'konfirmasi_rfi', 'catatan_teknis', 'file_upload'],
         requiredFields: ['co_tim', 'konfirmasi_rfi'],
         fileLabel: 'Foto CI/CO, laporan RFI',
-        paymentNote: '💰 Setelah stage ini: T2a (30% dari Termin 2) akan dapat diajukan.'
+        paymentNote: '💰 Setelah stage ini: T2 (Termin 2) akan dapat diajukan sesuai rules.'
     },
     'rfi_done→rfs_done': {
         nextLabel: 'RFS Selesai',
@@ -132,14 +165,27 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
     }
 };
 
-export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = 'Site Name Placeholder', currentStage, onUpdateStage }: UpdateStageModalProps) {
-    const nextLogicalStageId = useMemo(() => {
-        const currentIndex = STAGE_ORDER.indexOf(currentStage);
-        if (currentIndex === -1 || currentIndex === STAGE_ORDER.length - 1) return null;
-        return STAGE_ORDER[currentIndex + 1];
-    }, [currentStage]);
+export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = 'Site Name Placeholder', projectType = 'FILTER', currentStage, onUpdateStage }: UpdateStageModalProps) {
+    // Dynamic Pipeline computation
+    const getNextStages = () => {
+        if (currentStage === 'survey') return ['erfin_process', 'survey_nok']; // Special Branch logic
+        
+        // standard pipelines from mockData logic translated here:
+        const ppl = projectType === 'RESCOPING' 
+            ? ['imported', 'assigned', 'survey', 'erfin_process', 'erfin_ready', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed']
+            : ['imported', 'assigned', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed'];
+            
+        const currentIndex = ppl.indexOf(currentStage);
+        if (currentIndex === -1 || currentIndex === ppl.length - 1) return [];
+        return [ppl[currentIndex + 1]];
+    };
 
-    const transitionKey = `${currentStage}→${nextLogicalStageId}`;
+    const nextStages = getNextStages();
+    // Default the logical stage to the first next stage (the OK path)
+    const [selectedBranch, setSelectedBranch] = useState<string>('');
+    const nextLogicalStageId = (currentStage === 'survey' && selectedBranch === 'survey_nok') ? 'survey_nok' : nextStages[0] || null;
+
+    const transitionKey = `${currentStage}→${currentStage === 'survey' ? 'erfin_process' : nextLogicalStageId}`;
     const config = STAGE_TRANSITION_CONFIG[transitionKey];
 
     // Form State
@@ -161,6 +207,9 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
 
     const handleFormChange = (key: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [key]: value }));
+        if (key === 'survey_result') {
+            setSelectedBranch(value === 'nok' ? 'survey_nok' : 'erfin_process');
+        }
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -200,7 +249,18 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
         if (!config) return false;
         if (hasOversizedFiles) return false;
         
+        // Custom validations
+        if (currentStage === 'survey') {
+            if (!formData['survey_result']) return false;
+            if (formData['survey_result'] === 'nok' && (!formData['survey_nok_reason'] || (formData['survey_nok_reason'] as string).trim() === '')) return false;
+        }
+
+        if (formData['has_akses_gedung'] === true && (!formData['gedung_nama'] || formData['gedung_nama'] === '')) return false;
+
         for (const req of config.requiredFields) {
+            // Skip file validation if survey NOK
+            if (req === 'files' && formData['survey_result'] === 'nok') continue;
+
             if (req === 'files') {
                 if (files.length === 0) return false;
             } else if (req === 'tpas_approved' || req === 'tp_approved' || req.startsWith('konfirmasi_')) {
@@ -234,7 +294,7 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                 const selectedTeam = teams.find(t => t.id === formData.team_id);
                 const fieldLeadersInTeam = selectedTeam
                     ? teamMembersRecords
-                        .filter(tm => tm.team_id === selectedTeam.id && tm.is_field_leader)
+                        .filter(tm => tm.team_id === selectedTeam.id && tm.role === 'Team Leader')
                         .map(tm => people.find(p => p.id === tm.person_id))
                         .filter(p => !!p)
                     : [];
@@ -292,6 +352,9 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         )}
                     </div>
                 );
+            case 'survey_date':
+            case 'erfin_date':
+            case 'erfin_ready_date':
             case 'permit_create_date':
             case 'permit_start_date':
             case 'permit_expiry_date':
@@ -300,6 +363,9 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
             case 'tgl_bast':
             case 'tgl_invoice':
                 const labelMap: Record<string, string> = {
+                    'survey_date': 'Tanggal Survey',
+                    'erfin_date': 'Tanggal ERFIN',
+                    'erfin_ready_date': 'Tanggal ERFIN Ready',
                     'permit_create_date': 'Tanggal Buat Permit',
                     'permit_start_date': 'Tanggal Berlaku Permit TPAS',
                     'permit_expiry_date': 'Tanggal Berakhir Permit TPAS',
@@ -401,15 +467,18 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         </div>
                     </div>
                 );
+            case 'erfin_number':
             case 'pic_nama':
             case 'pic_telp':
             case 'no_invoice':
                 const textLabels: Record<string, string> = {
+                    'erfin_number': 'Nomor ERFIN',
                     'pic_nama': 'PIC Akses — Nama',
                     'pic_telp': 'PIC Akses — No. Telp',
                     'no_invoice': 'Nomor Invoice'
                 };
                 const place: Record<string, string> = {
+                    'erfin_number': 'ERF-XXX',
                     'pic_nama': 'Nama PIC dari Tower Provider',
                     'pic_telp': '08xx xxxx xxxx',
                     'no_invoice': 'INV-XXX'
@@ -427,8 +496,128 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                             required={rtext}
                             value={(formData[field] as string) || ''}
                             onChange={(e) => handleFormChange(field, e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm"
+                            className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm uppercase"
                         />
+                    </div>
+                );
+            case 'survey_result_radio':
+                return (
+                    <div key={field} className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-slate-800">Hasil Survey <span className="text-red-500">*</span></label>
+                            <div className="flex flex-col gap-3 p-3 bg-slate-50 border border-slate-200 rounded">
+                                <label className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-white border border-transparent hover:border-slate-200 transition-colors">
+                                    <input 
+                                        type="radio" 
+                                        name="survey_result"
+                                        value="ok"
+                                        checked={formData.survey_result === 'ok'}
+                                        onChange={(e) => handleFormChange('survey_result', e.target.value)}
+                                        className="mt-0.5 text-blue-600 focus:ring-blue-500 w-4 h-4" 
+                                    />
+                                    <div>
+                                        <span className="block text-sm font-bold text-slate-800">OK</span>
+                                        <span className="block text-xs text-slate-500">Site layak, lanjut ke ERFIN</span>
+                                    </div>
+                                </label>
+                                <label className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-white border border-transparent hover:border-slate-200 transition-colors">
+                                    <input 
+                                        type="radio" 
+                                        name="survey_result"
+                                        value="nok"
+                                        checked={formData.survey_result === 'nok'}
+                                        onChange={(e) => handleFormChange('survey_result', e.target.value)}
+                                        className="mt-0.5 text-red-600 focus:ring-red-500 w-4 h-4" 
+                                    />
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="block text-sm font-bold text-red-700">NOK</span>
+                                            {formData.survey_result === 'nok' && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Hentikan Sementara</span>}
+                                        </div>
+                                        <span className="block text-xs text-slate-500">Site tidak layak sementara</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        {formData.survey_result === 'nok' && (
+                             <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 p-3 rounded">
+                                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                     <p className="text-xs font-medium text-amber-800 leading-relaxed">
+                                         ⚠ Site akan ditandai Survey NOK. <br/>
+                                         Proses akan berhenti di sini sampai direset oleh Operational/Admin.
+                                     </p>
+                                 </div>
+                                 <div className="pt-2">
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Alasan NOK <span className="text-red-500">*</span></label>
+                                    <textarea 
+                                        required
+                                        rows={3}
+                                        value={(formData.survey_nok_reason as string) || ''}
+                                        onChange={(e) => handleFormChange('survey_nok_reason', e.target.value)}
+                                        className="w-full px-3 py-2 border border-red-300 rounded focus:border-red-500 text-sm bg-white"
+                                        placeholder="Jelaskan alasan site tidak layak..."
+                                    />
+                                </div>
+                             </div>
+                        )}
+                    </div>
+                );
+            case 'akses_gedung_toggle':
+                const hasGedung = formData['has_akses_gedung'] as boolean;
+                return (
+                    <div key={field} className="space-y-4 pt-4 border-t border-slate-200">
+                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded border border-slate-200">
+                            <span className="text-sm font-bold text-slate-800">Ada Akses Gedung?</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" className="sr-only peer" checked={hasGedung || false} onChange={e => handleFormChange('has_akses_gedung', e.target.checked)} />
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <span className="ml-3 text-sm font-medium text-slate-700">{hasGedung ? 'Ya' : 'Tidak'}</span>
+                            </label>
+                        </div>
+
+                        {hasGedung && (
+                            <div className="space-y-4 p-4 border border-blue-100 bg-blue-50/30 rounded animate-in fade-in duration-300">
+                                 <div className="space-y-1">
+                                    <label className="block text-sm font-medium text-slate-700">Nama Gedung <span className="text-red-500">*</span></label>
+                                    <input 
+                                        type="text" required 
+                                        value={(formData['gedung_nama'] as string) || ''}
+                                        onChange={(e) => handleFormChange('gedung_nama', e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="block text-sm font-medium text-slate-700">PIC Gedung Nama</label>
+                                        <input type="text" value={(formData['gedung_pic_nama'] as string) || ''} onChange={(e) => handleFormChange('gedung_pic_nama', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="block text-sm font-medium text-slate-700">PIC Gedung Telp</label>
+                                        <input type="tel" value={(formData['gedung_pic_telp'] as string) || ''} onChange={(e) => handleFormChange('gedung_pic_telp', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm" />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="block text-sm font-medium text-slate-700">Status Akses Gedung</label>
+                                    <input type="text" placeholder="Misal: Sudah izin RT/RW, dsb" value={(formData['gedung_akses_status'] as string) || ''} onChange={(e) => handleFormChange('gedung_akses_status', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded text-sm" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            case 'catatan_teknis':
+                return (
+                    <div key={field} className="space-y-3 pt-4 border-t border-slate-200">
+                        <label className="block text-sm font-bold text-slate-800">Catatan Teknis (Opsional)</label>
+                        <textarea 
+                            rows={3}
+                            value={(formData.catatan_teknis as string) || ''}
+                            onChange={(e) => handleFormChange('catatan_teknis', e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded text-sm placeholder:text-slate-400"
+                            placeholder="Catatan teknis implementasi..."
+                        />
+                         <button type="button" onClick={() => alert('Hubungi admin untuk menambah field teknis tambahan')} className="text-xs font-semibold text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition-colors inline-block">+ Tambah Field Teknis</button>
                     </div>
                 );
             case 'konfirmasi_akses':
@@ -583,7 +772,9 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                             <div className="flex-1">
                                 <span className="block text-xs font-medium text-blue-500 mb-0.5">Move to</span>
                                 {config ? (
-                                    <span className="font-bold text-blue-700">{config.nextLabel}</span>
+                                    <span className="font-bold text-blue-700">
+                                        {currentStage === 'survey' ? (selectedBranch === 'survey_nok' ? 'Survey NOK' : 'ERFIN Diproses') : config.nextLabel}
+                                    </span>
                                 ) : (
                                     <span className="font-bold text-slate-400">Tidak ada next stage</span>
                                 )}
@@ -716,9 +907,9 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                             type="submit" 
                             form="update-stage-form"
                             disabled={!config || !isMainFormValid()}
-                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium rounded transition-colors text-sm shadow-sm flex items-center gap-2"
                         >
-                            Update Stage <ChevronRight className="w-4 h-4" />
+                            {currentStage === 'survey' && selectedBranch === 'survey_nok' ? 'Tandai NOK' : 'Update Stage'}
+                            <ChevronRight className="w-4 h-4 ml-1" />
                         </button>
                     )}
                 </div>

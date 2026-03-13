@@ -329,12 +329,11 @@ label {
 .badge-tolak,
 .badge-active,
 .badge-in_progress,
-.badge-completed,
 .badge-type-filter,
 .badge-type-combat,
 .badge-type-blacksite,
 .badge-type-l2h,
-.badge-type-refinen {
+.badge-type-rescoping {
   border-radius: 20px;
   padding: 3px 10px;
   font-size: 11px;
@@ -411,10 +410,10 @@ label {
   border: 1px solid rgba(37, 99, 235, 0.3);
 }
 
-.badge-type-refinen {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34D399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+.badge-type-rescoping {
+  background-color: #ecfeff;
+  color: #0e7490;
+  border: 1px solid #cffafe;
 }
 
 /* BUTTONS */
@@ -1212,6 +1211,10 @@ label {
 /* Utility / Misc */
 @layer utilities {
   .glass {
-    @apply bg-black/20 backdrop-blur-md border border-white/10 shadow-sm;
+    background-color: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   }
 }

@@ -84,7 +84,7 @@ const NewProjectModal = ({ isOpen, onClose, onCreate }: NewProjectModalProps) =>
                         <option value="COMBAT" className="bg-[var(--glass-bg)]">COMBAT</option>
                         <option value="BLACKSITE" className="bg-[var(--glass-bg)]">BLACKSITE</option>
                         <option value="L2H" className="bg-[var(--glass-bg)]">L2H</option>
-                        <option value="REFINEN" className="bg-[var(--glass-bg)]">REFINEN</option>
+                        <option value="RESCOPING" className="bg-[var(--glass-bg)]">RESCOPING</option>
                     </select>
                 </div>
                 <div>

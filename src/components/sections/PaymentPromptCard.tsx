@@ -151,7 +151,14 @@ const PaymentPromptCard = ({ site, localStage, localPengajuan, localFiles: _loca
 
     // Build list of items to show
     const items: PromptItem[] = STAGE_TERMIN_MAP.filter(def => {
-        if (!isStageReached(localStage, def.stage)) return false;
+        // RESCOPING custom logic: T2b triggers at rfi_done instead of rfs_done
+        let effectiveTriggerStage = def.stage;
+        if (site.projectId?.toLowerCase().includes('rescoping') && def.terminKey === 'T2b') {
+             effectiveTriggerStage = 'rfi_done';
+        }
+
+        if (!isStageReached(localStage, effectiveTriggerStage)) return false;
+        
         const dismissKey = `${def.terminKey}_${localStage}`;
         if (dismissed.has(dismissKey)) return false;
         return true;
@@ -164,7 +171,7 @@ const PaymentPromptCard = ({ site, localStage, localPengajuan, localFiles: _loca
             terminKey: def.terminKey,
             label: def.label,
             pct: def.pct,
-            triggerLabel: def.triggerLabel,
+            triggerLabel: (site.projectId?.toLowerCase().includes('rescoping') && def.terminKey === 'T2b') ? 'CI/CO selesai (T2a & T2b)' : def.triggerLabel,
             contextKeys: def.contextKeys,
             pengajuan,
         };

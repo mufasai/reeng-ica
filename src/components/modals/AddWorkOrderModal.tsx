@@ -138,7 +138,7 @@ const AddWorkOrderModal: React.FC<AddWorkOrderModalProps> = ({ isOpen, onClose, 
                       <option value="COMBAT">COMBAT</option>
                       <option value="BLACKSITE">BLACKSITE</option>
                       <option value="L2H">L2H</option>
-                      <option value="REFINEN">REFINEN</option>
+                      <option value="RESCOPING">RESCOPING</option>
                     </select>
                   </div>
                 </div>

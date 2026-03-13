@@ -43,7 +43,7 @@ const PROJECT_TYPES: { id: ProjectType | 'ALL'; label: string }[] = [
     { id: 'COMBAT', label: 'Combat' },
     { id: 'BLACKSITE', label: 'Blacksite' },
     { id: 'L2H', label: 'L2H' },
-    { id: 'REFINEN', label: 'Refinen' },
+    { id: 'RESCOPING', label: 'Rescoping' },
 ];
 
 // ─── Uploaded document per stage group ───────────────────────────────────────

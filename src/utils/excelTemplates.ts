@@ -16,6 +16,14 @@ export const TEMPLATE_COLUMNS = [
     { key: 'curr_stage',    label: 'curr_stage',    locked: true },
     // Editable
     { key: 'new_stage',         label: 'new_stage',         group: 'stage' },
+    // SURVEY (RESCOPING)
+    { key: 'survey_date',        label: 'survey_date',        group: 'survey' },
+    { key: 'survey_result',      label: 'survey_result',      group: 'survey' },
+    { key: 'survey_nok_reason',  label: 'survey_nok_reason',  group: 'survey' },
+    // ERFIN (RESCOPING)
+    { key: 'erfin_number',       label: 'erfin_number',       group: 'erfin' },
+    { key: 'erfin_date',         label: 'erfin_date',         group: 'erfin' },
+    { key: 'erfin_ready_date',   label: 'erfin_ready_date',   group: 'erfin' },
     // PERMIT
     { key: 'permit_create_date', label: 'permit_create_date', group: 'permit' },
     { key: 'tpas_approved',      label: 'tpas_approved',      group: 'permit' },
@@ -28,6 +36,10 @@ export const TEMPLATE_COLUMNS = [
     { key: 'jenis_kunci',     label: 'jenis_kunci',     group: 'akses' },
     { key: 'pic_akses_nama',  label: 'pic_akses_nama',  group: 'akses' },
     { key: 'pic_akses_telp',  label: 'pic_akses_telp',  group: 'akses' },
+    { key: 'has_akses_gedung',label: 'has_akses_gedung',group: 'akses' },
+    { key: 'gedung_nama',     label: 'gedung_nama',     group: 'akses' },
+    { key: 'gedung_pic_nama', label: 'gedung_pic_nama', group: 'akses' },
+    { key: 'gedung_pic_telp', label: 'gedung_pic_telp', group: 'akses' },
     // IMPLEMENTASI
     { key: 'tanggal_plan',    label: 'tanggal_plan',    group: 'impl' },
     { key: 'tanggal_aktual',  label: 'tanggal_aktual',  group: 'impl' },
@@ -75,8 +87,21 @@ export const generateBulkUpdateTemplate = (scope: TemplateScope | string) => {
         return (a.site_id || '').localeCompare(b.site_id || '');
     });
 
-    // 2. Build header row
-    const headers = TEMPLATE_COLUMNS.map(c => c.label);
+    // 2. Build header row (dynamically filter columns based on projectType)
+    const activeColumns = TEMPLATE_COLUMNS.filter(col => {
+        if (opts.projectType === 'RESCOPING') {
+            // Rescoping: include survey, erfin, exclude rfs_done
+            if (col.key === 'rfs_done') return false;
+            return true;
+        } else {
+            // Non-rescoping: exclude survey, erfin, allow rfs_done, exclude Akses Gedung
+            if (col.group === 'survey' || col.group === 'erfin') return false;
+            if (['has_akses_gedung', 'gedung_nama', 'gedung_pic_nama', 'gedung_pic_telp'].includes(col.key)) return false;
+            return true;
+        }
+    });
+
+    const headers = activeColumns.map(c => c.label);
 
     // 3. Build data rows
     const dataRows = sites.map(site => {
@@ -88,7 +113,7 @@ export const generateBulkUpdateTemplate = (scope: TemplateScope | string) => {
             stage,
         ];
         // Fill editable columns with empty strings
-        for (let i = 4; i < TEMPLATE_COLUMNS.length; i++) {
+        for (let i = 4; i < activeColumns.length; i++) {
             row.push('');
         }
         return row;
@@ -102,7 +127,7 @@ export const generateBulkUpdateTemplate = (scope: TemplateScope | string) => {
     const ws = xlsx.utils.aoa_to_sheet(allRows);
 
     // Set column widths
-    ws['!cols'] = TEMPLATE_COLUMNS.map((_col, i) => {
+    ws['!cols'] = activeColumns.map((_col, i) => {
         if (i === 0) return { wch: 14 }; // unique_key
         if (i === 1) return { wch: 12 }; // site_id
         if (i === 2) return { wch: 22 }; // site_name
@@ -133,11 +158,16 @@ export const generateBulkUpdateTemplate = (scope: TemplateScope | string) => {
         ['- tower_provider: MITRATEL / STP / PTI / DMT'],
         ['- jenis_kunci: PADLOCK / SMARTLOCK / QUADLOCK'],
         [''],
+        ['KOLOM SURVEY & ERFIN (Untuk project Rescoping):'],
+        ['- survey_date, survey_result (OK/NOK), survey_nok_reason'],
+        ['- erfin_number, erfin_date, erfin_ready_date'],
+        [''],
         ['KOLOM PERMIT (isi jika stage berhubungan dengan permit):'],
         ['- permit_create_date, tpas_approved, tp_approved, caf_approved, permit_start_date, permit_expiry_date'],
         [''],
         ['KOLOM AKSES (isi jika stage berhubungan dengan akses):'],
         ['- tower_provider, jenis_kunci, pic_akses_nama, pic_akses_telp'],
+        ['- Akses Gedung: has_akses_gedung (Y/N), gedung_nama, gedung_pic_nama, gedung_pic_telp'],
         [''],
         ['KOLOM IMPLEMENTASI (isi jika stage berhubungan dengan implementasi):'],
         ['- tanggal_plan, tanggal_aktual, ci_date, ci_time, co_date, co_time, rfi_done, rfs_done, dokumen_done'],
@@ -189,6 +219,12 @@ export interface ParsedBulkRow {
     curr_stage: string;
     new_stage: string;
     // Additional fields from template
+    survey_date?: string;
+    survey_result?: string;
+    survey_nok_reason?: string;
+    erfin_number?: string;
+    erfin_date?: string;
+    erfin_ready_date?: string;
     permit_create_date?: string;
     tpas_approved?: string;
     tp_approved?: string;
@@ -199,6 +235,10 @@ export interface ParsedBulkRow {
     jenis_kunci?: string;
     pic_akses_nama?: string;
     pic_akses_telp?: string;
+    has_akses_gedung?: string;
+    gedung_nama?: string;
+    gedung_pic_nama?: string;
+    gedung_pic_telp?: string;
     tanggal_plan?: string;
     tanggal_aktual?: string;
     ci_date?: string;
@@ -291,11 +331,16 @@ export const parseBulkTemplate = (file: File): Promise<{
 
                     // Exactly +1 = valid. Collect changed fields.
                     const changedFields: string[] = [];
+                    // Use TEMPLATE_COLUMNS to check which columns we can process
                     TEMPLATE_COLUMNS.forEach(col => {
                         if (col.locked) return;
                         if (col.key === 'new_stage') return;
-                        const val = String(row[col.key] || '').trim();
-                        if (val) changedFields.push(col.key);
+                        
+                        // Check if the property exists in the parsed row (it might not if the template was generated for a different type)
+                        if (row.hasOwnProperty(col.key)) {
+                            const val = String(row[col.key] || '').trim();
+                            if (val) changedFields.push(col.key);
+                        }
                     });
 
                     return { row, status: 'valid' as const, changedFields };
@@ -322,6 +367,10 @@ export interface StageTransitionGroup {
 }
 
 const STAGE_EMOJI: Record<string, string> = {
+    'survey': '🔍',
+    'survey_nok': '❌',
+    'erfin_process': '📄',
+    'erfin_ready': '✅',
     'permit_process': '📋',
     'permit_ready': '📋',
     'akses_process': '🔑',
@@ -336,6 +385,10 @@ const STAGE_EMOJI: Record<string, string> = {
 };
 
 const STAGE_DOC_EXAMPLES: Record<string, string> = {
+    'survey': 'BAST Survey, Foto Lokasi',
+    'survey_nok': 'Berita Acara NOK, Bukti Kendala',
+    'erfin_process': 'Dokumen ERFIN',
+    'erfin_ready': 'Approval ERFIN',
     'permit_process': 'Formulir permit, surat pengajuan',
     'permit_ready': 'TPAS approval, izin TP, permit dokumen',
     'akses_process': 'Surat permintaan akses tower',

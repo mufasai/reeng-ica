@@ -9,8 +9,9 @@ import clsx from 'clsx';
 import MapWidget from '../components/MapWidget';
 import ModernKPICard from '../components/stats/ModernKPICard';
 import { 
-    sites, teams, activityFeed, people,
-    filterTerms, combatTerms, siteMasterRecords, type ProjectType
+    sites, activityFeed, people,
+    filterTerms, combatTerms, siteMasterRecords, type ProjectType,
+    teamMembersRecords, workOrders
 } from '../data/mockData';
 
 // Helper to format currency
@@ -40,17 +41,27 @@ const Dashboard = () => {
         const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
         if (!isRestricted) return sites;
         
-        const userTeamIds = teams
-            .filter(t => t.members.some(m => m.personId === currentUser.id))
-            .map(t => t.id);
+        const userTeamIds = teamMembersRecords
+            .filter(tm => tm.person_id === currentUser.id)
+            .map(tm => tm.team_id);
             
-        return sites.filter(s => s.teamId && userTeamIds.includes(s.teamId));
+        return sites.filter(s => {
+             const master = siteMasterRecords.find(sm => sm.site_id === s.id);
+             if (!master?.work_order_id) return false;
+             
+             // Check if user is in the team assigned to this site
+             const wo = workOrders.find(w => w.id === master.work_order_id);
+             if (!wo || !wo.assignedTeamId) return false;
+             
+             return userTeamIds.includes(wo.assignedTeamId);
+        });
     }, [currentUser]);
 
     // ----------------------------------------------------------------------
     // 2. STATUS LAPANGAN (STAGES SUMMARY FROM siteMasterRecords)
     // ----------------------------------------------------------------------
     const stageSummary = useMemo(() => {
+        let survey = 0;
         let menungguPermit = 0;
         let permitReady = 0;
         let aksesReady = 0;
@@ -60,17 +71,18 @@ const Dashboard = () => {
 
         siteMasterRecords.forEach(master => {
             const stage = master.stage || 'imported';
-            if (stage === 'permit_process') menungguPermit++;
+            if (stage === 'survey') survey++;
+            else if (stage === 'permit_process') menungguPermit++;
             else if (stage === 'permit_ready') permitReady++;
             else if (stage === 'akses_ready') aksesReady++;
             else if (['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done'].includes(stage)) implementasi++;
             else if (stage === 'completed') selesai++;
 
-            if ((stage as string) === 'issue_hold' || master.stage_notes?.toLowerCase().includes('issue')) {
+            if ((stage as string) === 'issue_hold' || (stage as string) === 'survey_nok' || master.stage_notes?.toLowerCase().includes('issue')) {
                 issues++;
             }
         });
-        return { menungguPermit, permitReady, aksesReady, implementasi, issues, selesai, total: siteMasterRecords.length };
+        return { survey, menungguPermit, permitReady, aksesReady, implementasi, issues, selesai, total: siteMasterRecords.length };
     }, []);
 
     // ----------------------------------------------------------------------
@@ -115,7 +127,7 @@ const Dashboard = () => {
         { id: 'COMBAT', label: 'Combat', color: 'text-[#EA580C]', bg: 'bg-orange-50' },
         { id: 'FILTER', label: 'Filter', color: 'text-[#16A34A]', bg: 'bg-green-50' },
         { id: 'L2H', label: 'L2H', color: 'text-[#2563EB]', bg: 'bg-blue-50' },
-        { id: 'REFINEN', label: 'Refinen', color: 'text-[#7C3AED]', bg: 'bg-purple-50' }
+        { id: 'RESCOPING', label: 'Rescoping', color: 'text-[#0891B2]', bg: 'bg-cyan-50' }
     ];
 
     const getTypeSummary = (type: ProjectType) => {
@@ -146,12 +158,17 @@ const Dashboard = () => {
         let items: any[] = [];
         siteMasterRecords.forEach(s => {
             const daysDiff = s.stage_updated_at ? Math.floor((Date.now() - new Date(s.stage_updated_at).getTime()) / 86400000) : 0;
-            if (daysDiff > 14 || (s.stage as string) === 'issue_hold' || s.stage_notes?.toLowerCase().includes('issue')) {
+            if (daysDiff > 14 || (s.stage as string) === 'issue_hold' || (s.stage as string) === 'survey_nok' || s.stage_notes?.toLowerCase().includes('issue')) {
+                let displayTitle = s.stage_notes || `${s.stage?.replace('_', ' ')} > 14 hari`;
+                if ((s.stage as string) === 'survey_nok') {
+                    displayTitle = s.stage_notes || 'Survey NOK - Butuh Update/Cancel';
+                }
+                
                 items.push({
                     id: s.site_id,
                     siteName: s.site_name,
                     type: s.project_type,
-                    title: s.stage_notes || `${s.stage?.replace('_', ' ')} > 14 hari`,
+                    title: displayTitle,
                     link: `/all-sites`
                 });
             }
@@ -259,7 +276,15 @@ const Dashboard = () => {
                         <h3 className="text-[11px] font-semibold text-[#9CA3AF] tracking-[0.08em] uppercase mb-4">
                             Status Lapangan
                         </h3>
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-3 md:grid-cols-7 gap-3">
+                            {/* Survey — cyan gradient */}
+                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'survey' }); }}
+                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)', boxShadow: '0 4px 14px rgba(6,182,212,0.35)' }}>
+                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.survey}</div>
+                                <p className="text-white/70 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Proses<br/>Survey</p>
+                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.survey}</p>
+                            </div>
                             {/* Menunggu Permit — slate/gray gradient */}
                             <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_process' }); }}
                                 className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
@@ -440,7 +465,7 @@ const Dashboard = () => {
                                         </div>
                                     ) : (
                                         actionNeededList.map((item) => {
-                                            const isCritical = item.title.includes('> 21 hari') || item.title.includes('issue_hold') || item.title.toLowerCase().includes('issue');
+                                            const isCritical = item.title.includes('> 21 hari') || item.title.includes('issue_hold') || item.title.includes('Survey NOK') || item.title.toLowerCase().includes('issue');
                                             const borderColor = isCritical ? 'border-l-[#EF4444]' : 'border-l-[#F59E0B]';
                                             return (
                                                 <div key={item.id} className={clsx("p-4 flex items-center justify-between hover:bg-[#F9FAFB] transition-colors border-l-[3px] border-b border-b-slate-50 cursor-pointer group", borderColor)}>

@@ -45,7 +45,7 @@ const TypeSiteList = () => {
   
   // 1. Data Validation & Formatting
   const upperType = type?.toUpperCase() as ProjectType;
-  const validTypes: ProjectType[] = ['FILTER', 'COMBAT', 'BLACKSITE', 'L2H', 'REFINEN'];
+  const validTypes: ProjectType[] = ['FILTER', 'COMBAT', 'BLACKSITE', 'L2H', 'RESCOPING'];
   
   // 2. Fetch Relevant Sites
   const matchedSites = useMemo(() => {
@@ -73,7 +73,7 @@ const TypeSiteList = () => {
       // 1. Total Sites
       const activeSitesCount = matchedSites.length;
       const completedSitesCount = matchedSites.filter(s => {
-          if (upperType === 'FILTER') {
+          if (upperType === 'FILTER' || upperType === 'RESCOPING') {
               const terms = filterTerms.filter(t => t.siteId === s.id);
               return terms.length > 0 && terms.every(t => t.status === 'paid');
           }
@@ -156,9 +156,9 @@ const TypeSiteList = () => {
   const formatFull = (amount: number | null): string =>
     amount ? `Rp ${amount.toLocaleString('id-ID')}` : '—';
 
-  // Calculate financial totals for FILTER & COMBAT sites
+  // Calculate financial totals for FILTER, COMBAT & RESCOPING sites
   const calculateFinancials = () => {
-    if (upperType !== 'FILTER' && upperType !== 'COMBAT') return null;
+    if (upperType !== 'FILTER' && upperType !== 'COMBAT' && upperType !== 'RESCOPING') return null;
     const siteIds = matchedSites.map(s => s.site_id || s.id);
 
     // Total Harga: sum of site.budget (the contract value field) for matched sites
@@ -206,7 +206,7 @@ const TypeSiteList = () => {
   const distributionMatrix = useMemo(() => {
       const siteIds = matchedSites.map(s => s.id);
       
-      if (upperType === 'FILTER') {
+      if (upperType === 'FILTER' || upperType === 'RESCOPING') {
           const matrix: Record<number, { title: string, paid: number, approved: number, pending: number, inProgress: number, locked: number }> = {
               1: { title: 'Termin 1 (30%)', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
               2: { title: 'Termin 2 (50%)', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
@@ -276,7 +276,7 @@ const TypeSiteList = () => {
       if (!filterState.step || !filterState.statusGroup) return matchedSites;
 
       return matchedSites.filter(site => {
-          if (upperType === 'FILTER') {
+          if (upperType === 'FILTER' || upperType === 'RESCOPING') {
               const term = filterTerms.find(t => t.siteId === site.id && t.step === filterState.step);
               if (!term) return false;
               
@@ -311,7 +311,18 @@ const TypeSiteList = () => {
 
   // 6. Calculate Pipeline Progress (Stage Counts)
   const pipelineGroups = useMemo(() => {
-    const STAGE_GROUPS = [
+    const STAGE_GROUPS = upperType === 'RESCOPING' ? [
+      { label: 'Assigned', keys: ['assigned'] },
+      { label: 'Survey', keys: ['survey'] },
+      { label: 'Survey NOK', keys: ['survey_nok'] },
+      { label: 'ERFIN', keys: ['erfin_process', 'erfin_ready'] },
+      { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
+      { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
+      { label: 'Implementasi', keys: ['implementasi', 'rfi_done', 'dokumen_done'] },
+      { label: 'BAST', keys: ['bast'] },
+      { label: 'Invoice', keys: ['invoice'] },
+      { label: 'Selesai', keys: ['completed'] }
+    ] : [
       { label: 'Assigned', keys: ['assigned'] },
       { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
       { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
@@ -363,7 +374,7 @@ const TypeSiteList = () => {
       'COMBAT': { color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' },
       'BLACKSITE': { color: 'text-purple-500', bg: 'bg-purple-50', border: 'border-purple-200' },
       'L2H': { color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
-      'REFINEN': { color: 'text-indigo-500', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+      'RESCOPING': { color: 'text-cyan-500', bg: 'bg-cyan-50', border: 'border-cyan-200' },
   }[upperType];
 
   return (
@@ -567,7 +578,10 @@ const TypeSiteList = () => {
                     };
                     
                     if (group.count > 0) {
-                        if (group.label === 'Permit') circleConfig = { fill: 'bg-[#FEF3C7]', border: 'border-[#F59E0B]', text: 'text-[#F59E0B]', label: 'text-[#F59E0B]' };
+                        if (group.label === 'Survey') circleConfig = { fill: 'bg-cyan-50', border: 'border-cyan-500', text: 'text-cyan-600', label: 'text-cyan-600' };
+                        else if (group.label === 'Survey NOK') circleConfig = { fill: 'bg-red-50', border: 'border-red-500', text: 'text-red-600', label: 'text-red-600' };
+                        else if (group.label === 'ERFIN') circleConfig = { fill: 'bg-teal-50', border: 'border-teal-500', text: 'text-teal-600', label: 'text-teal-600' };
+                        else if (group.label === 'Permit') circleConfig = { fill: 'bg-[#FEF3C7]', border: 'border-[#F59E0B]', text: 'text-[#F59E0B]', label: 'text-[#F59E0B]' };
                         else if (group.label === 'Akses') circleConfig = { fill: 'bg-[#DBEAFE]', border: 'border-[#3B82F6]', text: 'text-[#3B82F6]', label: 'text-[#3B82F6]' };
                         else if (group.label === 'Implementasi') circleConfig = { fill: 'bg-[#EDE9FE]', border: 'border-[#7C3AED]', text: 'text-[#7C3AED]', label: 'text-[#7C3AED]' };
                         else if (group.label === 'BAST' || group.label === 'Invoice') circleConfig = { fill: 'bg-[#FFF7ED]', border: 'border-[#F97316]', text: 'text-[#F97316]', label: 'text-[#F97316]' };
@@ -580,7 +594,10 @@ const TypeSiteList = () => {
                     let connectorColor = 'bg-[#E5E7EB]';
                     if (idx < pipelineGroups.counts.length - 1) {
                         if (group.count > 0) {
-                            if (group.label === 'Permit') connectorColor = 'bg-[#F59E0B]';
+                            if (group.label === 'Survey') connectorColor = 'bg-cyan-500';
+                            else if (group.label === 'Survey NOK') connectorColor = 'bg-red-500';
+                            else if (group.label === 'ERFIN') connectorColor = 'bg-teal-500';
+                            else if (group.label === 'Permit') connectorColor = 'bg-[#F59E0B]';
                             else if (group.label === 'Akses') connectorColor = 'bg-[#3B82F6]';
                             else if (group.label === 'Implementasi') connectorColor = 'bg-[#7C3AED]';
                             else if (group.label === 'BAST' || group.label === 'Invoice') connectorColor = 'bg-[#F97316]';

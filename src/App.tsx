@@ -39,6 +39,7 @@ function App() {
           <Route path="people" element={<People />} />
           <Route path="teams" element={<Teams />} />
           <Route path="spk" element={<Navigate to="/work-orders" replace />} />
+          <Route path="rescoping" element={<Navigate to="/projects/type/rescoping/sites" replace />} />
           <Route path="demo-guide" element={<DemoGuide />} />
           {/* Redirects for unimplemented routes */}
           <Route path="budget" element={<Navigate to="/projects" replace />} />

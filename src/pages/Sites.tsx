@@ -36,7 +36,7 @@ const PROJECT_TYPES: { id: ProjectType; label: string; color: string }[] = [
     { id: 'COMBAT', label: 'Combat', color: 'bg-orange-50 text-orange-600 border-orange-200' },
     { id: 'FILTER', label: 'Filter', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
     { id: 'L2H', label: 'L2H', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-    { id: 'REFINEN', label: 'Refinen', color: 'bg-purple-50 text-purple-600 border-purple-200' },
+    { id: 'RESCOPING', label: 'Rescoping', color: 'bg-cyan-50 text-cyan-600 border-cyan-200' },
 ];
 
 const formatImportDate = (isoString?: string): string => {

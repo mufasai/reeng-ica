@@ -117,6 +117,10 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
         switch (stage) {
             case 'imported': return { color: 'bg-slate-100 text-slate-700 border-slate-200', label: 'Imported' };
             case 'assigned': return { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Assigned' };
+            case 'survey': return { color: 'bg-cyan-100 text-cyan-700 border-cyan-200', label: 'Survey' };
+            case 'survey_nok': return { color: 'bg-red-100 text-red-700 border-red-300 shadow-[0_0_8px_rgba(239,68,68,0.4)]', label: 'Survey NOK' };
+            case 'erfin_process': return { color: 'bg-teal-100 text-teal-700 border-teal-200', label: 'ERFIN Process' };
+            case 'erfin_ready': return { color: 'bg-teal-100 text-teal-700 border-teal-200', label: 'ERFIN Ready' };
             case 'permit_process': return { color: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Permit' };
             case 'permit_ready': return { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Permit Ready' };
             case 'akses_process': return { color: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Akses' };
@@ -263,9 +267,14 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                            else if (permitDaysLeft <= 14) expiryColor = 'text-amber-600 font-bold';
                        }
                        
+                       const isSurveyNok = site.stage === 'survey_nok';
+
                        return (
                         <React.Fragment key={site.id}>
-                           <TableRow className={clsx(isStale ? "bg-amber-50/30" : "", isExpanded ? "border-b-0" : "")}>
+                           <TableRow className={clsx(
+                               isSurveyNok ? "bg-red-50/20 border-l-[3px] border-l-red-500" : (isStale ? "bg-amber-50/30" : ""), 
+                               isExpanded ? "border-b-0" : ""
+                           )}>
                                <TableCell className="font-mono font-bold text-slate-800">{site.site_id}</TableCell>
                                <TableCell>
                                    <Link to={`/sites/${site.site_id}`} className="font-medium text-[var(--blue-400)] hover:underline">
@@ -417,7 +426,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                                            
                                                            <span className="text-slate-500">Leader:</span> 
                                                            <span className="text-slate-700">{
-                                                               team ? (USERS.find(u => u.id === teamMembersRecords.find(tm => tm.team_id === team.id && tm.is_field_leader)?.person_id)?.name || '—') : '—'
+                                                               team ? (USERS.find(u => u.id === teamMembersRecords.find(tm => tm.team_id === team.id && tm.role === 'Team Leader')?.person_id)?.name || '—') : '—'
                                                            }</span>
                                                            
                                                            <span className="text-slate-500 mt-2 pt-2 border-t border-slate-200">PO:</span> 

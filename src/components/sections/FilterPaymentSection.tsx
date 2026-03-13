@@ -54,6 +54,14 @@ const FilterPaymentSection = ({
 
     // Build rows
     const rows: TerminRow[] = STAGE_TERMIN_MAP.map(def => {
+        // RESCOPING custom logic: T2b triggers at rfi_done instead of rfs_done
+        let effectiveTriggerStage = def.stage;
+        let effectiveTriggerLabel = def.triggerLabel;
+        if (site.projectId?.toLowerCase().includes('rescoping') && def.terminKey === 'T2b') {
+             effectiveTriggerStage = 'rfi_done';
+             effectiveTriggerLabel = 'CI/CO selesai (T2a & T2b)';
+        }
+
         const pengajuan = localPengajuan.find(p =>
             p.termin_key === def.terminKey &&
             ['submitted', 'approved', 'paid', 'rejected'].includes(p.status)
@@ -61,14 +69,14 @@ const FilterPaymentSection = ({
         let status: RowStatus = 'locked';
         if (pengajuan) {
             status = pengajuan.status as RowStatus;
-        } else if (isStageReached(localStage, def.stage)) {
+        } else if (isStageReached(localStage, effectiveTriggerStage)) {
             status = 'ready';
         }
         return {
             key: def.terminKey,
             pct: def.pct,
-            triggerLabel: def.triggerLabel,
-            triggerStage: def.stage,
+            triggerLabel: effectiveTriggerLabel,
+            triggerStage: effectiveTriggerStage,
             contextKeys: def.contextKeys,
             status,
             pengajuan,

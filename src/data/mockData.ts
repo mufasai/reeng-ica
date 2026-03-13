@@ -1,6 +1,6 @@
 
 
-export type ProjectType = 'FILTER' | 'COMBAT' | 'BLACKSITE' | 'L2H' | 'REFINEN';
+export type ProjectType = 'FILTER' | 'COMBAT' | 'BLACKSITE' | 'L2H' | 'RESCOPING';
 
 export type WOStatus = 'Unassigned' | 'Assigned' | 'Pending SPK Approval' | 'SPK Created' | 'Active' | 'Implementasi' | 'BAST' | 'Invoice' | 'Completed';
 
@@ -49,6 +49,29 @@ export const terminPengajuanRecords: TerminPengajuan[] = [
         submitted_by: 'u_lead',
         submitted_at: '2024-03-05T10:00:00Z',
         documents: ['file-1', 'file-2']
+    },
+    {
+        id: 'tp-rs1',
+        site_id: 'RS-001',
+        termin_key: 'T1',
+        nominal: 45000000,
+        status: 'paid',
+        catatan: 'DP 30% Terbayar',
+        submitted_by: 'u_lead',
+        submitted_at: '2026-03-11T10:00:00Z',
+        paid_at: '2026-03-12T09:00:00Z',
+        documents: ['file-3']
+    },
+    {
+        id: 'tp-rs2',
+        site_id: 'RS-001',
+        termin_key: 'T2a',
+        nominal: 75000000,
+        status: 'submitted',
+        catatan: 'Pengajuan Termin 2a',
+        submitted_by: 'u_lead',
+        submitted_at: '2026-03-13T10:00:00Z',
+        documents: []
     }
 ];
 
@@ -144,6 +167,27 @@ export interface Site {
   endDate?: string;
   import_source?: string;
   extra_data?: Record<string, any>;
+  projectType?: ProjectType; // Added for consistency with SiteMaster
+  status?: string; // Added for consistency with mockRescopingSite
+  stage?: string; // Added for consistency with mockRescopingSite
+  progress?: number; // Added for consistency with mockRescopingSite
+  geom?: string; // Added for consistency with mockRescopingSite
+
+  // Rescoping Added Fields
+  has_akses_gedung?: boolean;
+  gedung_nama?: string;
+  gedung_pic_nama?: string;
+  gedung_pic_telp?: string;
+  gedung_akses_status?: string;
+  gedung_dokumen_url?: string;
+  survey_date?: string;
+  survey_result?: 'ok' | 'nok';
+  survey_nok_reason?: string;
+  survey_dokumen_url?: string;
+  erfin_number?: string;
+  erfin_date?: string;
+  erfin_ready_date?: string;
+  erfin_dokumen_url?: string;
 }
 
 export interface ProjectFile {
@@ -267,7 +311,7 @@ export const projects: Project[] = [
   { id: 'p2', name: 'Jabo - Combat 500 Sites', type: 'COMBAT', sites: 500, activeTeams: 12, budget: 50000000000, cost: 12000000000, status: 'active', startDate: '2023-11-01', endDate: '2024-06-30' },
   { id: 'p3', name: 'Blacksite Alpha', type: 'BLACKSITE', status: 'active' },
   { id: 'p4', name: 'L2H Migration', type: 'L2H', status: 'active' },
-  { id: 'p5', name: 'Refinen Upgrade', type: 'REFINEN', status: 'completed' },
+  { id: 'p5', name: 'Refinen Upgrade', type: 'RESCOPING', status: 'completed' }, // Changed from REFINEN to RESCOPING
 ];
 
 export const sites: Site[] = [
@@ -277,6 +321,25 @@ export const sites: Site[] = [
         teamId: 't2', jobName: 'Site Readiness', contractNumber: 'CTR-2024-002', startDate: '2024-02-01', endDate: '2024-04-01'
     },
 ];
+
+// Add a mock Rescoping site for testing
+export const mockRescopingSite: Site = {
+    id: 'RS-001',
+    projectId: 'p5', // Assuming p5 is now RESCOPING
+    name: 'Rescoping Test Site',
+    location: 'Jakarta Selatan',
+    status: 'In Progress',
+    stage: 'assigned',
+    progress: 30,
+    budget: 150000000,
+    teamId: 't1',
+    projectType: 'RESCOPING',
+    jobName: 'RESCOPING JKS-001',
+    contractNumber: 'RESP-CTR-2026',
+    import_source: 'Rescoping DB',
+    geom: '-6.200000, 106.816666'
+};
+sites.push(mockRescopingSite);
 
 export const people: Person[] = [
     { 
@@ -334,12 +397,21 @@ export const teams: Team[] = [
     }, 
 ];
 
-export const teamMembersRecords: TeamMember[] = [
-    { id: 'tm1', team_id: 't1', person_id: 'u2', jabatan: 'Engineer', is_field_leader: false, joined_date: '2023-03-15' },
-    { id: 'tm2', team_id: 't1', person_id: 'u3', jabatan: 'Leader', is_field_leader: true, joined_date: '2023-03-10' },
-    { id: 'tm3', team_id: 't3', person_id: 'u5', jabatan: 'Engineer', is_field_leader: false, joined_date: '2023-06-05' },
-    { id: 'tm4', team_id: 't3', person_id: 'u3', jabatan: 'Leader', is_field_leader: true, joined_date: '2023-06-01' },
-    { id: 'tm5', team_id: 't2', person_id: 'u_lead', jabatan: 'Leader', is_field_leader: true, joined_date: '2023-01-05' },
+export interface TeamMemberRecord {
+    id: string;
+    team_id: string;
+    person_id: string;
+    role: 'Team Leader' | 'Engineer' | 'Koordinator';
+    is_active: boolean;
+    joined_at: string;
+}
+
+export const teamMembersRecords: TeamMemberRecord[] = [
+    { id: 'tm-1', team_id: 't1', person_id: 'p1', role: 'Team Leader', is_active: true, joined_at: '2023-01-01' },
+    { id: 'tm-2', team_id: 't1', person_id: 'p2', role: 'Engineer', is_active: true, joined_at: '2023-01-15' },
+    { id: 'tm-3', team_id: 't2', person_id: 'p1', role: 'Koordinator', is_active: true, joined_at: '2023-06-01' },
+    { id: 'tm-4', team_id: 't2', person_id: 'p3', role: 'Engineer', is_active: true, joined_at: '2023-06-15' },
+    { id: 'tm5', team_id: 't2', person_id: 'u_lead', role: 'Team Leader', is_active: true, joined_at: '2023-01-05' }, // Adjusted to new interface
 ];
 
 export const termins: Termin[] = [
@@ -514,6 +586,47 @@ export const filterTerms: FilterTerm[] = [
         amountRequest: 0,
         amountPaid: 0,
     },
+    {
+        id: 'ft-rs1',
+        siteId: 'RS-001',
+        step: 1,
+        name: 'Termin 1 (30%)',
+        percentage: 30,
+        status: 'paid',
+        amountRequest: 45000000,
+        amountPaid: 45000000,
+        paidAt: '2026-03-12T09:00:00Z'
+    },
+    {
+        id: 'ft-rs2',
+        siteId: 'RS-001',
+        step: 2,
+        name: 'Termin 2 (50%)',
+        percentage: 50,
+        status: 'open',
+        amountRequest: 75000000,
+        amountPaid: 0,
+    },
+    {
+        id: 'ft-rs3',
+        siteId: 'RS-001',
+        step: 3,
+        name: 'Termin 3 (10%)',
+        percentage: 10,
+        status: 'open',
+        amountRequest: 0,
+        amountPaid: 0,
+    },
+    {
+        id: 'ft-rs4',
+        siteId: 'RS-001',
+        step: 4,
+        name: 'Termin 4 (10%)',
+        percentage: 10,
+        status: 'open',
+        amountRequest: 0,
+        amountPaid: 0,
+    },
 ];
 
 export interface CombatSubStep {
@@ -599,7 +712,7 @@ export const combatTerms: CombatTerm[] = [
 
 export type SiteMasterStatus = 'unassigned' | 'assigned' | 'spk_active' | 'completed' | 'reallocated' | 'on_hold';
 
-export type SiteStage = 'imported' | 'assigned' | 'permit_process' | 'permit_ready' | 'akses_process' | 'akses_ready' | 'implementasi' | 'rfi_done' | 'rfs_done' | 'dokumen_done' | 'bast' | 'invoice' | 'completed';
+export type SiteStage = 'imported' | 'assigned' | 'permit_process' | 'permit_ready' | 'akses_process' | 'akses_ready' | 'implementasi' | 'rfi_done' | 'rfs_done' | 'dokumen_done' | 'bast' | 'invoice' | 'completed' | 'survey' | 'survey_nok' | 'erfin_process' | 'erfin_ready';
 
 export interface SiteMaster {
     id: string; // BIGINT equivalent
@@ -646,9 +759,35 @@ export interface SiteMaster {
     batch_ref: string;
     imported_by: string; // ID of the user
     imported_at: string; // Timestamp
+    geom?: string; // Added for consistency
 }
 
 export const siteMasterRecords: SiteMaster[] = [
+    {
+        id: 'sm-rs001',
+        unique_key: 'JKS-RESP-01',
+        site_id: 'RS-001',
+        ne_id: 'RS-001-NE',
+        site_name: 'Rescoping Test Site',
+        plan_capex: 'CAPEX RESCOPING 2026',
+        area: 'Area 1',
+        region: 'R03 Jakarta & Banten',
+        nop: 'NOP JAKARTA SELATAN',
+        sow_eqp: 'EQP RESCOPING',
+        quantity: 1,
+        sow_pekerjaan: 'Rescoping Services Jakarta',
+        po_tsel: '4200052177',
+        mitra: 'Smartelco',
+        project_type: 'RESCOPING',
+        status: 'assigned',
+        stage: 'assigned',
+        ineom_registered: false,
+        batch_ref: 'EPROC20260310001_Smartelco_BoQ_Rescoping_Batch1',
+        imported_by: 'u_adm',
+        imported_at: '2026-03-10T09:00:00Z',
+        team_id: 't1',
+        geom: '-6.200000, 106.816666'
+    },
     {
         id: 'sm1',
         unique_key: 'BKS598',
@@ -838,10 +977,39 @@ export const siteMasterRecords: SiteMaster[] = [
 ];
 
 export const STAGE_ORDER = [
-    'imported', 'assigned', 'permit_process', 'permit_ready',
-    'akses_process', 'akses_ready', 'implementasi',
-    'rfi_done', 'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed'
+    'imported',
+    'assigned',
+    'survey',
+    'survey_nok',
+    'erfin_process',
+    'erfin_ready',
+    'permit_process',
+    'permit_ready',
+    'akses_process',
+    'akses_ready',
+    'implementasi',
+    'rfi_done',
+    'rfs_done',
+    'dokumen_done',
+    'bast',
+    'invoice',
+    'completed'
 ];
+
+export const STAGE_PIPELINES: Record<string, SiteStage[]> = {
+    'FILTER': [
+        'imported', 'assigned', 'permit_process', 'permit_ready', 
+        'akses_process', 'akses_ready', 'implementasi', 'rfs_done', 
+        'dokumen_done', 'bast', 'invoice', 'completed'
+    ],
+    'RESCOPING': [
+        'imported', 'assigned', 'survey', 'erfin_process', 'erfin_ready', 
+        'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 
+        'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed'
+    ]
+};
+// fallback
+['COMBAT', 'BLACKSITE', 'L2H'].forEach(pt => STAGE_PIPELINES[pt] = STAGE_PIPELINES['FILTER']);
 
 export interface SiteStageLog {
     id: string; // auto-increment / SurrealDB auto ID
@@ -858,7 +1026,17 @@ export interface SiteStageLog {
 export const siteStageLogs: SiteStageLog[] = [
     { id: 'log-1', site_master_id: 'sm2', from_stage: 'imported', to_stage: 'assigned', created_by: 'u_mgr', created_at: '2024-02-11T09:00:00Z' },
     { id: 'log-2', site_master_id: 'sm2', from_stage: 'assigned', to_stage: 'permit_process', notes: 'Pengurusan permit sedang berjalan', created_by: 'u_lead', created_at: '2024-02-12T08:30:00Z', evidence_files: ['file-1'] },
-    { id: 'log-3', site_master_id: 'sm3', from_stage: 'akses_ready', to_stage: 'implementasi', created_by: 'u_eng', created_at: '2024-02-28T14:00:00Z' }
+    { id: 'log-3', site_master_id: 'sm3', from_stage: 'akses_ready', to_stage: 'implementasi', created_by: 'u_eng', created_at: '2024-02-28T14:00:00Z' },
+    // Rescoping sample logs
+    {
+        id: 'sl-rs1',
+        site_master_id: 'sm-rs001',
+        from_stage: 'imported',
+        to_stage: 'assigned',
+        notes: 'Assigned to Team Alpha',
+        created_by: 'u_ops',
+        created_at: '2026-03-12T09:00:00Z'
+    }
 ];
 
 // --- UNIFIED SITE FILES ---
@@ -937,7 +1115,7 @@ export const getActiveSiteCountsByType = (currentUser: User, _allProjects: Proje
         COMBAT: 0,
         BLACKSITE: 0,
         L2H: 0,
-        REFINEN: 0,
+        RESCOPING: 0,
     };
 
     // Which teams does this user belong to?

@@ -742,10 +742,10 @@ const SiteDetail = () => {
 
   const teamMembers = team 
       ? teamMembersRecords
-          .filter(tm => tm.team_id === team.id && !tm.left_date) // active members only
+          .filter(tm => tm.team_id === team.id && tm.is_active) // active members only
           .map(tm => {
               const p = people.find(person => person.id === tm.person_id);
-              return p ? { id: p.id, name: p.name, role: tm.jabatan, isLeader: tm.is_field_leader } : null;
+              return p ? { id: p.id, name: p.name, role: tm.role, isLeader: tm.role === 'Team Leader' } : null;
           })
           .filter(Boolean) as { id: string; name: string; role: string; isLeader: boolean }[]
       : [];
@@ -995,15 +995,27 @@ const SiteDetail = () => {
   };
 
   // --- STEPPER LOGIC ---
-  const STAGE_GROUPS = [
-    { label: 'Assigned', keys: ['assigned'] },
-    { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
-    { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
-    { label: 'Implementasi', keys: ['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done'] },
-    { label: 'BAST', keys: ['bast'] },
-    { label: 'Invoice', keys: ['invoice'] },
-    { label: 'Selesai', keys: ['completed'] }
-  ];
+  const STAGE_GROUPS = project.type === 'RESCOPING' 
+    ? [
+        { label: 'Assigned', keys: ['assigned'] },
+        { label: 'Survey', keys: ['survey', 'survey_nok'] },
+        { label: 'ERFIN', keys: ['erfin_process', 'erfin_ready'] },
+        { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
+        { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
+        { label: 'Implementasi', keys: ['implementasi', 'rfi_done', 'dokumen_done'] },
+        { label: 'BAST', keys: ['bast'] },
+        { label: 'Invoice', keys: ['invoice'] },
+        { label: 'Selesai', keys: ['completed'] }
+      ]
+    : [
+        { label: 'Assigned', keys: ['assigned'] },
+        { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
+        { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
+        { label: 'Implementasi', keys: ['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done'] },
+        { label: 'BAST', keys: ['bast'] },
+        { label: 'Invoice', keys: ['invoice'] },
+        { label: 'Selesai', keys: ['completed'] }
+      ];
 
   const currentGroupIndex = STAGE_GROUPS.findIndex(g => g.keys.includes(localStage));
   const activeIndex = currentGroupIndex === -1 && localStage === 'imported' ? -1 : currentGroupIndex;
@@ -1150,6 +1162,40 @@ const SiteDetail = () => {
             </div>
         </div>
 
+        {/* --- SURVEY NOK WARNING BANNER --- */}
+        {localStage === 'survey_nok' && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-5 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm flex items-start gap-4">
+                <div className="bg-red-100 p-2 rounded-full shrink-0">
+                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="flex-1">
+                    <h3 className="text-red-800 font-bold text-lg mb-1">Site Ditahan: Survey NOK</h3>
+                    <p className="text-red-700 text-sm mb-3">
+                        Pengerjaan site ini dihentikan sementara karena hasil survey dinyatakan tidak layak (NOK). 
+                        Proses selanjutnya seperti ERFIN, Permit, dan Implementasi tidak dapat dilakukan.
+                    </p>
+                    {/* Retrieve reason from mock logs potentially, or extra data */}
+                    {site.survey_nok_reason && (
+                         <div className="bg-white/60 p-3 rounded text-sm text-slate-700 mb-4 border border-red-100 italic">
+                             <strong>Alasan NOK:</strong> {site.survey_nok_reason}
+                         </div>
+                    )}
+                    {(can('manage_data') || currentUser?.role === 'operational') && (
+                        <button 
+                            onClick={() => {
+                                if(window.confirm('Yakin ingin mereset site ini kembali ke tahap Survey?')) {
+                                    handleUpdateStage('survey', 'Reset dari Survey NOK ke Survey ulang');
+                                }
+                            }}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded shadow-sm transition-colors"
+                        >
+                            Reset ke Survey
+                        </button>
+                    )}
+                </div>
+            </div>
+        )}
+
         {/* Payment Prompt Card — only for FILTER sites when action needed */}
         {project.type === 'FILTER' && (
             <PaymentPromptCard
@@ -1173,9 +1219,9 @@ const SiteDetail = () => {
 
 
 
-        <div className="space-y-8 w-full">
-            {/* Tabs */}
-                <div className="border-b border-slate-200 flex gap-6">
+        {/* Note Panel: if site is survey_nok, hide the tabs or grey them out logically, but for now we'll just show them */}
+
+                <div className="border-b border-slate-200 flex gap-6 mt-8">
                     <button
                         onClick={() => setActiveTab('details')}
                         className={clsx("pb-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'details' ? "border-blue-500 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
@@ -1198,7 +1244,7 @@ const SiteDetail = () => {
                 </div>
 
                 {activeTab === 'details' && (
-                    <div className="space-y-8">
+                    <div className="space-y-8 mt-6">
                         <EvidenceSection
                             evidences={localEvidences}
                             canUploadEvidence={can('upload_evidence')}
@@ -1228,7 +1274,7 @@ const SiteDetail = () => {
                 )}
 
                 {activeTab === 'costs' && (
-                    <div className="space-y-6">
+                    <div className="space-y-6 mt-6">
                         <div className="w-full">
                             {project.type === 'FILTER' ? (
                                 <FilterPaymentSection 
@@ -1255,7 +1301,6 @@ const SiteDetail = () => {
                         />
                     </div>
                 )}
-        </div>
 
         {/* Riwayat Stage Section */}
         <details className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden group">
@@ -1332,6 +1377,7 @@ const SiteDetail = () => {
             isOpen={isUpdateStageModalOpen}
             onClose={() => setIsUpdateStageModalOpen(false)}
             siteId={site.id}
+            projectType={project.type}
             currentStage={localStage}
             onUpdateStage={handleUpdateStage}
         />
