@@ -41,18 +41,13 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
   
   const formatRelativeDate = (dateString: string) => {
     const d = new Date(dateString);
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const target = new Date(d);
-    target.setHours(0,0,0,0);
-    
-    const diffTime = today.getTime() - target.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Hari ini';
-    if (diffDays === 1) return 'Kemarin';
-    if (diffDays < 7) return `${diffDays} hari lalu`;
-    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('id-ID', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).replace('.', ':');
   };
   
   const getLatestUpdate = (site: SiteMaster) => {

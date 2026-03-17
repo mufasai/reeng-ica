@@ -42,7 +42,7 @@ const PROJECT_TYPES: { id: ProjectType; label: string; color: string }[] = [
 const formatImportDate = (isoString?: string): string => {
     if (!isoString) return '—';
     const d = new Date(isoString);
-    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace('.', ':');
 };
 
 const truncate = (str: string, maxLen = 25): string =>
@@ -101,7 +101,7 @@ const ALL_COLS: ColDef[] = [
     { key: 'import_date', label: 'Import Date', defaultVisible: false },
     { key: 'team', label: 'Team', defaultVisible: true },
     { key: 'stage', label: 'Stage', defaultVisible: true },
-    { key: 'days', label: 'Days in Stage', defaultVisible: true },
+    { key: 'days', label: 'Last Updated', defaultVisible: true },
     { key: 'termin', label: 'Termin', defaultVisible: true },
     { key: 'ineom', label: 'INEOM', defaultVisible: false },
     { key: 'actions', label: 'Actions', defaultVisible: true },
@@ -261,9 +261,11 @@ const Sites = () => {
 
     const getDaysInStage = (site: any) => {
         if (site.stage === 'imported' || !site.stage_updated_at) return { text: '—', isStuck: false, daysDiff: 0 };
-        const daysDiff = Math.floor((Date.now() - new Date(site.stage_updated_at).getTime()) / 86400000);
+        const d = new Date(site.stage_updated_at);
+        const text = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace('.', ':');
+        const daysDiff = Math.floor((Date.now() - d.getTime()) / 86400000);
         const isStuck = daysDiff > 14 || site.stage_notes?.toLowerCase().includes('issue') || site.stage === 'issue_hold';
-        return { text: `${daysDiff} hari`, isStuck, daysDiff };
+        return { text, isStuck, daysDiff };
     };
 
     // Main Filtering
@@ -518,7 +520,7 @@ const Sites = () => {
                                         {col('import_date') && <th className="px-4 py-3 font-semibold text-slate-600">Import Date</th>}
                                         {col('team') && <th className="px-4 py-3 font-semibold text-slate-600">Team</th>}
                                         {col('stage') && <th className="px-4 py-3 font-semibold text-slate-600">Stage</th>}
-                                        {col('days') && <th className="px-4 py-3 font-semibold text-slate-600">Days in Stage</th>}
+                                        {col('days') && <th className="px-4 py-3 font-semibold text-slate-600">Last Updated</th>}
                                         {col('termin') && <th className="px-4 py-3 font-semibold text-slate-600">Termin</th>}
                                         {col('ineom') && <th className="px-4 py-3 font-semibold text-slate-600 text-center">INEOM</th>}
                                         {col('actions') && <th className="px-4 py-3 font-semibold text-slate-600 text-right">Actions</th>}
