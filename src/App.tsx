@@ -16,7 +16,7 @@ import TerminReview from './pages/TerminReview';
 import TerminPayment from './pages/TerminPayment';
 import Sites from './pages/Sites';
 import UserManagement from './pages/UserManagement';
-
+import MaterialMaster from './pages/MaterialMaster';
 
 function App() {
   return (
@@ -38,6 +38,7 @@ function App() {
           <Route path="sites/:id/termins/:terminId/payment" element={<TerminPayment />} />
           <Route path="people" element={<People />} />
           <Route path="teams" element={<Teams />} />
+          <Route path="materials" element={<MaterialMaster />} />
           <Route path="spk" element={<Navigate to="/work-orders" replace />} />
           <Route path="rescoping" element={<Navigate to="/projects/type/rescoping/sites" replace />} />
           <Route path="demo-guide" element={<DemoGuide />} />

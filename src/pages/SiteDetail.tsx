@@ -1,14 +1,15 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, DollarSign, 
   FileText, Upload, CheckCircle2,
-  Image as ImageIcon, Send, Edit, Plus, X, AlertTriangle
+  Image as ImageIcon, Send, Edit, Plus, X, AlertTriangle, FolderCheck, ChevronRight
 } from 'lucide-react';
 import { useState, useMemo, useRef } from 'react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import FilterPaymentSection from '../components/sections/FilterPaymentSection';
 import PaymentPromptCard, { STAGE_TERMIN_MAP } from '../components/sections/PaymentPromptCard';
+import DirectorPaymentSection from '../components/sections/DirectorPaymentSection';
 import CombatPaymentSection from '../components/sections/CombatPaymentSection';
 import BuatSKPModal from '../components/modals/BuatSKPModal';
 import TerimaSKPModal from '../components/modals/TerimaSKPModal';
@@ -20,8 +21,8 @@ import {
     sites, projects, teams, people, 
     siteMaterials, siteEvidence, siteCosts, filterTerms, combatTerms, skpRecords,
     siteMasterRecords, siteBoQRecords, siteStageLogs, mockSiteFiles,
-    terminPengajuanRecords, teamMembersRecords,
-    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan
+    terminPengajuanRecords, teamMembersRecords, bastDocumentChecklists, createBastChecklistForSite,
+    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan, type BastDocumentChecklistItem
 } from '../data/mockData';
 import {
     TableContainer,
@@ -373,9 +374,9 @@ const MaterialsSection = ({ materials, skps, siteBoQs, canAddSkp, canMarkReceive
     const [page, setPage] = useState(1);
     const itemsPerPage = 5;
 
-    const filteredMaterials = useMemo(() => materials.filter(m => 
-        m.skp.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        m.items.some(i => i.toLowerCase().includes(searchTerm.toLowerCase()))
+    const filteredMaterials = useMemo(() => materials.filter((m: any) => 
+        (m.skp || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (m.nama_material || '').toLowerCase().includes(searchTerm.toLowerCase())
     ), [materials, searchTerm]);
     
     // Derived SKP data
@@ -554,22 +555,36 @@ const MaterialsSection = ({ materials, skps, siteBoQs, canAddSkp, canMarkReceive
                             <TableHeader>
                                 <TableHead className="min-w-[140px]">SKP Ref</TableHead>
                                 <TableHead className="min-w-[120px]">Take Date</TableHead>
-                                <TableHead className="w-full">Items</TableHead>
+                                <TableHead className="w-full">Material Info</TableHead>
+                                <TableHead className="min-w-[100px]">Qty</TableHead>
+                                <TableHead className="min-w-[120px]">Source</TableHead>
                             </TableHeader>
                             <TableBody>
                                 {paginated.length === 0 ? (
-                                    <tr><td colSpan={3}><EmptyState message="No materials found" /></td></tr>
+                                    <tr><td colSpan={5}><EmptyState message="No materials found" /></td></tr>
                                 ) : (
-                                    paginated.map((m: SiteMaterial) => (
+                                    paginated.map((m: any) => (
                                         <TableRow key={m.id}>
-                                            <TableCell className="font-medium text-slate-700">{m.skp}</TableCell>
-                                            <TableCell className="text-slate-600">{m.date}</TableCell>
+                                            <TableCell className="font-medium text-slate-700">{m.skp || 'N/A'}</TableCell>
+                                            <TableCell className="text-slate-600">{m.date || m.added_at?.split('T')[0]}</TableCell>
                                             <TableCell className="text-slate-600">
-                                                <div className="flex flex-wrap gap-1">
-                                                    {m.items.map((item: string, i: number) => (
-                                                        <span key={i} className="px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-600 border border-slate-200">{item}</span>
-                                                    ))}
-                                                </div>
+                                                <p className="font-bold text-slate-800">{m.nama_material}</p>
+                                                {m.spesifikasi && <p className="text-xs text-slate-500 mt-0.5">{m.spesifikasi}</p>}
+                                                {m.keterangan && <p className="text-xs text-slate-400 italic mt-0.5">Catatan: {m.keterangan}</p>}
+                                            </TableCell>
+                                            <TableCell className="text-slate-800 font-semibold">
+                                                {m.jumlah} <span className="text-xs font-normal text-slate-500">{m.satuan}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                {m.source_master ? (
+                                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold uppercase tracking-wide">
+                                                        Master
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-bold uppercase tracking-wide">
+                                                        Ad-hoc / {m.source === 'ocr' ? 'OCR' : 'Manual'}
+                                                    </span>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -684,7 +699,12 @@ const SiteDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can, currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'details' | 'evidence' | 'costs'>('details');
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  const initialTab = searchParams.get('tab') === 'costs' ? 'costs' : (searchParams.get('tab') === 'evidence' ? 'evidence' : 'details');
+  const [activeTab, setActiveTab] = useState<'details' | 'evidence' | 'costs'>(initialTab);
+  
+  const initialExpand = searchParams.get('expand') || undefined;
 
   // SKP Modals State
   const [isSkpModalOpen, setIsSkpModalOpen] = useState(false);
@@ -751,7 +771,7 @@ const SiteDetail = () => {
       : [];
 
   // Filtered Data
-  const materials = siteMaterials.filter(m => m.siteId === id);
+  const [localMaterials, setLocalMaterials] = useState<any[]>(siteMaterials.filter((m: any) => m.siteId === id || m.site_id === id));
   const siteBoQsSource = siteBoQRecords.filter(b => b.siteId === id || b.siteId === site?.projectId);
   const [localBoQs, setLocalBoQs] = useState<SiteBoQ[]>(siteBoQsSource);
   const costs = siteCosts.filter(c => c.siteId === id);
@@ -774,6 +794,13 @@ const SiteDetail = () => {
   });
   
   const [isMultiUploadOpen, setIsMultiUploadOpen] = useState(false);
+
+  // BAST Document Checklist State
+  const seedBastChecklist = bastDocumentChecklists.filter(b => b.site_id === id || b.site_id === site?.id);
+  const [localBastChecklist, setLocalBastChecklist] = useState<BastDocumentChecklistItem[]>(
+    seedBastChecklist.length > 0 ? seedBastChecklist : createBastChecklistForSite(id || '')
+  );
+  const [isBastChecklistOpen, setIsBastChecklistOpen] = useState(false);
 
   // File Input Refs
   const evidenceInputRef = useRef<HTMLInputElement>(null);
@@ -856,17 +883,11 @@ const SiteDetail = () => {
   };
 
   const handleAddMaterialSubmit = (newMaterials: any[]) => {
-      const generatedBoQs: SiteBoQ[] = newMaterials.map((m, i) => ({
-          id: `boq-new-${Date.now()}-${i}`,
-          siteId: site.id,
-          siteType: project?.type || 'FILTER',
-          itemCode: m.source === 'ocr' ? 'OCR-Scanned' : 'Manual-Input',
-          description: m.spesifikasi ? `${m.nama_material} - ${m.spesifikasi}` : m.nama_material,
-          quantity: m.jumlah,
-          unit: m.satuan || 'pcs',
-          type: 'material'
+      const generatedMaterials = newMaterials.map((m, i) => ({
+          id: `mat-new-${Date.now()}-${i}`,
+          ...m
       }));
-      setLocalBoQs([ ...generatedBoQs, ...localBoQs ]);
+      setLocalMaterials([ ...generatedMaterials, ...localMaterials ]);
       setIsAddMaterialModalOpen(false);
   };
 
@@ -994,6 +1015,16 @@ const SiteDetail = () => {
       setLocalPengajuan(localPengajuan.map(p => p.id === pengajuanId ? { ...p, status: 'rejected', catatan: reason } : p));
   };
 
+  // BAST Checklist handlers
+  const handleBastSaveOnly = (items: BastDocumentChecklistItem[], _catatan: string) => {
+      setLocalBastChecklist(items);
+  };
+
+  const handleBastMarkDone = (items: BastDocumentChecklistItem[], _catatan: string) => {
+      setLocalBastChecklist(items);
+      // Files from BAST checklist are pre-attached for T2c pengajuan
+  };
+
   // --- STEPPER LOGIC ---
   const STAGE_GROUPS = project.type === 'RESCOPING' 
     ? [
@@ -1118,6 +1149,55 @@ const SiteDetail = () => {
                         }
                     }
 
+                    // Setup enriched Line 2 text
+                    let line2Text = null;
+                    let line2Color = 'text-slate-500 font-medium';
+
+                    if (isReached) {
+                        const highestKey = [...group.keys].reverse().find(k => (STAGE_ORDER_IDX.indexOf(localStage) >= STAGE_ORDER_IDX.indexOf(k))) || group.keys[0];
+                        
+                        if (isPermitGroup && permitDaysText) {
+                            line2Text = permitDaysText;
+                            line2Color = permitDaysColor;
+                        } else {
+                            switch (highestKey) {
+                                case 'assigned':
+                                    line2Text = `Tim: ${site.mitra || '-'} · Leader: Budi (FL)`;
+                                    break;
+                                case 'permit_process':
+                                    line2Text = `Create: ${eData.permit_start_date ? new Date(eData.permit_start_date).toLocaleDateString('id-ID', {day:'numeric',month:'short'}) : '-'}`;
+                                    break;
+                                case 'akses_process':
+                                    line2Text = `${eData.akses_provider || '-'} · ${eData.akses_kunci || '-'}`;
+                                    break;
+                                case 'akses_ready':
+                                    line2Text = `PIC: ${eData.akses_pic || '-'} · OK`;
+                                    break;
+                                case 'implementasi':
+                                    line2Text = `Plan: ${eData.impl_plan ? new Date(eData.impl_plan).toLocaleDateString('id-ID', {day:'numeric',month:'short'}) : '-'}`;
+                                    break;
+                                case 'rfi_done':
+                                case 'rfs_done':
+                                    line2Text = `CI ${eData.impl_aktual ? new Date(eData.impl_aktual).toLocaleDateString('id-ID',{day:'numeric',month:'short'}) : '-'} ${eData.impl_ci || ''} → CO ${eData.impl_aktual ? new Date(eData.impl_aktual).toLocaleDateString('id-ID',{day:'numeric',month:'short'}) : '-'} ${eData.impl_co || ''}`;
+                                    break;
+                                case 'dokumen_done':
+                                    const docsCount = localFiles.filter(f => f.stage_context?.includes('bast') || f.stage_context?.includes('dokumen')).length;
+                                    line2Text = `${docsCount}/5 dokumen BAST siap`;
+                                    break;
+                                case 'bast':
+                                    line2Text = `BAST: ${eData.bast_date ? new Date(eData.bast_date).toLocaleDateString('id-ID', {day:'numeric',month:'short'}) : `${(new Date()).toLocaleDateString('id-ID', {day:'numeric',month:'short'})}`}`;
+                                    break;
+                                case 'invoice':
+                                    line2Text = `Invoice: ${eData.invoice_number || `INV-${site.site_id}-01`}`;
+                                    break;
+                                case 'completed':
+                                    line2Text = '✓ Selesai';
+                                    line2Color = 'text-emerald-600 font-bold';
+                                    break;
+                            }
+                        }
+                    }
+
                     // For non-permit nodes, purely visual without dates
                     let nodeClass = "bg-white text-slate-300 border-slate-200";
                     let textClass = "text-slate-400";
@@ -1139,21 +1219,19 @@ const SiteDetail = () => {
                             </span>
                             
                             {/* Meta texts beneath */}
-                            <div className="absolute top-14 w-40 text-center flex flex-col items-center justify-center">
+                            <div className="absolute top-14 w-48 text-center flex flex-col items-center justify-center">
                                 {/* Line 1: Date reached */}
                                 {isReached && reachedDate && (
-                                    <span className="text-[10px] text-slate-500 whitespace-nowrap bg-white/80 px-1 rounded">
+                                    <span className="text-[10px] text-slate-500 font-bold whitespace-nowrap bg-white/80 px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
                                         {reachedDate.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year:'numeric'})}
                                     </span>
                                 )}
 
-                                {/* Line 2: Permit Expiry if applicable */}
-                                {(isReached || !isReached) && isPermitGroup && permitDaysText && ( // The user requirement said permitNodes ONLY show additional line, but pending doesn't show dates. If it's pending it should show nothing. So limit to isReached. Wait user said "Pending node: show nothing".
-                                    isReached ? (
-                                        <span className={clsx("text-[10px] mt-0.5 whitespace-nowrap bg-white/80 px-1 rounded", permitDaysColor)}>
-                                            {permitDaysText}
-                                        </span>
-                                    ) : null
+                                {/* Line 2: Specific Key Data */}
+                                {isReached && line2Text && (
+                                    <span className={clsx("text-[10px] mt-1 whitespace-nowrap bg-white/95 px-2 py-0.5 rounded shadow-sm border border-slate-100", line2Color)}>
+                                        {line2Text}
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -1207,6 +1285,37 @@ const SiteDetail = () => {
             />
         )}
 
+        {/* Persiapan BAST Progress Card — shown when rfi_done/rfs_done + partial uploads exist */}
+        {(localStage === 'rfi_done' || localStage === 'rfs_done') && localBastChecklist.some(i => i.is_uploaded) && (
+            <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-4 flex items-center gap-4 shadow-sm animate-in fade-in duration-300">
+                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center shrink-0">
+                    <FolderCheck className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div className="flex-1">
+                    <p className="text-sm font-bold text-indigo-900">Persiapan Dokumen BAST</p>
+                    <div className="flex items-center gap-3 mt-1">
+                        <div className="h-1.5 bg-indigo-200 rounded-full flex-1 overflow-hidden">
+                            <div
+                                className="h-full bg-indigo-600 rounded-full transition-all"
+                                style={{ width: `${(localBastChecklist.filter(i => i.is_required && i.is_uploaded).length / Math.max(localBastChecklist.filter(i => i.is_required).length, 1)) * 100}%` }}
+                            />
+                        </div>
+                        <span className="text-xs font-semibold text-indigo-700 whitespace-nowrap">
+                            {localBastChecklist.filter(i => i.is_required && i.is_uploaded).length}/{localBastChecklist.filter(i => i.is_required).length} dokumen wajib
+                        </span>
+                    </div>
+                </div>
+                {can('site.update_stage') && (
+                    <button
+                        onClick={() => setIsUpdateStageModalOpen(true)}
+                        className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                    >
+                        Lanjutkan Persiapan <ChevronRight className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
+        )}
+
         <InfoSection
             site={site}
             project={project}
@@ -1216,6 +1325,51 @@ const SiteDetail = () => {
             canViewCosts={can('view_financials')}
             canManageUsers={can('manage_data')}
         />
+
+        {/* Dokumen BAST Panel — visible to all roles once dokumen_done reached */}
+        {STAGE_ORDER_IDX.indexOf(localStage) >= STAGE_ORDER_IDX.indexOf('dokumen_done') && (
+            <div className="border border-slate-200 bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                        <FolderCheck className="w-5 h-5 text-indigo-600" />
+                        <h3 className="text-base font-bold text-slate-800">Dokumen Persiapan BAST</h3>
+                    </div>
+                    <span className={clsx(
+                        "text-xs font-bold px-3 py-1 rounded-full",
+                        localBastChecklist.filter(i => i.is_required).every(i => i.is_uploaded)
+                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                            : "bg-amber-100 text-amber-700 border border-amber-200"
+                    )}>
+                        {localBastChecklist.filter(i => i.is_required && i.is_uploaded).length}/{localBastChecklist.filter(i => i.is_required).length} dokumen wajib terlampir
+                    </span>
+                </div>
+                <div className="divide-y divide-slate-50">
+                    {localBastChecklist.map(item => (
+                        <div key={item.id} className="px-5 py-3 flex items-center gap-3">
+                            {item.is_uploaded
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                : <div className="w-4 h-4 rounded-full border-2 border-slate-300 shrink-0" />
+                            }
+                            <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-slate-700">{item.doc_label}</span>
+                                {!item.is_required && <span className="ml-2 text-[10px] text-slate-400">(opsional)</span>}
+                            </div>
+                            {item.is_uploaded && item.file_name ? (
+                                <a
+                                    href="#"
+                                    onClick={e => { e.preventDefault(); alert(`Download: ${item.file_name}`); }}
+                                    className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
+                                >
+                                    <FileText className="w-3.5 h-3.5" /> {item.file_name}
+                                </a>
+                            ) : (
+                                <span className="text-xs text-slate-400 italic">Belum diupload</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
 
 
 
@@ -1251,7 +1405,7 @@ const SiteDetail = () => {
                             onUpload={handleEvidenceUpload}
                         />
                         <MaterialsSection 
-                            materials={materials} 
+                            materials={localMaterials} 
                             skps={localSkps}
                             siteBoQs={localBoQs}
                             canAddSkp={can('manage_data') || (currentUser?.role === 'field')}
@@ -1276,15 +1430,27 @@ const SiteDetail = () => {
                 {activeTab === 'costs' && (
                     <div className="space-y-6 mt-6">
                         <div className="w-full">
-                            {project.type === 'FILTER' ? (
-                                <FilterPaymentSection 
-                                    site={site}
-                                    localStage={localStage}
-                                    localPengajuan={localPengajuan}
-                                    handleAjukanTermin={handleAjukanTermin}
-                                    handleApproveTermin={handleApproveTermin}
-                                    handleRejectTermin={handleRejectTermin}
-                                />
+                            {project.type === 'FILTER' || project.type === 'RESCOPING' ? (
+                                ['director', 'finance'].includes(currentUser?.role ?? '') ? (
+                                    <DirectorPaymentSection 
+                                        site={site}
+                                        localStage={localStage}
+                                        localPengajuan={localPengajuan}
+                                        handleApproveTermin={handleApproveTermin}
+                                        handleRejectTermin={handleRejectTermin}
+                                        initialExpandedTermin={initialExpand}
+                                    />
+                                ) : (
+                                    <FilterPaymentSection 
+                                        site={site}
+                                        localStage={localStage}
+                                        localPengajuan={localPengajuan}
+                                        handleAjukanTermin={handleAjukanTermin}
+                                        handleApproveTermin={handleApproveTermin}
+                                        handleRejectTermin={handleRejectTermin}
+                                        initialExpandedTermin={initialExpand}
+                                    />
+                                )
                             ) : project.type === 'COMBAT' ? (
                                  <CombatPaymentSection terms={filteredCombatTerms} isTermin1Enabled={localSkps.some(s => s.status === 'Received')} />
                             ) : null}
@@ -1377,9 +1543,13 @@ const SiteDetail = () => {
             isOpen={isUpdateStageModalOpen}
             onClose={() => setIsUpdateStageModalOpen(false)}
             siteId={site.id}
+            siteName={site.name}
             projectType={project.type}
             currentStage={localStage}
             onUpdateStage={handleUpdateStage}
+            bastChecklistItems={localBastChecklist}
+            onBastSaveOnly={handleBastSaveOnly}
+            onBastMarkDone={handleBastMarkDone}
         />
         <AddMaterialModal
             isOpen={isAddMaterialModalOpen}
@@ -1394,7 +1564,28 @@ const SiteDetail = () => {
             siteName={site.name}
             terminKey={pengajuanData.terminKey}
             nominal={pengajuanData.nominal}
-            prefillDocs={pengajuanData.docs}
+            prefillDocs={pengajuanData.terminKey === 'T2c'
+                ? [
+                    ...pengajuanData.docs,
+                    // Synthesize SiteFile-like objects from BAST checklist uploaded items
+                    ...localBastChecklist
+                        .filter(b => b.is_uploaded && b.file_name)
+                        .map(b => ({
+                            id: b.id,
+                            site_id: site.id,
+                            filename: b.file_name!,
+                            original_name: b.file_name!,
+                            file_url: '#',
+                            mime_type: 'application/octet-stream',
+                            file_size: b.file_size || 0,
+                            source: 'bast_dokumen' as const,
+                            stage_context: 'dokumen_done',
+                            uploaded_at: b.uploaded_at || new Date().toISOString(),
+                            uploaded_by: b.uploaded_by || 'Admin'
+                        }))
+                  ]
+                : pengajuanData.docs
+            }
             onSubmit={handleSubmitPengajuan}
         />
 

@@ -12,6 +12,7 @@ export interface FilterPaymentSectionProps {
     handleAjukanTermin: (terminKey: 'T1' | 'T2a' | 'T2b' | 'T2c' | 'T3' | 'T4', nominal: number, contextKeys: string[]) => void;
     handleApproveTermin: (pengajuanId: string, nominal: number, terminKey: string, e: React.MouseEvent<HTMLButtonElement>) => void;
     handleRejectTermin: (pengajuanId: string, e: React.MouseEvent<HTMLButtonElement>) => void;
+    initialExpandedTermin?: string;
 }
 
 const STAGE_ORDER_LIST = [
@@ -46,10 +47,23 @@ const FilterPaymentSection = ({
     handleAjukanTermin,
     handleApproveTermin,
     handleRejectTermin,
+    initialExpandedTermin,
 }: FilterPaymentSectionProps) => {
     const { currentUser } = useAuth();
     const isManagement = ['director', 'operational', 'admin'].includes(currentUser?.role ?? '');
-    const [selectedStep, setSelectedStep] = useState<string | null>(null);
+    
+    // Normalize initialExpandedTermin to the internal keys (T1, T2a, etc.)
+    let initStepId: string | null = null;
+    if (initialExpandedTermin) {
+        // e.g. "t2a" -> "T2a", "t3" -> "T3"
+        const upper = initialExpandedTermin.toUpperCase();
+        if (upper === 'T1' || upper === 'T3' || upper === 'T4') initStepId = upper;
+        else if (upper === 'T2A') initStepId = 'T2a';
+        else if (upper === 'T2B') initStepId = 'T2b';
+        else if (upper === 'T2C') initStepId = 'T2c';
+    }
+    
+    const [selectedStep, setSelectedStep] = useState<string | null>(initStepId);
     const [expandedRiwayat, setExpandedRiwayat] = useState(true);
 
     // Build rows

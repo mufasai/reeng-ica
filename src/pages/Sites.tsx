@@ -6,7 +6,7 @@ import {
     CheckCircle2, Plus, Download, History
 } from 'lucide-react';
 import clsx from 'clsx';
-import { siteMasterRecords, filterTerms, type ProjectType } from '../data/mockData';
+import { siteMasterRecords, type ProjectType, getTerminSummary } from '../data/mockData';
 import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
 import ImportSiteModal from '../components/modals/ImportSiteModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
@@ -49,37 +49,40 @@ const truncate = (str: string, maxLen = 25): string =>
     str && str.length > maxLen ? str.slice(0, maxLen) + '…' : str;
 
 // ─── Termin 4-dot indicator ──────────────────────────────────────────────────
-const TERMIN_STEP_STATUS_COLOR: Record<string, string> = {
-    'submitted': 'bg-amber-400',
-    'pending_review': 'bg-amber-300',
-    'approved': 'bg-blue-500',
-    'diterima': 'bg-blue-400',
-    'dibayarkan': 'bg-emerald-500',
-    'paid': 'bg-emerald-500',
-    'rejected': 'bg-red-400',
-    'open': 'bg-slate-200',
-    'locked': 'bg-slate-100 border border-slate-200',
-    'pending': 'bg-slate-100 border border-slate-200',
-};
-
-const TerminDots = ({ siteId }: { siteId: string }) => {
-    const siteTermins = filterTerms.filter(t => t.siteId === siteId);
-    if (siteTermins.length === 0) {
-        return <span className="text-slate-300 font-mono text-xs">— — — —</span>;
-    }
-    const steps = [1, 2, 3, 4];
+const TerminDots = ({ summaryData }: { summaryData: any }) => {
+    if (!summaryData) return <span className="text-slate-300 font-mono text-xs">— — — —</span>;
+    const summary = summaryData.summary;
+    const dotKeys = ['t1', 't2a', 't2b', 't2c', 't3', 't4'];
+    
     return (
-        <div className="flex items-center gap-1.5">
-            {steps.map(step => {
-                const t = siteTermins.find(x => x.step === step);
-                const status = t?.status || 'locked';
-                const colorClass = TERMIN_STEP_STATUS_COLOR[status] || 'bg-slate-100';
+        <div className="flex items-center gap-1">
+            {dotKeys.map((k) => {
+                const status = summary[k]?.status || 'locked';
+                let colorClass = 'bg-slate-200'; // open
+                if (status === 'locked') colorClass = 'bg-slate-100 border border-slate-200';
+                if (status === 'paid' || status === 'approved') colorClass = 'bg-[#10B981]';
+                if (status === 'submitted') {
+                    if (summaryData.pending_termin_key?.toLowerCase() === k) {
+                        colorClass = 'bg-[#EF4444] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]';
+                    } else {
+                        colorClass = 'bg-[#F59E0B]';
+                    }
+                }
+                
                 return (
-                    <span
-                        key={step}
-                        title={`T${step}: ${status}`}
-                        className={clsx('w-2.5 h-2.5 rounded-full inline-block', colorClass)}
-                    />
+                    <div key={k} className="flex items-center">
+                        <span
+                            title={`${k.toUpperCase()}: ${status}`}
+                            className={clsx('w-2.5 h-2.5 rounded-full inline-block', colorClass)}
+                        />
+                        {/* Spacing adjustments: T2a,b,c are grouped */}
+                        {(k === 't1' || k === 't2c' || k === 't3') && (
+                            <div className="w-1.5 h-[1px] bg-slate-200 mx-1" />
+                        )}
+                        {(k === 't2a' || k === 't2b') && (
+                            <div className="w-0.5 h-[1px] bg-slate-200 mx-0.5" />
+                        )}
+                    </div>
                 );
             })}
         </div>
@@ -540,8 +543,14 @@ const Sites = () => {
                                         sortedSites.map(site => {
                                             const typeObj = PROJECT_TYPES.find(t => t.id === site.project_type);
                                             const { text: daysText, isStuck } = getDaysInStage(site);
+                                            const termSummary = getTerminSummary(site.site_id);
+                                            const hasDirectorPending = termSummary.has_pending_approval;
+                                            const rowBg = (hasDirectorPending && currentUser.role === 'director') 
+                                                ? 'bg-[#FEF3C7] hover:bg-[#FDE68A] border-l-4 border-l-[#F59E0B]' 
+                                                : 'hover:bg-slate-50/50';
+
                                             return (
-                                                <tr key={site.site_id} className="hover:bg-slate-50/50 transition-colors group">
+                                                <tr key={site.site_id} className={clsx("transition-colors group", rowBg)}>
                                                     {col('site_id') && <td className="px-4 py-3 font-mono font-bold text-slate-700">{site.site_id}</td>}
                                                     {col('site_name') && <td className="px-4 py-3"><div className="font-semibold text-slate-800 max-w-[180px] truncate" title={site.site_name}>{site.site_name}</div></td>}
                                                     {col('type') && <td className="px-4 py-3">{typeObj && <span className={clsx('px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border', typeObj.color)}>{typeObj.label}</span>}</td>}
@@ -576,17 +585,32 @@ const Sites = () => {
                                                             </span>
                                                         </td>
                                                     )}
-                                                    {col('termin') && <td className="px-4 py-3"><TerminDots siteId={site.site_id} /></td>}
+                                                    {col('termin') && (
+                                                        <td className="px-4 py-3">
+                                                            <TerminDots summaryData={termSummary} />
+                                                            {hasDirectorPending && currentUser.role === 'director' && (
+                                                                <div className="text-[10px] text-[#EF4444] mt-1 font-bold animate-pulse">
+                                                                    ⚠ {termSummary.pending_termin_key?.toUpperCase()} Menunggu
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    )}
                                                     {col('ineom') && <td className="px-4 py-3 text-center">{site.ineom_registered ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-slate-300">—</span>}</td>}
                                                     {col('actions') && (
                                                         <td className="px-4 py-3 text-right">
                                                             <div className="flex items-center justify-end gap-2">
-                                                                <button onClick={() => navigate(`/sites/${site.site_id}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                                                                    Detail <ArrowRight className="w-3 h-3 text-slate-400" />
-                                                                </button>
-                                                                <button onClick={() => alert(`Update Stage for ${site.site_id}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
-                                                                    <Edit3 className="w-3 h-3" /> Update Stage
-                                                                </button>
+                                                                {hasDirectorPending && currentUser.role === 'director' ? (
+                                                                    <button onClick={() => navigate(`/sites/${site.site_id}?tab=costs&expand=${termSummary.pending_termin_key?.toLowerCase()}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#EF4444] hover:bg-red-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-red-500/20">
+                                                                        Review {termSummary.pending_termin_key?.toUpperCase()} <ArrowRight className="w-3 h-3" />
+                                                                    </button>
+                                                                ) : (
+                                                                    <button onClick={() => navigate(`/sites/${site.site_id}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                                                                        Detail <ArrowRight className="w-3 h-3 text-slate-400" />
+                                                                    </button>
+                                                                )}
+                                                                {!hasDirectorPending && <button onClick={() => alert(`Update Stage for ${site.site_id}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
+                                                                    <Edit3 className="w-3 h-3" /> Update
+                                                                </button>}
                                                             </div>
                                                         </td>
                                                     )}

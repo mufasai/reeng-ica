@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { X, Upload, AlertTriangle, ChevronRight, File, XCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { teams, people, teamMembersRecords } from '../../data/mockData';
+import { teams, people, teamMembersRecords, type BastDocumentChecklistItem } from '../../data/mockData';
+import BastDocumentChecklistModal from './BastDocumentChecklistModal';
 
 interface UpdateStageModalProps {
     isOpen: boolean;
@@ -11,6 +12,9 @@ interface UpdateStageModalProps {
     projectType?: string;
     currentStage: string;
     onUpdateStage: (newStage: string, notes?: string, payload?: Record<string, unknown>) => void;
+    bastChecklistItems?: BastDocumentChecklistItem[];
+    onBastSaveOnly?: (items: BastDocumentChecklistItem[], catatan: string) => void;
+    onBastMarkDone?: (items: BastDocumentChecklistItem[], catatan: string) => void;
 }
 
 // Map stage names to their display labels (optional fallback)
@@ -124,6 +128,16 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
         fileLabel: 'Foto CI/CO, laporan RFI',
         paymentNote: '💰 Setelah stage ini: T2 (Termin 2) akan dapat diajukan sesuai rules.'
     },
+    // FILTER: implementasi → rfs_done → dokumen_done (no rfi step)
+    'implementasi→rfs_done': {
+        nextLabel: 'RFS Selesai',
+        helper: 'Site sudah Ready For Service. Upload laporan RFS dan konfirmasi.',
+        fields: ['konfirmasi_rfs', 'file_upload'],
+        requiredFields: ['konfirmasi_rfs', 'files'],
+        fileLabel: 'Laporan RFS / foto instalasi selesai',
+        paymentNote: '💰 Setelah stage ini: T2b (50% dari Termin 2) akan dapat diajukan.'
+    },
+    // FILTER: rfi_done → rfs_done (if FILTER pipeline has explicit rfi step)
     'rfi_done→rfs_done': {
         nextLabel: 'RFS Selesai',
         helper: 'Site sudah Ready For Service.',
@@ -132,20 +146,28 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
         fileLabel: 'Laporan RFS / foto instalasi selesai',
         paymentNote: '💰 Setelah stage ini: T2b (50% dari Termin 2) akan dapat diajukan.'
     },
+    // RESCOPING: rfi_done → dokumen_done (no rfs step)
+    'rfi_done→dokumen_done': {
+        nextLabel: 'Dokumen Submitted',
+        helper: 'Semua dokumen BAST sudah disiapkan dan siap diserahkan.',
+        fields: [],
+        requiredFields: [],
+        paymentNote: '💰 Setelah stage ini: T2c (20% dari Termin 2) akan dapat diajukan.'
+    },
+    // FILTER: rfs_done → dokumen_done
     'rfs_done→dokumen_done': {
         nextLabel: 'Dokumen Submitted',
-        helper: 'Semua dokumen pekerjaan sudah diserahkan.',
-        fields: ['konfirmasi_dok', 'file_upload'],
-        requiredFields: ['konfirmasi_dok', 'files'],
-        fileLabel: 'As-built, laporan instalasi, atau dokumen lainnya',
+        helper: 'Semua dokumen BAST sudah disiapkan dan siap diserahkan.',
+        fields: [],
+        requiredFields: [],
         paymentNote: '💰 Setelah stage ini: T2c (20% dari Termin 2) akan dapat diajukan.'
     },
     'dokumen_done→bast': {
         nextLabel: 'BAST',
-        helper: 'Berita Acara Serah Terima pekerjaan.',
-        fields: ['file_upload', 'tgl_bast'],
-        requiredFields: ['files', 'tgl_bast'],
-        fileLabel: 'Upload BAST yang sudah ditandatangani',
+        helper: 'Upload Berita Acara Serah Terima yang sudah ditandatangani.',
+        fields: ['tgl_bast', 'file_upload'],
+        requiredFields: ['tgl_bast', 'files'],
+        fileLabel: 'Upload BAST Final yang sudah ditandatangani',
         paymentNote: '💰 Setelah stage ini: T3 (10% dari total) akan dapat diajukan.'
     },
     'bast→invoice': {
@@ -159,13 +181,50 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
     'invoice→completed': {
         nextLabel: 'Selesai',
         helper: 'Konfirmasi semua pekerjaan dan pembayaran sudah selesai.',
-        fields: ['konfirmasi_final'],
+        fields: ['invoice_completed_summary', 'konfirmasi_final'],
         requiredFields: ['konfirmasi_final'],
         paymentNote: null
     }
 };
 
-export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = 'Site Name Placeholder', projectType = 'FILTER', currentStage, onUpdateStage }: UpdateStageModalProps) {
+export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = 'Site Name Placeholder', projectType = 'FILTER', currentStage, onUpdateStage, bastChecklistItems = [], onBastSaveOnly, onBastMarkDone }: UpdateStageModalProps) {
+
+    // ── Detect dokumen_done transition ──────────────────────────────────────
+    // Compute next stage based on project type pipeline to determine if BAST checklist is needed
+    const getNextStageForBastCheck = () => {
+        const ppl = projectType === 'RESCOPING'
+            ? ['imported', 'assigned', 'survey', 'erfin_process', 'erfin_ready', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed']
+            : ['imported', 'assigned', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed'];
+        const idx = ppl.indexOf(currentStage);
+        return idx >= 0 && idx < ppl.length - 1 ? ppl[idx + 1] : null;
+    };
+    const nextStageForBastCheck = getNextStageForBastCheck();
+    // Only show BAST checklist when next stage is actually dokumen_done
+    const isBastChecklistTransition = nextStageForBastCheck === 'dokumen_done';
+
+    // When the transition targets dokumen_done, render the checklist modal instead
+    if (isOpen && isBastChecklistTransition) {
+        return (
+            <BastDocumentChecklistModal
+                isOpen={isOpen}
+                onClose={onClose}
+                siteId={siteId}
+                siteName={siteName}
+                currentStage={currentStage}
+                checklistItems={bastChecklistItems.length > 0 ? bastChecklistItems : []}
+                onSaveOnly={(items, catatan) => {
+                    onBastSaveOnly?.(items, catatan);
+                    onClose();
+                }}
+                onMarkDone={(items, catatan) => {
+                    onBastMarkDone?.(items, catatan);
+                    // Also advance the stage
+                    onUpdateStage('dokumen_done', catatan, { bastChecklist: items });
+                    onClose();
+                }}
+            />
+        );
+    }
     // Dynamic Pipeline computation
     const getNextStages = () => {
         if (currentStage === 'survey') return ['erfin_process', 'survey_nok']; // Special Branch logic
@@ -620,6 +679,22 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                          <button type="button" onClick={() => alert('Hubungi admin untuk menambah field teknis tambahan')} className="text-xs font-semibold text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition-colors inline-block">+ Tambah Field Teknis</button>
                     </div>
                 );
+            case 'invoice_completed_summary':
+                return (
+                    <div key={field} className="space-y-3">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-amber-800">Perhatian Sebelum Menutup Site</p>
+                                    <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                                        Site ini akan ditandai <strong>SELESAI</strong>. Semua termin harus sudah dibayar sebelum menandai completed.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
             case 'konfirmasi_akses':
             case 'konfirmasi_rfi':
             case 'konfirmasi_rfs':
@@ -630,19 +705,25 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                     'konfirmasi_rfi': 'RFI sudah selesai dilakukan',
                     'konfirmasi_rfs': 'Site sudah Ready For Service (RFS)',
                     'konfirmasi_dok': 'Semua dokumen pekerjaan sudah disubmit',
-                    'konfirmasi_final': 'Semua termin sudah dibayar dan pekerjaan selesai'
+                    'konfirmasi_final': 'Semua pekerjaan selesai dan invoice sudah dibayar'
                 };
+                const isFinalCheck = field === 'konfirmasi_final';
                 return (
                     <div key={field} className="pt-2">
-                        <label className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-100 rounded cursor-pointer hover:bg-blue-100/50 transition-colors">
+                        <label className={clsx(
+                            "flex items-start gap-3 p-3 rounded cursor-pointer transition-colors",
+                            isFinalCheck
+                                ? "bg-emerald-50 border border-emerald-200 hover:bg-emerald-100/50"
+                                : "bg-blue-50 border border-blue-100 hover:bg-blue-100/50"
+                        )}>
                             <input 
                                 type="checkbox" 
                                 required
                                 checked={(formData[field] as boolean) || false}
                                 onChange={(e) => handleFormChange(field, e.target.checked)}
-                                className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 w-4 h-4" 
+                                className={clsx("mt-0.5 rounded w-4 h-4", isFinalCheck ? "text-emerald-600 focus:ring-emerald-500" : "text-blue-600 focus:ring-blue-500")} 
                             />
-                            <span className="text-sm font-medium text-slate-800 tracking-tight leading-tight">
+                            <span className={clsx("text-sm font-semibold tracking-tight leading-tight", isFinalCheck ? "text-emerald-900" : "text-slate-800")}>
                                 {cLabels[field]} <span className="text-red-500">*</span>
                             </span>
                         </label>

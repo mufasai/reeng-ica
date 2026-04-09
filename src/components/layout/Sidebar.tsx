@@ -8,6 +8,7 @@ import {
   Database,
   ChevronRight,
   CreditCard,
+  Package,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { USERS, type UserRole, getActiveSiteCountsByType, projects, type ProjectType, siteMasterRecords } from '../../data/mockData';
@@ -20,9 +21,9 @@ const Sidebar = () => {
 
   // Navigation config per confirmed RBAC matrix
   const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
-    director:    ['dashboard', 'sites', 'people', 'teams', 'options'],
-    operational: ['dashboard', 'sites', 'people', 'teams', 'options'],
-    admin:       ['dashboard', 'sites', 'people', 'teams', 'options'],
+    director:    ['dashboard', 'sites', 'people', 'teams', 'materials', 'options'],
+    operational: ['dashboard', 'sites', 'people', 'teams', 'materials', 'options'],
+    admin:       ['dashboard', 'sites', 'people', 'teams', 'materials', 'options'],
     finance:     ['dashboard', 'sites', 'pembayaran'],
     field:       [],  // field role has no full sidebar — own sites view only
   };
@@ -42,6 +43,9 @@ const Sidebar = () => {
   }
   if (allowedSidebarItems.includes('teams')) {
     dataMasterItems.push({ icon: Users, label: 'Teams', path: '/teams' });
+  }
+  if (allowedSidebarItems.includes('materials')) {
+    dataMasterItems.push({ icon: Package, label: 'Material Master', path: '/materials' });
   }
 
   const showDataMaster = dataMasterItems.length > 0;

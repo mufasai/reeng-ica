@@ -11,7 +11,7 @@ import ModernKPICard from '../components/stats/ModernKPICard';
 import { 
     sites, activityFeed, people,
     filterTerms, combatTerms, siteMasterRecords, type ProjectType,
-    teamMembersRecords, workOrders
+    teamMembersRecords, workOrders, getTerminSummary
 } from '../data/mockData';
 
 // Helper to format currency
@@ -177,41 +177,29 @@ const Dashboard = () => {
     }, []);
 
     // ----------------------------------------------------------------------
-    // 6. RIGHT COLUMN: PENGAJUAN MENUNGGU APPROVAL
+    // 6. RIGHT COLUMN: PENGAJUAN MENUNGGU APPROVAL (Director View)
     // ----------------------------------------------------------------------
     const pendingPengajuanList = useMemo(() => {
         let list: any[] = [];
-        filterTerms.forEach(t => {
-            if (['pengajuan', 'submitted', 'pending_review'].includes(t.status)) {
-                 const site = sites.find(s => s.id === t.siteId);
-                 list.push({
-                     id: t.id,
-                     siteId: t.siteId,
-                     siteName: site?.name || siteMasterRecords.find(sm => sm.site_id === t.siteId)?.site_name || t.siteId,
-                     title: t.name,
-                     amount: t.amountRequest || 0,
-                     date: t.submittedAt || new Date().toISOString(),
-                 });
+        // Use the new getTerminSummary for the new structure
+        visibleSites.forEach(s => {
+            const sum = getTerminSummary(s.id);
+            if (sum.has_pending_approval && sum.pending_termin_key) {
+               const pKey = sum.pending_termin_key as string;
+               list.push({
+                   id: `${s.id}-${pKey}`,
+                   siteId: s.id,
+                   siteName: s.name || siteMasterRecords.find(sm => sm.site_id === s.id)?.site_name || s.id,
+                   title: pKey.toUpperCase(),
+                   amount: sum.pending_termin_amount || 0,
+                   date: sum.pending_termin_date || new Date().toISOString(),
+                   terminKey: pKey.toLowerCase()
+               });
             }
         });
-        combatTerms.forEach(t => {
-            t.subSteps.forEach(s => {
-                if (['pengajuan', 'submitted', 'pending_review'].includes(s.status)) {
-                    const site = sites.find(st => st.id === t.siteId);
-                    list.push({
-                        id: s.id,
-                        siteId: t.siteId,
-                        siteName: site?.name || siteMasterRecords.find(sm => sm.site_id === t.siteId)?.site_name || t.siteId,
-                        title: `${(s as any).stepName} (${(s as any).percentage}%)`,
-                        status: 'pending_review',
-                        date: (s as any).submittedAt || new Date().toISOString(),
-                    });
-                }
-            });
-        });
-        list.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        list.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // oldest first
         return list;
-    }, []);
+    }, [visibleSites]);
 
     return (
         <div className="space-y-6 pb-16 animate-in fade-in duration-300">
@@ -521,28 +509,24 @@ const Dashboard = () => {
                         {/* RIGHT COLUMN (40%): Pengajuan Menunggu */}
                         <div className="lg:col-span-5 space-y-6">
                             <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden">
-                                <div className="px-5 py-4 flex justify-between items-center">
+                                <div className="px-5 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100 rounded-t-[12px]">
                                     <h3 className="font-bold text-[14px] text-[#111827] flex items-center gap-2">
-                                        Pengajuan Termin
+                                        Pengajuan Termin — Menunggu Review
                                         {pendingPengajuanList.length > 0 && <div className="w-2 h-2 rounded-full bg-[#F59E0B]" />}
                                     </h3>
                                 </div>
                                 <div className="flex flex-col">
                                     {pendingPengajuanList.length === 0 ? (
                                         <div className="p-8 text-center text-[13px] text-[#6B7280] bg-[#FAFAFA]">
-                                            Tidak ada pengajuan yg menunggu review.
+                                            Tidak ada pengajuan menunggu approval.
                                         </div>
                                     ) : (
-                                        pendingPengajuanList.slice(0, 6).map((item, idx) => {
-                                            // Extract Step number if exists, e.g., "Termin 1 (100%)" or "T1"
-                                            const isTermin = item.title.toLowerCase().includes('termin');
-                                            const badgeText = isTermin ? `T${item.title.match(/\d+/)?.[0] || '?'}` : 'REQ';
-
+                                        pendingPengajuanList.slice(0, 5).map((item, idx) => {
                                             return (
                                                 <div key={`${item.id}-${idx}`} className="p-4 hover:bg-[#F9FAFB] transition-colors border-t border-slate-50 group flex items-start justify-between gap-3">
                                                     <div className="flex items-start gap-3 overflow-hidden">
                                                         <div className="shrink-0 mt-0.5 bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold px-1.5 py-0.5 rounded">
-                                                            {badgeText}
+                                                            {item.title}
                                                         </div>
                                                         <div className="overflow-hidden">
                                                             <div className="font-semibold text-[#111827] text-[13px] truncate">
@@ -556,7 +540,7 @@ const Dashboard = () => {
                                                         </div>
                                                     </div>
                                                     <button 
-                                                        onClick={() => navigate(`/sites/${item.siteId}?tab=costs`)}
+                                                        onClick={() => navigate(`/sites/${item.siteId}?tab=costs&expand=${item.terminKey}`)}
                                                         className="shrink-0 text-[13px] font-medium text-[#2563EB] opacity-0 group-hover:opacity-100 transition-opacity hover:underline"
                                                     >
                                                         Review <span className="text-[14px] leading-none">→</span>
@@ -564,6 +548,13 @@ const Dashboard = () => {
                                                 </div>
                                             );
                                         })
+                                    )}
+                                    {pendingPengajuanList.length > 5 && (
+                                        <div className="p-3 border-t border-slate-100 text-center">
+                                            <Link to="/sites?tab=data" className="text-[12px] font-semibold text-blue-600 hover:underline">
+                                                Lihat {pendingPengajuanList.length - 5} lainnya →
+                                            </Link>
+                                        </div>
                                     )}
                                 </div>
                             </div>

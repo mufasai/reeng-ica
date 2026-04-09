@@ -36,7 +36,74 @@ export interface TerminPengajuan {
   approved_at?: string; // datetime nullable
   paid_at?: string; // datetime nullable
   documents: string[]; // json array of file IDs
+  history?: { action: string; by: string; at: string }[];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BAST DOCUMENT CHECKLIST
+// ─────────────────────────────────────────────────────────────────────────────
+export type BastDocType =
+  | 'as_built_drawing'
+  | 'bap_implementasi'
+  | 'foto_instalasi'
+  | 'rekap_pekerjaan'
+  | 'bast_draft'
+  | 'foto_label_perangkat'
+  | 'catatan_teknis';
+
+export interface BastDocumentChecklistItem {
+  id: string;
+  site_id: string;
+  doc_type: BastDocType;
+  doc_label: string;
+  is_required: boolean;
+  is_uploaded: boolean;
+  file_name?: string;
+  file_size?: number; // bytes
+  uploaded_by?: string;
+  uploaded_at?: string;
+  catatan?: string;
+}
+
+const BAST_DOC_DEFAULTS: { doc_type: BastDocType; doc_label: string; is_required: boolean }[] = [
+  { doc_type: 'as_built_drawing',     doc_label: 'As-Built Drawing',           is_required: true  },
+  { doc_type: 'bap_implementasi',     doc_label: 'BAP Implementasi',            is_required: true  },
+  { doc_type: 'foto_instalasi',       doc_label: 'Foto Instalasi (min 5 foto)', is_required: true  },
+  { doc_type: 'rekap_pekerjaan',      doc_label: 'Rekapitulasi Pekerjaan',      is_required: true  },
+  { doc_type: 'bast_draft',           doc_label: 'Draft BAST',                  is_required: true  },
+  { doc_type: 'foto_label_perangkat', doc_label: 'Foto Label Perangkat',        is_required: false },
+  { doc_type: 'catatan_teknis',       doc_label: 'Catatan Teknis',              is_required: false },
+];
+
+const makeBastChecklist = (siteId: string, prefix: string): BastDocumentChecklistItem[] =>
+  BAST_DOC_DEFAULTS.map((d, i) => ({
+    id: `bast-${prefix}-${i}`,
+    site_id: siteId,
+    doc_type: d.doc_type,
+    doc_label: d.doc_label,
+    is_required: d.is_required,
+    is_uploaded: false,
+  }));
+
+// Pre-seed checklists for demo sites (empty — admins fill via modal)
+export const bastDocumentChecklists: BastDocumentChecklistItem[] = [
+  ...makeBastChecklist('JKT010', 'jkt010'),
+  ...makeBastChecklist('JKS026', 'jks026'),
+  ...makeBastChecklist('RS-001', 'rs001'),
+];
+
+/** Returns the default 7-item template for any new site */
+export const createBastChecklistForSite = (siteId: string): BastDocumentChecklistItem[] =>
+  BAST_DOC_DEFAULTS.map((d, i) => ({
+    id: `bast-new-${siteId}-${i}-${Date.now()}`,
+    site_id: siteId,
+    doc_type: d.doc_type,
+    doc_label: d.doc_label,
+    is_required: d.is_required,
+    is_uploaded: false,
+  }));
+
+
 
 export const terminPengajuanRecords: TerminPengajuan[] = [
     {
@@ -44,11 +111,19 @@ export const terminPengajuanRecords: TerminPengajuan[] = [
         site_id: 'JKT010',
         termin_key: 'T1',
         nominal: 45000000,
-        status: 'submitted',
+        status: 'paid',
         catatan: 'Permit sudah turun sesuai standar operasional',
-        submitted_by: 'u_lead',
+        submitted_by: 'Sari Admin',
         submitted_at: '2024-03-05T10:00:00Z',
-        documents: ['file-1', 'file-2']
+        approved_by: 'Budi Director',
+        approved_at: '2024-03-06T14:30:00Z',
+        paid_at: '2024-03-07T11:00:00Z',
+        documents: ['file-1', 'file-2'],
+        history: [
+            { action: 'submitted', by: 'Sari Admin', at: '2024-03-05T10:00:00Z' },
+            { action: 'approved', by: 'Budi Director', at: '2024-03-06T14:30:00Z' },
+            { action: 'paid', by: 'Keuangan', at: '2024-03-07T11:00:00Z' }
+        ]
     },
     {
         id: 'tp-rs1',
@@ -60,7 +135,11 @@ export const terminPengajuanRecords: TerminPengajuan[] = [
         submitted_by: 'u_lead',
         submitted_at: '2026-03-11T10:00:00Z',
         paid_at: '2026-03-12T09:00:00Z',
-        documents: ['file-3']
+        documents: ['file-3'],
+        history: [
+            { action: 'submitted', by: 'u_lead', at: '2026-03-11T10:00:00Z' },
+            { action: 'paid', by: 'Keuangan', at: '2026-03-12T09:00:00Z' }
+        ]
     },
     {
         id: 'tp-rs2',
@@ -69,11 +148,122 @@ export const terminPengajuanRecords: TerminPengajuan[] = [
         nominal: 75000000,
         status: 'submitted',
         catatan: 'Pengajuan Termin 2a',
-        submitted_by: 'u_lead',
+        submitted_by: 'Sari Admin',
         submitted_at: '2026-03-13T10:00:00Z',
-        documents: []
+        documents: [],
+        history: [
+            { action: 'submitted', by: 'Sari Admin', at: '2026-03-13T10:00:00Z' }
+        ]
+    },
+    {
+        id: 'tp-jkt010-t2a',
+        site_id: 'JKT010',
+        termin_key: 'T2a',
+        nominal: 20000000,
+        status: 'paid',
+        catatan: '',
+        submitted_by: 'Sari Admin',
+        submitted_at: '2024-03-10T10:00:00Z',
+        approved_by: 'Budi Director',
+        approved_at: '2024-03-11T14:30:00Z',
+        paid_at: '2024-03-12T11:00:00Z',
+        documents: [],
+        history: [
+            { action: 'submitted', by: 'Sari Admin', at: '2024-03-10T10:00:00Z' },
+            { action: 'approved', by: 'Budi Director', at: '2024-03-11T14:30:00Z' },
+            { action: 'paid', by: 'Keuangan', at: '2024-03-12T11:00:00Z' }
+        ]
+    },
+    {
+        id: 'tp-jkt010-t2b',
+        site_id: 'JKT010',
+        termin_key: 'T2b',
+        nominal: 25000000,
+        status: 'rejected',
+        catatan: 'Tolak: Dokumen BAST belum ada ttd lengkap',
+        submitted_by: 'Sari Admin',
+        submitted_at: '2024-03-15T10:00:00Z',
+        documents: [],
+        history: [
+            { action: 'submitted', by: 'Sari Admin', at: '2024-03-15T10:00:00Z' },
+            { action: 'rejected', by: 'Budi Director', at: '2024-03-16T14:30:00Z' }
+        ]
+    },
+    {
+        id: 'tp-jkt010-t2b-retry',
+        site_id: 'JKT010',
+        termin_key: 'T2b',
+        nominal: 25000000,
+        status: 'submitted',
+        catatan: 'Re-submit: Dokumen BAST sudah disematkan ttd',
+        submitted_by: 'Sari Admin',
+        submitted_at: '2024-03-18T10:00:00Z',
+        documents: ['file-4'],
+        history: [
+            { action: 'submitted', by: 'Sari Admin', at: '2024-03-18T10:00:00Z' }
+        ]
+    },
+    {
+        id: 'tp-jkt010-t3',
+        site_id: 'JKT010',
+        termin_key: 'T3',
+        nominal: 15000000,
+        status: 'submitted',
+        catatan: 'Pengajuan Termin 3 menunggu approve',
+        submitted_by: 'Sari Admin',
+        submitted_at: '2026-03-09T09:12:00Z',
+        documents: [],
+        history: [
+            { action: 'submitted', by: 'Sari Admin', at: '2026-03-09T09:12:00Z' }
+        ]
     }
 ];
+
+export const getTerminSummary = (siteId: string): { summary: Record<string, any>; has_pending_approval: boolean; pending_termin_key: string | null; pending_termin_amount: number | null; pending_termin_date: string | null } => {
+    // Collect pengajuan for this site
+    const tKeys = ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'T4'] as const;
+    const summary: Record<string, any> = {};
+    let has_pending_approval = false;
+    let pending_termin_key: string | null = null;
+    let pending_termin_amount: number | null = null;
+    let pending_termin_date: string | null = null;
+
+    const sitePengajuans = terminPengajuanRecords.filter(tp => tp.site_id === siteId);
+
+    // To simulate 'unlocked' vs 'locked' accurately, we need the site's stage.
+    // For simplicity in mock data, we determine locked/unlocked via standard flow pseudo-logic:
+    // If previous termin is paid/submitted, current is unlocked.
+    let anyPreviousPaid = true;
+
+    tKeys.forEach(tKey => {
+        // Find latest pengajuan for this termin key
+        const reqs = sitePengajuans.filter(tp => tp.termin_key === tKey).sort((a,b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+        const latest = reqs.length > 0 ? reqs[0] : null;
+
+        let status = 'locked';
+        if (latest) {
+            status = latest.status;
+            if (status === 'submitted') {
+                has_pending_approval = true;
+                if (!pending_termin_key) {
+                    pending_termin_key = tKey;
+                    pending_termin_amount = latest.nominal;
+                    pending_termin_date = latest.submitted_at;
+                }
+            } else if (status === 'rejected') {
+                status = 'open'; // It needs re-submission
+            }
+        } else if (anyPreviousPaid) {
+            status = 'open'; // Ready to submit
+        }
+
+        anyPreviousPaid = (status === 'paid' || status === 'approved' || status === 'submitted');
+
+        summary[tKey.toLowerCase()] = { status };
+    });
+
+    return { summary, has_pending_approval, pending_termin_key, pending_termin_amount, pending_termin_date };
+};
 
 export const workOrders: WorkOrder[] = [
   {
@@ -430,13 +620,7 @@ export const termins: Termin[] = [
     { id: 't-c6', projectId: 'p2', name: 'OPTIM', percentage: 15, status: 'pending' },
 ];
 
-export interface SiteMaterial {
-    id: string;
-    siteId: string;
-    skp: string;
-    date: string;
-    items: string[];
-}
+// Removed early duplicate of SiteMaterial
 
 export interface SiteEvidence {
     id: string;
@@ -479,11 +663,60 @@ export interface SKP {
 export interface SiteMaterial {
     id: string;
     siteId: string;
-    skpId: string; // Link to SKP
-    skp: string; // Keep for legacy
+    skpId?: string; 
+    skp?: string; 
     date: string;
-    items: string[];
+    
+    // New fields replacing just string[] for items
+    nama_material: string;
+    spesifikasi?: string;
+    jumlah?: number;
+    satuan?: string;
+    harga_satuan?: number;
+    status?: string;
+    keterangan?: string;
+    source?: string;
+    source_file_name?: string;
+    added_by?: string;
+    added_at?: string;
+
+    // Master link
+    material_master_id?: string;
+    source_master: boolean;
 }
+
+export interface MaterialMaster {
+    id: string;
+    kode_material: string | null;
+    nama_material: string;
+    kategori: string | null;
+    spesifikasi: string | null;
+    satuan: string | null;
+    harga_satuan: number | null;
+    keterangan: string | null;
+    status_aktif: boolean;
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export const materialMasterRecords: MaterialMaster[] = [
+    {
+        id: 'mm-1', kode_material: 'MT-001', nama_material: 'Semen Portland', kategori: 'Sipil', spesifikasi: '50kg', satuan: 'ZAK', harga_satuan: 65000, keterangan: '', status_aktif: true
+    },
+    {
+        id: 'mm-2', kode_material: 'MT-002', nama_material: 'Besi Beton D13', kategori: 'Sipil', spesifikasi: 'Ulir 12m', satuan: 'Btg', harga_satuan: 115000, keterangan: 'SNI', status_aktif: true
+    },
+    {
+        id: 'mm-3', kode_material: 'MT-003', nama_material: 'Filter LTE 900 MHz', kategori: 'Telecom', spesifikasi: '900MHz Bandpass', satuan: 'pcs', harga_satuan: 2500000, keterangan: 'Import', status_aktif: true
+    },
+    {
+        id: 'mm-4', kode_material: 'MT-004', nama_material: 'Cable RG-8', kategori: 'Telecom', spesifikasi: 'Coaxial 50ohm', satuan: 'm', harga_satuan: 25000, keterangan: '', status_aktif: true
+    },
+    {
+        id: 'mm-5', kode_material: null, nama_material: 'Pipa PVC', kategori: 'Sipil', spesifikasi: '3 inch', satuan: 'Btg', harga_satuan: 75000, keterangan: '', status_aktif: false
+    }
+];
 
 export interface SiteBoQ {
     id: string;
@@ -511,9 +744,9 @@ export const skpRecords: SKP[] = [
 ];
 
 export const siteMaterials: SiteMaterial[] = [
-    { id: 'm1', siteId: 's1', skpId: 'skp-1', skp: 'SKP-2024-001', date: '2024-01-12', items: ['Semen 50 Sak', 'Besi D13 100btg'] },
-    { id: 'm2', siteId: 's1', skpId: 'skp-2', skp: 'SKP-2024-002', date: '2024-01-15', items: ['Kabel NYM 2x1.5', 'Pipa PVC', 'Kabel FO 1000m'] },
-    { id: 'm3', siteId: 's2', skpId: 'skp-3', skp: 'SKP-2024-003', date: '2024-02-05', items: ['Antena Sectoral', 'RRU', 'BBU'] },
+    { id: 'm1', siteId: 's1', skpId: 'skp-1', skp: 'SKP-2024-001', date: '2024-01-12', nama_material: 'Semen 50 Sak', source_master: false },
+    { id: 'm2', siteId: 's1', skpId: 'skp-2', skp: 'SKP-2024-002', date: '2024-01-15', nama_material: 'Kabel NYM 2x1.5', source_master: false },
+    { id: 'm3', siteId: 's2', skpId: 'skp-3', skp: 'SKP-2024-003', date: '2024-02-05', nama_material: 'Antena Sectoral', source_master: false },
 ];
 
 export const siteEvidence: SiteEvidence[] = [
@@ -1048,7 +1281,7 @@ export interface SiteFile {
     file_url: string;
     mime_type: string;
     file_size: number;
-    source: 'direct_upload' | 'stage_update';
+    source: 'direct_upload' | 'stage_update' | 'bast_dokumen';
     stage_context?: string;
     stage_log_id?: string;
     uploaded_by: string;
