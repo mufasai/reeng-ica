@@ -61,28 +61,22 @@ const Dashboard = () => {
     // 2. STATUS LAPANGAN (STAGES SUMMARY FROM siteMasterRecords)
     // ----------------------------------------------------------------------
     const stageSummary = useMemo(() => {
-        let survey = 0;
-        let menungguPermit = 0;
-        let permitReady = 0;
-        let aksesReady = 0;
-        let implementasi = 0;
-        let issues = 0;
-        let selesai = 0;
+        let survey = 0, menungguPermit = 0, permitReady = 0, aksesReady = 0;
+        let implementasi = 0, prosBast = 0, invoice = 0, issues = 0, selesai = 0;
 
         siteMasterRecords.forEach(master => {
             const stage = master.stage || 'imported';
             if (stage === 'survey') survey++;
-            else if (stage === 'permit_process') menungguPermit++;
+            else if (['assigned', 'permit_process', 'erfin_process', 'erfin_ready'].includes(stage)) menungguPermit++;
             else if (stage === 'permit_ready') permitReady++;
-            else if (stage === 'akses_ready') aksesReady++;
-            else if (['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done'].includes(stage)) implementasi++;
+            else if (['akses_process', 'akses_ready'].includes(stage)) aksesReady++;
+            else if (['implementasi', 'rfi_done', 'rfs_done'].includes(stage)) implementasi++;
+            else if (['dokumen_done', 'bast'].includes(stage)) prosBast++;
+            else if (stage === 'invoice') invoice++;
             else if (stage === 'completed') selesai++;
-
-            if ((stage as string) === 'issue_hold' || (stage as string) === 'survey_nok' || master.stage_notes?.toLowerCase().includes('issue')) {
-                issues++;
-            }
+            if ((stage as string) === 'issue_hold' || (stage as string) === 'survey_nok' || master.stage_notes?.toLowerCase().includes('issue')) issues++;
         });
-        return { survey, menungguPermit, permitReady, aksesReady, implementasi, issues, selesai, total: siteMasterRecords.length };
+        return { survey, menungguPermit, permitReady, aksesReady, implementasi, prosBast, invoice, issues, selesai, total: siteMasterRecords.length };
     }, []);
 
     // ----------------------------------------------------------------------
@@ -264,63 +258,34 @@ const Dashboard = () => {
                         <h3 className="text-[11px] font-semibold text-[#9CA3AF] tracking-[0.08em] uppercase mb-4">
                             Status Lapangan
                         </h3>
-                        <div className="grid grid-cols-3 md:grid-cols-7 gap-3">
-                            {/* Survey — cyan gradient */}
-                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'survey' }); }}
-                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)', boxShadow: '0 4px 14px rgba(6,182,212,0.35)' }}>
-                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.survey}</div>
-                                <p className="text-white/70 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Proses<br/>Survey</p>
-                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.survey}</p>
-                            </div>
-                            {/* Menunggu Permit — slate/gray gradient */}
-                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_process' }); }}
-                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #64748B 0%, #475569 100%)', boxShadow: '0 4px 14px rgba(71,85,105,0.35)' }}>
-                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.menungguPermit}</div>
-                                <p className="text-white/70 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Menunggu<br/>Permit</p>
-                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.menungguPermit}</p>
-                            </div>
-                            {/* Permit Ready — amber/orange gradient */}
-                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'permit_ready' }); }}
-                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', boxShadow: '0 4px 14px rgba(245,158,11,0.4)' }}>
-                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.permitReady}</div>
-                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Permit<br/>Ready</p>
-                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.permitReady}</p>
-                            </div>
-                            {/* Akses Ready — blue gradient */}
-                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'akses_ready' }); }}
-                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)', boxShadow: '0 4px 14px rgba(59,130,246,0.4)' }}>
-                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.aksesReady}</div>
-                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Akses<br/>Ready</p>
-                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.aksesReady}</p>
-                            </div>
-                            {/* Implementasi — violet/purple gradient */}
-                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'implementasi' }); }}
-                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)', boxShadow: '0 4px 14px rgba(139,92,246,0.4)' }}>
-                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.implementasi}</div>
-                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Imple-<br/>mentasi</p>
-                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.implementasi}</p>
-                            </div>
-                            {/* Issue — red/rose gradient */}
-                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'issue_hold' }); }}
-                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #F87171 0%, #DC2626 100%)', boxShadow: '0 4px 14px rgba(239,68,68,0.4)' }}>
-                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.issues}</div>
-                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Issue<br/>⚡ Hold</p>
-                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.issues}</p>
-                            </div>
-                            {/* Selesai — emerald green gradient */}
-                            <div onClick={() => { setSearchParams({ tab: 'map', stage: 'completed' }); }}
-                                className="relative rounded-xl p-4 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #34D399 0%, #059669 100%)', boxShadow: '0 4px 14px rgba(16,185,129,0.4)' }}>
-                                <div className="absolute -right-2 -bottom-2 text-white/10 text-[64px] font-black leading-none select-none pointer-events-none">{stageSummary.selesai}</div>
-                                <p className="text-white/80 text-[10px] font-semibold uppercase tracking-[0.07em] mb-2 leading-tight">Selesai<br/>✓ Done</p>
-                                <p className="text-white text-[32px] font-black leading-none">{stageSummary.selesai}</p>
-                            </div>
+                        <div className="grid grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2">
+                            {([
+                                { label: ['Proses','Survey'],    count: stageSummary.survey,        nav: '/sites?tab=data&stage=survey',                                               grad: 'linear-gradient(135deg,#06B6D4,#0891B2)', shadow: 'rgba(6,182,212,0.35)',    pulse: false },
+                                { label: ['Menunggu','Permit'],  count: stageSummary.menungguPermit, nav: '/sites?tab=data&stage=assigned,permit_process,erfin_process,erfin_ready', grad: 'linear-gradient(135deg,#64748B,#475569)', shadow: 'rgba(71,85,105,0.35)',   pulse: false },
+                                { label: ['Permit','Ready'],     count: stageSummary.permitReady,    nav: '/sites?tab=data&stage=permit_ready',                                        grad: 'linear-gradient(135deg,#F59E0B,#D97706)', shadow: 'rgba(245,158,11,0.4)', pulse: false },
+                                { label: ['Akses','Ready'],      count: stageSummary.aksesReady,     nav: '/sites?tab=data&stage=akses_process,akses_ready',                           grad: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', shadow: 'rgba(59,130,246,0.4)',  pulse: false },
+                                { label: ['Imple-','mentasi'],   count: stageSummary.implementasi,   nav: '/sites?tab=data&stage=implementasi,rfi_done,rfs_done',                      grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', shadow: 'rgba(139,92,246,0.4)', pulse: false },
+                                { label: ['Proses','BAST'],      count: stageSummary.prosBast,       nav: '/sites?tab=data&stage=dokumen_done,bast',                                   grad: 'linear-gradient(135deg,#F97316,#EA580C)', shadow: 'rgba(249,115,22,0.4)', pulse: false },
+                                { label: ['Invoice',''],         count: stageSummary.invoice,        nav: '/sites?tab=data&stage=invoice',                                             grad: 'linear-gradient(135deg,#0EA5E9,#0284C7)', shadow: 'rgba(14,165,233,0.4)', pulse: false },
+                                { label: ['Issue','⚡ Hold'],    count: stageSummary.issues,         nav: '/sites?tab=data&has_issue=true',                                            grad: 'linear-gradient(135deg,#F87171,#DC2626)', shadow: 'rgba(239,68,68,0.4)',   pulse: true  },
+                                { label: ['Selesai','✓ Done'],   count: stageSummary.selesai,        nav: '/sites?tab=data&stage=completed',                                           grad: 'linear-gradient(135deg,#34D399,#059669)', shadow: 'rgba(16,185,129,0.4)', pulse: false },
+                            ] as const).map((card, i) => (
+                                <div key={i}
+                                    onClick={() => navigate(card.nav)}
+                                    className={clsx('relative rounded-xl p-3 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden', card.count === 0 && 'opacity-60')}
+                                    style={{ background: card.grad, boxShadow: `0 4px 14px ${card.shadow}` }}
+                                >
+                                    {card.pulse && card.count > 0 && (
+                                        <span className="absolute top-2 right-2 flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+                                        </span>
+                                    )}
+                                    <div className="absolute -right-2 -bottom-2 text-white/10 text-[56px] font-black leading-none select-none pointer-events-none">{card.count}</div>
+                                    <p className="text-white/80 text-[9px] font-semibold uppercase tracking-[0.07em] mb-1.5 leading-tight">{card.label[0]}<br/>{card.label[1]}</p>
+                                    <p className="text-white text-[28px] font-black leading-none">{card.count}</p>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
@@ -333,6 +298,7 @@ const Dashboard = () => {
                                 icon={Wallet}
                                 iconClass="bg-blue-50 text-blue-600"
                                 subtitle={financials.totalHarga > 0 ? 'Seluruh tipe pekerjaan' : 'Data harga belum diset'}
+                                onClick={() => navigate('/sites?tab=data')}
                             />
 
                             <ModernKPICard
@@ -341,36 +307,30 @@ const Dashboard = () => {
                                 icon={CheckCircle2}
                                 iconClass="bg-emerald-50 text-emerald-600"
                                 subtitle={financials.totalHarga > 0 ? `${financials.pctTerbayar}% dari total kontrak` : 'Data harga belum diset'}
+                                onClick={() => navigate('/sites?tab=data&has_paid_termin=true')}
                             />
 
-                            <ModernKPICard
-                                title="Menunggu Approval"
-                                value={
-                                    <div className="flex items-center gap-2">
-                                        {financials.menungguApprovalCount}
-                                        {financials.menungguApprovalCount > 0 && (
-                                            <span className="relative flex h-2.5 w-2.5 mx-1">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                                            </span>
-                                        )}
-                                    </div>
-                                }
-                                icon={Clock}
-                                iconClass={financials.menungguApprovalCount > 0 ? "bg-amber-500 text-white" : "bg-slate-50 text-slate-400"}
-                                subtitle={financials.totalHarga > 0 ? 'Pengajuan termin menunggu review' : 'Data harga belum diset'}
-                                trend={financials.menungguApprovalCount > 0 ? { direction: 'down', label: 'Action Needed', colorClass: 'bg-amber-100 text-amber-700' } : undefined}
-                                onClick={() => {/* Mock interaction */}}
-                                isActive={false}
-                            />
+                            <div className="relative">
+                                {financials.menungguApprovalCount > 0 && (
+                                    <span className="absolute top-2 right-2 z-10 flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+                                    </span>
+                                )}
+                                <ModernKPICard
+                                    title="Menunggu Approval"
+                                    value={financials.menungguApprovalCount}
+                                    icon={Clock}
+                                    iconClass={financials.menungguApprovalCount > 0 ? 'bg-amber-500 text-white' : 'bg-slate-50 text-slate-400'}
+                                    subtitle={financials.totalHarga > 0 ? 'Pengajuan termin menunggu review' : 'Data harga belum diset'}
+                                    trend={financials.menungguApprovalCount > 0 ? { direction: 'down', label: 'Action Needed', colorClass: 'bg-amber-100 text-amber-700' } : undefined}
+                                    onClick={() => navigate('/sites?tab=data&has_pending_termin=true')}
+                                />
+                            </div>
 
                             <ModernKPICard
                                 title="Sisa Tagih"
-                                value={
-                                    <span className="text-blue-600">
-                                        {financials.totalHarga > 0 ? formatRupiah(financials.sisaTagih) : '—'}
-                                    </span>
-                                }
+                                value={<span className="text-blue-600">{financials.totalHarga > 0 ? formatRupiah(financials.sisaTagih) : '—'}</span>}
                                 icon={CreditCard}
                                 iconClass="bg-indigo-50 text-indigo-600"
                                 subtitle={financials.totalHarga > 0 ? 'Belum ditagihkan' : 'Data harga belum diset'}

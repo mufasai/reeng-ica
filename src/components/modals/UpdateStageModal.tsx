@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { X, Upload, AlertTriangle, ChevronRight, File, XCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { teams, people, teamMembersRecords, type BastDocumentChecklistItem } from '../../data/mockData';
-import BastDocumentChecklistModal from './BastDocumentChecklistModal';
+import { teams, people, teamMembersRecords } from '../../data/mockData';
+// import BastDocumentChecklistModal from './BastDocumentChecklistModal';
 
 interface UpdateStageModalProps {
     isOpen: boolean;
@@ -12,9 +12,11 @@ interface UpdateStageModalProps {
     projectType?: string;
     currentStage: string;
     onUpdateStage: (newStage: string, notes?: string, payload?: Record<string, unknown>) => void;
-    bastChecklistItems?: BastDocumentChecklistItem[];
-    onBastSaveOnly?: (items: BastDocumentChecklistItem[], catatan: string) => void;
-    onBastMarkDone?: (items: BastDocumentChecklistItem[], catatan: string) => void;
+    // bastChecklistItems?: any[]; 
+    // onBastSaveOnly?: (items: any[], catatan: string) => void;
+    // onBastMarkDone?: (items: any[], catatan: string) => void;
+    /** Termin pengajuan records for this site — used to validate invoice→completed */ 
+    pengajuanRecords?: { termin_key: string; status: string }[];
 }
 
 // Map stage names to their display labels (optional fallback)
@@ -28,7 +30,7 @@ const STAGE_LABELS: Record<string, string> = {
     'implementasi': 'Implementasi',
     'rfi_done': 'RFI Selesai',
     'rfs_done': 'RFS Selesai',
-    'dokumen_done': 'Dokumen Submitted',
+    'dokumen_done': 'Dokumen ATP',
     'bast': 'BAST',
     'invoice': 'Invoice',
     'completed': 'Selesai',
@@ -148,16 +150,16 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
     },
     // RESCOPING: rfi_done → dokumen_done (no rfs step)
     'rfi_done→dokumen_done': {
-        nextLabel: 'Dokumen Submitted',
-        helper: 'Semua dokumen BAST sudah disiapkan dan siap diserahkan.',
+        nextLabel: 'Dokumen ATP',
+        helper: 'Semua dokumen ATP sudah disiapkan dan siap diserahkan.',
         fields: [],
         requiredFields: [],
         paymentNote: '💰 Setelah stage ini: T2c (20% dari Termin 2) akan dapat diajukan.'
     },
     // FILTER: rfs_done → dokumen_done
     'rfs_done→dokumen_done': {
-        nextLabel: 'Dokumen Submitted',
-        helper: 'Semua dokumen BAST sudah disiapkan dan siap diserahkan.',
+        nextLabel: 'Dokumen ATP',
+        helper: 'Semua dokumen ATP sudah disiapkan dan siap diserahkan.',
         fields: [],
         requiredFields: [],
         paymentNote: '💰 Setelah stage ini: T2c (20% dari Termin 2) akan dapat diajukan.'
@@ -187,82 +189,82 @@ const STAGE_TRANSITION_CONFIG: Record<string, TransitionConfig> = {
     }
 };
 
-export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = 'Site Name Placeholder', projectType = 'FILTER', currentStage, onUpdateStage, bastChecklistItems = [], onBastSaveOnly, onBastMarkDone }: UpdateStageModalProps) {
+export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = 'Site Name Placeholder', projectType = 'FILTER', currentStage, onUpdateStage, pengajuanRecords = [] }: UpdateStageModalProps) {
 
-    // ── Detect dokumen_done transition ──────────────────────────────────────
-    // Compute next stage based on project type pipeline to determine if BAST checklist is needed
-    const getNextStageForBastCheck = () => {
-        const ppl = projectType === 'RESCOPING'
-            ? ['imported', 'assigned', 'survey', 'erfin_process', 'erfin_ready', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed']
-            : ['imported', 'assigned', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed'];
-        const idx = ppl.indexOf(currentStage);
-        return idx >= 0 && idx < ppl.length - 1 ? ppl[idx + 1] : null;
-    };
-    const nextStageForBastCheck = getNextStageForBastCheck();
-    // Only show BAST checklist when next stage is actually dokumen_done
-    const isBastChecklistTransition = nextStageForBastCheck === 'dokumen_done';
-
-    // When the transition targets dokumen_done, render the checklist modal instead
-    if (isOpen && isBastChecklistTransition) {
-        return (
-            <BastDocumentChecklistModal
-                isOpen={isOpen}
-                onClose={onClose}
-                siteId={siteId}
-                siteName={siteName}
-                currentStage={currentStage}
-                checklistItems={bastChecklistItems.length > 0 ? bastChecklistItems : []}
-                onSaveOnly={(items, catatan) => {
-                    onBastSaveOnly?.(items, catatan);
-                    onClose();
-                }}
-                onMarkDone={(items, catatan) => {
-                    onBastMarkDone?.(items, catatan);
-                    // Also advance the stage
-                    onUpdateStage('dokumen_done', catatan, { bastChecklist: items });
-                    onClose();
-                }}
-            />
-        );
-    }
-    // Dynamic Pipeline computation
-    const getNextStages = () => {
-        if (currentStage === 'survey') return ['erfin_process', 'survey_nok']; // Special Branch logic
-        
-        // standard pipelines from mockData logic translated here:
-        const ppl = projectType === 'RESCOPING' 
-            ? ['imported', 'assigned', 'survey', 'erfin_process', 'erfin_ready', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed']
-            : ['imported', 'assigned', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed'];
-            
-        const currentIndex = ppl.indexOf(currentStage);
-        if (currentIndex === -1 || currentIndex === ppl.length - 1) return [];
-        return [ppl[currentIndex + 1]];
-    };
-
-    const nextStages = getNextStages();
-    // Default the logical stage to the first next stage (the OK path)
+    // ── ALL HOOKS MUST COME FIRST (React Rules of Hooks) ────────────────────
     const [selectedBranch, setSelectedBranch] = useState<string>('');
-    const nextLogicalStageId = (currentStage === 'survey' && selectedBranch === 'survey_nok') ? 'survey_nok' : nextStages[0] || null;
-
-    const transitionKey = `${currentStage}→${currentStage === 'survey' ? 'erfin_process' : nextLogicalStageId}`;
-    const config = STAGE_TRANSITION_CONFIG[transitionKey];
-
-    // Form State
     const [notes, setNotes] = useState('');
     const [showIssueForm, setShowIssueForm] = useState(false);
     const [issueNotes, setIssueNotes] = useState('');
-    const [issueAction, setIssueAction] = useState('hold'); // hold, escalate
-    
-    // Dynamic Fields State
+    const [issueAction, setIssueAction] = useState('hold');
     const [formData, setFormData] = useState<Record<string, string | boolean>>({
-        permit_create_date: new Date().toISOString().split('T')[0] // default today
+        permit_create_date: new Date().toISOString().split('T')[0]
     });
-    
-    // Files State
     const [files, setFiles] = useState<File[]>([]);
     const [isDragActive, setIsDragActive] = useState(false);
 
+    // ── Derived computations (no hooks below) ────────────────────────────────
+    const FILTER_PIPELINE = ['imported', 'assigned', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed'];
+    const RESCOPING_PIPELINE = ['imported', 'assigned', 'survey', 'erfin_process', 'erfin_ready', 'permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed'];
+    const activePipeline = projectType === 'RESCOPING' ? RESCOPING_PIPELINE : FILTER_PIPELINE;
+
+    // Detect if next stage is dokumen_done → delegate to BAST checklist modal
+    const currentPipelineIdx = activePipeline.indexOf(currentStage);
+    const nextStageInPipeline = currentPipelineIdx >= 0 && currentPipelineIdx < activePipeline.length - 1
+        ? activePipeline[currentPipelineIdx + 1]
+        : null;
+    const isBastChecklistTransition = nextStageInPipeline === 'dokumen_done';
+
+    // For survey branch logic
+    const getNextStages = () => {
+        if (currentStage === 'survey') return ['erfin_process', 'survey_nok'];
+        if (currentPipelineIdx === -1 || currentPipelineIdx === activePipeline.length - 1) return [];
+        return [activePipeline[currentPipelineIdx + 1]];
+    };
+    const nextStages = getNextStages();
+    const nextLogicalStageId = (currentStage === 'survey' && selectedBranch === 'survey_nok') ? 'survey_nok' : nextStages[0] || null;
+    const transitionKey = `${currentStage}→${currentStage === 'survey' ? 'erfin_process' : nextLogicalStageId}`;
+    const config = STAGE_TRANSITION_CONFIG[transitionKey];
+
+    // Termin payment check for invoice→completed
+    const unpaidTermins = pengajuanRecords.filter(p => !['paid'].includes(p.status) && ['submitted', 'approved'].includes(p.status));
+    const hasUnpaidTermins = currentStage === 'invoice' && unpaidTermins.length > 0;
+
+    // ── Early exit (must be AFTER all hooks) ─────────────────────────────────
     if (!isOpen) return null;
+
+    // ── Pre-transition to dokumen_done ──
+    if (isBastChecklistTransition) {
+        return (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+                    <div className="flex flex-col items-center text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                            <Upload className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-800 mb-2">Persiapan Dokumen (ATP)</h2>
+                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                            Proses audit dokumen ATP sekarang dilakukan langsung di halaman detail site.
+                        </p>
+                        <div className="flex flex-col gap-3 w-full">
+                            <button 
+                                onClick={onClose}
+                                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors shadow-sm"
+                            >
+                                Pergi ke Bagian ATP
+                            </button>
+                            <button 
+                                onClick={onClose}
+                                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-lg transition-colors"
+                            >
+                                Kembali
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const handleFormChange = (key: string, value: string | boolean) => {
         setFormData(prev => ({ ...prev, [key]: value }));
@@ -307,6 +309,8 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
     const isMainFormValid = () => {
         if (!config) return false;
         if (hasOversizedFiles) return false;
+        // Block invoice→completed if any termins are not fully paid
+        if (hasUnpaidTermins) return false;
         
         // Custom validations
         if (currentStage === 'survey') {
@@ -682,17 +686,39 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
             case 'invoice_completed_summary':
                 return (
                     <div key={field} className="space-y-3">
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-                            <div className="flex items-start gap-2">
-                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-bold text-amber-800">Perhatian Sebelum Menutup Site</p>
-                                    <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                                        Site ini akan ditandai <strong>SELESAI</strong>. Semua termin harus sudah dibayar sebelum menandai completed.
-                                    </p>
+                        {hasUnpaidTermins ? (
+                            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 space-y-3">
+                                <div className="flex items-start gap-2">
+                                    <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-bold text-red-800">Tidak Dapat Menutup Site</p>
+                                        <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                                            Terdapat {unpaidTermins.length} termin yang belum selesai dibayar. Selesaikan semua termin sebelum menutup site.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="space-y-1 pl-7">
+                                    {unpaidTermins.map(t => (
+                                        <div key={t.termin_key} className="flex items-center gap-2 text-xs font-medium text-red-700">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                                            {t.termin_key} — status: <span className="uppercase font-bold">{t.status}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
+                                <div className="flex items-start gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-bold text-amber-800">Perhatian Sebelum Menutup Site</p>
+                                        <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                                            Site ini akan ditandai <strong>SELESAI</strong>. Semua termin harus sudah dibayar sebelum menandai completed.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             case 'konfirmasi_akses':
@@ -988,9 +1014,15 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                             type="submit" 
                             form="update-stage-form"
                             disabled={!config || !isMainFormValid()}
+                            className={clsx(
+                                "px-5 py-2 font-semibold rounded transition-colors text-sm shadow-sm flex items-center gap-1",
+                                (!config || !isMainFormValid())
+                                    ? "bg-blue-200 text-blue-100 cursor-not-allowed"
+                                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                            )}
                         >
-                            {currentStage === 'survey' && selectedBranch === 'survey_nok' ? 'Tandai NOK' : 'Update Stage'}
-                            <ChevronRight className="w-4 h-4 ml-1" />
+                            {currentStage === 'survey' && selectedBranch === 'survey_nok' ? 'Tandai NOK' : currentStage === 'invoice' ? '🏁 Tandai Selesai' : 'Update Stage'}
+                            <ChevronRight className="w-4 h-4" />
                         </button>
                     )}
                 </div>

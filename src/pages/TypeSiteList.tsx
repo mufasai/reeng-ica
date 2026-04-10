@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import { useParams, Navigate, useSearchParams } from 'react-router-dom';
+import clsx from 'clsx';
 import { 
   FolderKanban, 
   MapPin, 
@@ -25,13 +26,41 @@ import {
 import { useAuth } from '../context/AuthContext';
 import ProjectSitesTable from '../components/tables/ProjectSitesTable';
 
+// ── Compact pipeline strip group definitions ─────────────────────────────────
+const COMPACT_GROUPS_GENERIC = [
+  { key: 'assigned', label: 'Assigned', stages: ['imported','assigned'],                                   color: 'text-slate-600',  bg: 'bg-slate-100',  ring: 'bg-slate-400'  },
+  { key: 'permit',   label: 'Permit',   stages: ['permit_process','permit_ready','erfin_process','erfin_ready'], color: 'text-amber-700',  bg: 'bg-amber-50',   ring: 'bg-amber-500'  },
+  { key: 'akses',    label: 'Akses',    stages: ['akses_process','akses_ready'],                             color: 'text-blue-700',   bg: 'bg-blue-50',    ring: 'bg-blue-500'   },
+  { key: 'impl',     label: 'Impl',     stages: ['implementasi','rfi_done','rfs_done','survey'],             color: 'text-violet-700', bg: 'bg-violet-50',  ring: 'bg-violet-500' },
+  { key: 'bast',     label: 'BAST',     stages: ['dokumen_done','bast'],                                     color: 'text-orange-700', bg: 'bg-orange-50',  ring: 'bg-orange-500' },
+  { key: 'invoice',  label: 'Invoice',  stages: ['invoice'],                                                 color: 'text-sky-700',    bg: 'bg-sky-50',     ring: 'bg-sky-500'    },
+  { key: 'selesai',  label: 'Selesai',  stages: ['completed'],                                               color: 'text-emerald-700',bg: 'bg-emerald-50', ring: 'bg-emerald-500'},
+];
+const COMPACT_GROUPS_RESCOPING = [
+  { key: 'survey',   label: 'Survey',   stages: ['survey'],                                                  color: 'text-cyan-700',   bg: 'bg-cyan-50',    ring: 'bg-cyan-500'   },
+  { key: 'assigned', label: 'Assigned', stages: ['imported','assigned'],                                     color: 'text-slate-600',  bg: 'bg-slate-100',  ring: 'bg-slate-400'  },
+  { key: 'permit',   label: 'Permit',   stages: ['erfin_process','erfin_ready','permit_process','permit_ready'], color: 'text-amber-700',  bg: 'bg-amber-50',   ring: 'bg-amber-500'  },
+  { key: 'akses',    label: 'Akses',    stages: ['akses_process','akses_ready'],                             color: 'text-blue-700',   bg: 'bg-blue-50',    ring: 'bg-blue-500'   },
+  { key: 'impl',     label: 'Impl',     stages: ['implementasi','rfi_done','rfs_done'],                       color: 'text-violet-700', bg: 'bg-violet-50',  ring: 'bg-violet-500' },
+  { key: 'bast',     label: 'BAST',     stages: ['dokumen_done','bast'],                                     color: 'text-orange-700', bg: 'bg-orange-50',  ring: 'bg-orange-500' },
+  { key: 'invoice',  label: 'Invoice',  stages: ['invoice'],                                                 color: 'text-sky-700',    bg: 'bg-sky-50',     ring: 'bg-sky-500'    },
+  { key: 'selesai',  label: 'Selesai',  stages: ['completed'],                                               color: 'text-emerald-700',bg: 'bg-emerald-50', ring: 'bg-emerald-500'},
+];
+
+
 const TypeSiteList = () => {
   const { type } = useParams<{ type: string }>();
   const { currentUser } = useAuth();
-  const [filterState, setFilterState] = useState<{ step: number | null, statusGroup: string | null }>({ step: null, statusGroup: null });
-  const [stageFilter, setStageFilter] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'termin'>('pipeline');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [stageFilter, setStageFilter] = useState<string | null>(() => new URLSearchParams(window.location.search).get('stage'));
   const [isBulkUpdateOpen, setIsBulkUpdateOpen] = useState(false);
+  const canBulkUpdate = ['operational', 'admin'].includes(currentUser.role);
+
+  const handleStripToggle = (key: string) => {
+    const next = stageFilter === key ? null : key;
+    setStageFilter(next);
+    setSearchParams(prev => { const n = new URLSearchParams(prev); next ? n.set('stage', next) : n.delete('stage'); return n; });
+  };
   
   // View Toggle (List vs Map)
   const [viewMode, setViewMode] = useState<'list' | 'map'>(() => {
@@ -202,165 +231,23 @@ const TypeSiteList = () => {
 
   const fin = calculateFinancials();
 
-  // 4. Calculate Per-Termin Distribution Matrix
-  const distributionMatrix = useMemo(() => {
-      const siteIds = matchedSites.map(s => s.id);
-      
-      if (upperType === 'FILTER' || upperType === 'RESCOPING') {
-          const matrix: Record<number, { title: string, paid: number, approved: number, pending: number, inProgress: number, locked: number }> = {
-              1: { title: 'Termin 1 (30%)', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
-              2: { title: 'Termin 2 (50%)', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
-              3: { title: 'Termin 3 (10%)', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
-              4: { title: 'Termin 4 (10%)', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 }
-          };
-
-          siteIds.forEach(id => {
-              const terms = filterTerms.filter(t => t.siteId === id);
-              terms.forEach(t => {
-                  const m = matrix[t.step];
-                  if (!m) return;
-
-                  if (t.status === 'paid' || t.status === 'dibayarkan') m.paid++;
-                  else if (t.status === 'approved' || t.status === 'diterima') m.approved++;
-                  else if (t.status === 'pengajuan' || t.status === 'pending_review' || t.status === 'submitted') m.pending++;
-                  else if (t.status === 'open' || t.status === 'rejected') m.inProgress++;
-                  else m.locked++; // pending, locked
-              });
-          });
-
-          return Object.entries(matrix).map(([step, data]) => ({ step: Number(step), ...data }));
-      }
-
-      if (upperType === 'COMBAT') {
-          const matrix: Record<number, { title: string, paid: number, approved: number, pending: number, inProgress: number, locked: number }> = {
-              1: { title: 'Phase 1: SITAC', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
-              2: { title: 'Phase 2: Dimentle', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
-              3: { title: 'Phase 3: Towing', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 },
-              4: { title: 'Phase 4+: Install/Optim', paid: 0, approved: 0, pending: 0, inProgress: 0, locked: 0 }
-          };
-
-          siteIds.forEach(id => {
-              const terms = combatTerms.filter(t => t.siteId === id);
-              
-              // Map 6 steps into 4 phases
-              terms.forEach(t => {
-                  let phaseId = t.step;
-                  if (t.step >= 4) phaseId = 4;
-                  
-                  const m = matrix[phaseId];
-                  if (!m) return;
-
-                  // Evaluate the overall status of the Combat Term based on its subSteps
-                  if (t.status === 'completed') m.paid++;
-                  else if (t.status === 'in_progress') {
-                      const hasPending = t.subSteps.some(s => s.status === 'pengajuan' || s.status === 'pending_review');
-                      if (hasPending) {
-                          m.pending++;
-                      } else {
-                          m.inProgress++;
-                      }
-                  } else {
-                      m.locked++;
-                  }
-              });
-          });
-
-           return Object.entries(matrix).map(([step, data]) => ({ step: Number(step), ...data }));
-      }
-
-      return [];
-  }, [matchedSites, upperType]);
-
-  // 5. Apply Interactive Filters to Table
-  const filteredTableSites = useMemo(() => {
-      if (!filterState.step || !filterState.statusGroup) return matchedSites;
-
-      return matchedSites.filter(site => {
-          if (upperType === 'FILTER' || upperType === 'RESCOPING') {
-              const term = filterTerms.find(t => t.siteId === site.id && t.step === filterState.step);
-              if (!term) return false;
-              
-              switch (filterState.statusGroup) {
-                  case 'paid': return term.status === 'paid' || term.status === 'dibayarkan';
-                  case 'approved': return term.status === 'approved' || term.status === 'diterima';
-                  case 'pending': return term.status === 'pengajuan' || term.status === 'pending_review' || term.status === 'submitted';
-                  case 'inProgress': return term.status === 'open' || term.status === 'rejected';
-                  case 'locked': return term.status === 'pending' || term.status === 'locked';
-                  default: return false;
-              }
-          }
-          if (upperType === 'COMBAT') {
-               const terms = combatTerms.filter(t => t.siteId === site.id);
-               // Combine 4-6 into phase 4
-               const matchingTerms = filterState.step === 4 ? terms.filter(t => t.step >= 4) : terms.filter(t => t.step === filterState.step);
-               if (matchingTerms.length === 0) return false;
-               
-               return matchingTerms.some(t => {
-                   switch(filterState.statusGroup) {
-                       case 'paid': return t.status === 'completed';
-                       case 'pending': return t.status === 'in_progress' && t.subSteps.some(s => s.status === 'pengajuan' || s.status === 'pending_review');
-                       case 'inProgress': return t.status === 'in_progress' && !t.subSteps.some(s => s.status === 'pengajuan' || s.status === 'pending_review');
-                       case 'locked': return t.status === 'locked';
-                       default: return false; // Note: 'approved' not cleanly mapped for top-level combat terms in this summary
-                   }
-               });
-          }
-          return true;
-      });
-  }, [matchedSites, filterState, upperType]);
-
-  // 6. Calculate Pipeline Progress (Stage Counts)
-  const pipelineGroups = useMemo(() => {
-    const STAGE_GROUPS = upperType === 'RESCOPING' ? [
-      { label: 'Assigned', keys: ['assigned'] },
-      { label: 'Survey', keys: ['survey'] },
-      { label: 'Survey NOK', keys: ['survey_nok'] },
-      { label: 'ERFIN', keys: ['erfin_process', 'erfin_ready'] },
-      { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
-      { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
-      { label: 'Implementasi', keys: ['implementasi', 'rfi_done', 'dokumen_done'] },
-      { label: 'BAST', keys: ['bast'] },
-      { label: 'Invoice', keys: ['invoice'] },
-      { label: 'Selesai', keys: ['completed'] }
-    ] : [
-      { label: 'Assigned', keys: ['assigned'] },
-      { label: 'Permit', keys: ['permit_process', 'permit_ready'] },
-      { label: 'Akses', keys: ['akses_process', 'akses_ready'] },
-      { label: 'Implementasi', keys: ['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done'] },
-      { label: 'BAST', keys: ['bast'] },
-      { label: 'Invoice', keys: ['invoice'] },
-      { label: 'Selesai', keys: ['completed'] }
-    ];
-
-    const counts = STAGE_GROUPS.map(g => ({ ...g, count: 0 }));
-    let issueCount = 0;
-
-    matchedSites.forEach(site => {
-        const stage = site.stage || 'imported';
-        
-        counts.forEach(g => {
-            if (g.keys.includes(stage)) g.count++;
-        });
-
-        if (site.stage_notes?.toLowerCase().includes('issue') || (stage as string) === 'issue_hold') {
-            issueCount++;
-        }
-    });
-
-    return { counts, issueCount };
-  }, [matchedSites]);
+  // Interactive filters (PIPELINE_LABEL_TO_KEY, filterState, etc.) have been removed. 
+  // All table logic now flows from matchedSites -> stageFilter.
 
   // 7. Apply Stage Filter to Table Sites
+  // Compact strip per-stage counts
+  const compactGroups = upperType === 'RESCOPING' ? COMPACT_GROUPS_RESCOPING : COMPACT_GROUPS_GENERIC;
+  const compactStrip = useMemo(() =>
+    compactGroups.map(g => ({ ...g, count: matchedSites.filter(s => g.stages.includes(s.stage as string)).length })),
+    [matchedSites, upperType] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const finalFilteredSites = useMemo(() => {
-    if (!stageFilter) return filteredTableSites;
-
-    const targetKeys = pipelineGroups.counts.find(c => c.label === stageFilter)?.keys || [];
-
-    return filteredTableSites.filter(site => {
-        const stage = site.stage || 'imported';
-        return targetKeys.includes(stage);
-    });
-  }, [filteredTableSites, stageFilter, pipelineGroups]);
+    if (!stageFilter) return matchedSites;
+    const group = compactGroups.find(g => g.key === stageFilter);
+    if (!group) return matchedSites;
+    return matchedSites.filter(site => group.stages.includes(site.stage as string));
+  }, [matchedSites, stageFilter, upperType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEditSite = (site: SiteMaster) => { console.log('Edit site', site); };
   const handleDeleteSite = (siteId: string) => { console.log('Delete site', siteId); };
@@ -395,22 +282,34 @@ const TypeSiteList = () => {
                   </p>
               </div>
               
-              {/* VIEW TOGGLE */}
-              <div className="ml-auto flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-                  <button 
-                      onClick={() => handleToggleView('list')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${viewMode === 'list' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                  >
-                      <List className="w-4 h-4" />
-                      List
-                  </button>
-                  <button 
-                      onClick={() => handleToggleView('map')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${viewMode === 'map' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                  >
-                      <MapPin className="w-4 h-4" />
-                      Map
-                  </button>
+              {/* RIGHT SIDE ACTIONS */}
+              <div className="ml-auto flex items-center gap-3">
+                  {canBulkUpdate && (
+                      <button
+                          onClick={() => setIsBulkUpdateOpen(true)}
+                          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg text-sm transition-colors shadow-sm"
+                      >
+                          <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                          ⬆ Bulk Update Stage
+                      </button>
+                  )}
+                  {/* VIEW TOGGLE */}
+                  <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                      <button
+                          onClick={() => handleToggleView('list')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${viewMode === 'list' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                      >
+                          <List className="w-4 h-4" />
+                          List
+                      </button>
+                      <button
+                          onClick={() => handleToggleView('map')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${viewMode === 'map' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                      >
+                          <MapPin className="w-4 h-4" />
+                          Map
+                      </button>
+                  </div>
               </div>
           </div>
 
@@ -538,208 +437,52 @@ const TypeSiteList = () => {
           )}
       </div>
 
-      {/* TABS COMPONENT */}
-      <div className="relative z-10 mb-2">
-        <div className="flex border-b border-slate-200">
-          <button
-            className={`px-1 py-3 mr-6 text-sm flex-none transition-colors border-b-2 ${
-              activeTab === 'pipeline'
-                ? 'border-blue-600 text-blue-800 font-bold pointer-events-none'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-            onClick={() => setActiveTab('pipeline')}
-          >
-            Pipeline Progress
-          </button>
-          <button
-            className={`px-1 py-3 text-sm flex-none transition-colors border-b-2 ${
-              activeTab === 'termin'
-                ? 'border-blue-600 text-blue-800 font-bold pointer-events-none'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-            onClick={() => setActiveTab('termin')}
-          >
-            Termin & Pembayaran
-          </button>
-        </div>
-      </div>
-
-      {/* PIPELINE PROGRESS (STAGE TRACKING) */}
-      {activeTab === 'pipeline' && (
-      <div className="relative z-10 mb-5 bg-white border border-slate-200 rounded-lg shadow-sm">
-        <div className="p-4 px-6 overflow-x-auto custom-scrollbar">
-            <div className="flex items-start w-full min-w-max py-4 pt-6 px-4">
-                {pipelineGroups.counts.map((group, idx) => {
-                    const hasIssue = group.count > 0 && pipelineGroups.issueCount > 0;
-                    const stageFilterActive = stageFilter === group.label;
-                    
-                    let circleConfig = {
-                        fill: 'bg-[#F9FAFB]', border: 'border-[#E5E7EB]', text: 'text-[#9CA3AF]', label: 'text-[#9CA3AF]'
-                    };
-                    
-                    if (group.count > 0) {
-                        if (group.label === 'Survey') circleConfig = { fill: 'bg-cyan-50', border: 'border-cyan-500', text: 'text-cyan-600', label: 'text-cyan-600' };
-                        else if (group.label === 'Survey NOK') circleConfig = { fill: 'bg-red-50', border: 'border-red-500', text: 'text-red-600', label: 'text-red-600' };
-                        else if (group.label === 'ERFIN') circleConfig = { fill: 'bg-teal-50', border: 'border-teal-500', text: 'text-teal-600', label: 'text-teal-600' };
-                        else if (group.label === 'Permit') circleConfig = { fill: 'bg-[#FEF3C7]', border: 'border-[#F59E0B]', text: 'text-[#F59E0B]', label: 'text-[#F59E0B]' };
-                        else if (group.label === 'Akses') circleConfig = { fill: 'bg-[#DBEAFE]', border: 'border-[#3B82F6]', text: 'text-[#3B82F6]', label: 'text-[#3B82F6]' };
-                        else if (group.label === 'Implementasi') circleConfig = { fill: 'bg-[#EDE9FE]', border: 'border-[#7C3AED]', text: 'text-[#7C3AED]', label: 'text-[#7C3AED]' };
-                        else if (group.label === 'BAST' || group.label === 'Invoice') circleConfig = { fill: 'bg-[#FFF7ED]', border: 'border-[#F97316]', text: 'text-[#F97316]', label: 'text-[#F97316]' };
-                        else if (group.label === 'Selesai') circleConfig = { fill: 'bg-[#ECFDF5]', border: 'border-[#10B981]', text: 'text-[#10B981]', label: 'text-[#10B981]' };
-                        else if (group.label === 'Assigned') circleConfig = { fill: 'bg-[#F0F4FF]', border: 'border-[#6B7280]', text: 'text-[#6B7280]', label: 'text-[#6B7280]' };
-                    }
-
-                    const ringClass = stageFilterActive ? `ring-2 ring-offset-2 ring-blue-500` : '';
-                    
-                    let connectorColor = 'bg-[#E5E7EB]';
-                    if (idx < pipelineGroups.counts.length - 1) {
-                        if (group.count > 0) {
-                            if (group.label === 'Survey') connectorColor = 'bg-cyan-500';
-                            else if (group.label === 'Survey NOK') connectorColor = 'bg-red-500';
-                            else if (group.label === 'ERFIN') connectorColor = 'bg-teal-500';
-                            else if (group.label === 'Permit') connectorColor = 'bg-[#F59E0B]';
-                            else if (group.label === 'Akses') connectorColor = 'bg-[#3B82F6]';
-                            else if (group.label === 'Implementasi') connectorColor = 'bg-[#7C3AED]';
-                            else if (group.label === 'BAST' || group.label === 'Invoice') connectorColor = 'bg-[#F97316]';
-                            else if (group.label === 'Selesai') connectorColor = 'bg-[#10B981]';
-                            else if (group.label === 'Assigned') connectorColor = 'bg-[#6B7280]';
-                        }
-                    }
-
-                    return (
-                        <React.Fragment key={idx}>
-                            <div 
-                                className="flex flex-col items-center flex-none cursor-pointer group w-[85px]"
-                                onClick={() => setStageFilter(stageFilter === group.label ? null : group.label)}
-                            >
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-[15px] mb-2 border-[2px] transition-all z-10 ${circleConfig.fill} ${circleConfig.border} ${circleConfig.text} ${ringClass}`}>
-                                    {group.count > 0 ? group.count : '—'}
-                                </div>
-                                <span className={`text-[11px] font-semibold whitespace-nowrap text-center transition-colors ${stageFilterActive ? 'text-blue-700 font-bold' : circleConfig.label}`}>
-                                    {group.label} {hasIssue && <span className="text-amber-500 ml-1">⚡</span>}
-                                </span>
-                            </div>
-                            {idx < pipelineGroups.counts.length - 1 && (
-                                <div className={`flex-1 h-[2px] ${connectorColor} self-start mt-5 mx-1 transition-colors`}></div>
-                            )}
-                        </React.Fragment>
-                    )
-                })}
-            </div>
-
-            <div className="mt-4 flex justify-center text-sm font-medium text-[var(--text-secondary)]">
-                {pipelineGroups.counts.find(c => c.label === 'Permit')?.count === 0 && pipelineGroups.issueCount === 0 
-                  ? <>{matchedSites.length} sites total <span className="mx-2 opacity-50">•</span> semua site masih dalam proses awal</>
-                  : <>{matchedSites.length} sites total <span className="mx-2 opacity-50">•</span> {pipelineGroups.counts.find(c => c.label === 'Permit')?.count || 0} permit siap {pipelineGroups.issueCount > 0 && <><span className="mx-2 opacity-50">•</span> <span className="text-amber-600">⚡ {pipelineGroups.issueCount} butuh tindakan</span></>}</>
-                }
-            </div>
-        </div>
-      </div>
-      )}
-
-      {/* TERMIN & PEMBAYARAN */}
-      {activeTab === 'termin' && (
-        <div className="relative z-10 mb-5 bg-white border border-slate-200 rounded-lg shadow-sm">
-           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mx-6 mt-6 rounded-r-lg flex gap-3 shadow-sm">
-               <span className="text-xl leading-none pt-0.5">ℹ️</span>
-               <p className="text-sm text-blue-800 font-medium leading-relaxed">Termin tracking akan aktif setelah SPK digenerate untuk setiap site. SPK digenerate setelah permit selesai dan disetujui.</p>
-           </div>
-          {statCards.actionNeededCount > 0 && (
-            <div className="action-banner rounded-t-lg">
-              <span>⚡</span>
-              <span><strong>{statCards.actionNeededCount} site{statCards.actionNeededCount > 1 ? 's' : ''}</strong> menunggu tindakan — <strong>{statCards.mostUrgentAction.split('·')[0]}</strong> · {statCards.mostUrgentAction.split('·')[1]}</span>
-              <span className="action-link" onClick={() => {
-                 setFilterState({ step: null, statusGroup: 'pending' }); 
-              }}>Lihat →</span>
-            </div>
-          )}
-
-          <div className="stepper-wrap !pt-2 pb-0">
-             <div className="flex justify-end px-5 pt-3">
-             </div>
-            <div className="stepper">
-              {distributionMatrix.map((col, idx) => {
-                 const hasAnyData = distributionMatrix.some(c => c.paid > 0 || c.approved > 0 || c.pending > 0 || c.inProgress > 0 || c.locked > 0);
-                 const isEmpty = col.paid === 0 && col.approved === 0 && col.pending === 0 && col.inProgress === 0 && col.locked === 0;
-                 const isAction = col.pending > 0;
-                 const isCompleted = col.locked === 0 && col.inProgress === 0 && col.pending === 0 && col.approved === 0 && col.paid > 0;
-                 const isApproved = col.approved > 0 && col.pending === 0 && col.inProgress === 0 && col.locked === 0;
-                 
-                 let circleClass = 'inactive';
-                 let circleContent = (idx + 1).toString();
-                 if (!hasAnyData || isEmpty) {
-                     circleClass = 'inactive opacity-60';
-                     circleContent = '🔒';
-                 } else if (isAction) {
-                   circleClass = 'action';
-                   circleContent = '!';
-                 } else if (isCompleted) {
-                   circleClass = 'done';
-                   circleContent = '✓';
-                 } else if (isApproved || col.paid > 0 || col.approved > 0 || col.inProgress > 0) {
-                   circleClass = 'approved';
-                   circleContent = '✓';
-                 }
-
-                 return (
-                   <React.Fragment key={col.step}>
-                     {/* Step Node */}
-                     <div className="step" onClick={(e) => {
-                        if (!hasAnyData || isEmpty) return; // Prevent filtering on empty steps
-                        setFilterState({ step: col.step, statusGroup: null });
-                        document.querySelectorAll('.step-circle').forEach(s => (s as HTMLElement).style.outline = 'none');
-                        (e.currentTarget.querySelector('.step-circle') as HTMLElement).style.outline = '3px solid var(--blue, #2563EB)';
-                        (e.currentTarget.querySelector('.step-circle') as HTMLElement).style.outlineOffset = '3px';
-                     }}>
-                       <div className={`step-circle ${circleClass}`}>{circleContent}</div>
-                       <div className="step-label">
-                         <div className="step-name">{col.title.split(' ')[0]} {col.title.split(' ')[1]}</div>
-                         <div className="step-pct">{col.title.split('(')[1]?.replace(')','')}</div>
-                       </div>
-                       <div className="step-stats">
-                          {(!hasAnyData || isEmpty) ? (
-                              <>
-                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— Dibayarkan</div>
-                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— Approved</div>
-                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— Menunggu Aksi</div>
-                                <div className="step-stat-row s-inactive opacity-60"><span className="step-stat-dot dot-gr bg-transparent border"></span>— In Progress</div>
-                              </>
-                          ) : (
-                              <>
-                                  {col.paid > 0 && <div className="step-stat-row s-paid"><span className="step-stat-dot dot-em"></span>{col.paid} Dibayarkan</div>}
-                                  {col.approved > 0 && <div className="step-stat-row s-approved"><span className="step-stat-dot dot-em"></span>{col.approved} Approved</div>}
-                                  {col.pending > 0 && <div className="step-stat-row s-action"><span className="step-stat-dot dot-am"></span>{col.pending} Menunggu Aksi</div>}
-                                  
-                                  {col.locked > 0 && (
-                                    <div className={`step-stat-row s-inactive ${col.paid === 0 && col.approved === 0 && col.pending === 0 && col.inProgress === 0 ? 'muted-pill' : ''}`}>
-                                      <span className="step-stat-dot dot-gr bg-transparent border"></span>{col.locked} Belum Aktif
-                                    </div>
-                                  )}
-                                  {col.inProgress > 0 && <div className="step-stat-row s-inactive"><span className="step-stat-dot dot-gr !bg-[var(--blue-500)] border-none"></span>{col.inProgress} In Progress</div>}
-                              </>
-                          )}
-                       </div>
-                     </div>
-                     
-                     {/* Connector */}
-                     {idx < distributionMatrix.length - 1 && (
-                       <div className="step-connector">
-                         <div className="step-connector-track">
-                           {(!hasAnyData || isEmpty) 
-                             ? <div className="step-connector-fill none border-t-2 border-dashed border-slate-300 bg-transparent w-full h-[2px]"></div>
-                             : <div className={`step-connector-fill ${circleClass === 'done' || circleClass === 'approved' ? 'full' : (circleClass === 'action' ? 'partial' : 'none')}`}></div>
-                           }
-                         </div>
-                       </div>
-                     )}
-                   </React.Fragment>
-                 )
-              })}
-            </div>
+      {/* ── COMPACT PIPELINE STRIP ────────────────────────────────────────────────────── */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div
+          className="flex items-center overflow-x-auto px-4 gap-0"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', height: 52 }}
+        >
+          {compactStrip.map((seg, i) => {
+            const isActive = stageFilter === seg.key;
+            const has = seg.count > 0;
+            return (
+              <React.Fragment key={seg.key}>
+                {i > 0 && <div className={`flex-shrink-0 w-5 h-px mx-0.5 ${has ? seg.ring : 'bg-slate-200'}`} />}
+                <button
+                  onClick={() => handleStripToggle(seg.key)}
+                  className={clsx(
+                    'flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full transition-all',
+                    'border text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap',
+                    isActive ? 'ring-2 ring-blue-400/40 border-blue-400 bg-blue-50 text-blue-700'
+                      : has ? `border-transparent ${seg.bg} ${seg.color} hover:opacity-80`
+                      : 'border-slate-100 bg-slate-50 text-slate-300'
+                  )}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${has ? seg.ring : 'bg-slate-200'}`} />
+                  {seg.label}
+                  <span className={`text-[13px] font-black tabular-nums ml-0.5 ${isActive ? 'text-blue-700' : has ? '' : 'text-slate-300'}`}>
+                    {has ? seg.count : '—'}
+                  </span>
+                </button>
+              </React.Fragment>
+            );
+          })}
+          <div className="ml-auto pl-4 flex-shrink-0 border-l border-slate-100 text-[11px] text-slate-400 font-medium whitespace-nowrap">
+            {matchedSites.length} sites total
+            {(() => {
+              const top = [...compactStrip].filter(g => g.count > 0).sort((a,b) => b.count - a.count)[0];
+              const pending = terminPengajuanRecords.filter(p =>
+                matchedSites.some(s => (s.site_id || s.id) === p.site_id) && p.status === 'submitted'
+              ).length;
+              const parts = [];
+              if (top) parts.push(`${top.count} ${top.label.toLowerCase()}`);
+              if (pending > 0) parts.push(`${pending} menunggu persetujuan termin`);
+              return parts.length ? ` · ${parts.join(' · ')}` : '';
+            })()}
           </div>
-
         </div>
-      )}
+      </div>
 
       {/* CONTENT AREA (TABLE OR MAP) */}
       {viewMode === 'list' ? (
@@ -748,12 +491,6 @@ const TypeSiteList = () => {
                   <h2 className="section-header section-header-accent !mb-0 !text-[14px]">
                       <MapPin className="w-4 h-4 text-[var(--text-muted)]" />
                       Site Registry
-                      {filterState.step && (
-                          <span className="ml-2 px-2.5 py-1 bg-[var(--glass-bg-active)] text-[var(--blue-400)] text-xs font-semibold rounded-full border border-[var(--glass-border)]">
-                              Filtered
-                              <button onClick={() => setFilterState({step: null, statusGroup: null})} className="ml-2 hover:text-white">&times;</button>
-                          </span>
-                      )}
                   </h2>
                   <div className="flex items-center gap-3">
                       <div className="bg-[var(--glass-bg)] text-[var(--text-secondary)] px-3 py-1 rounded-full text-sm font-medium border border-[var(--glass-border)]">

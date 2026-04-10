@@ -2,15 +2,14 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Search, Filter as FilterIcon, ArrowRight, AlertCircle, RefreshCw, FileSpreadsheet,
-    Columns, Check, ChevronDown, ChevronUp, Edit3, FolderKanban, MapPin, Layers,
-    CheckCircle2, Plus, Download, History
+    Columns, Check, ChevronDown, ChevronUp, Edit3,
+    Plus, Download, History, Layers
 } from 'lucide-react';
 import clsx from 'clsx';
 import { siteMasterRecords, type ProjectType, getTerminSummary } from '../data/mockData';
 import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
 import ImportSiteModal from '../components/modals/ImportSiteModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
-import ModernKPICard from '../components/stats/ModernKPICard';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Constants & Helpers ────────────────────────────────────────────────────────
@@ -186,7 +185,83 @@ const ImportedFromBadge = ({ value }: { value?: string }) => {
     );
 };
 
+// ─── Action Signal Card ───────────────────────────────────────────────────────
+type DotColor = 'red' | 'amber' | 'purple' | 'blue';
+interface ActionCardProps {
+    label: string;
+    count: number;
+    subText: string;
+    dotColor: DotColor;
+    filterKey: string;
+    activeFilter: string | null;
+    onClick: () => void;
+    visible?: boolean;
+}
+const ActionCard = ({ label, count, subText, dotColor, filterKey, activeFilter, onClick, visible = true }: ActionCardProps) => {
+    if (!visible) return null;
+    const isActive = activeFilter === filterKey;
+    const dotMap: Record<DotColor, string> = {
+        red:    'bg-red-500',
+        amber:  'bg-amber-500',
+        purple: 'bg-purple-500',
+        blue:   'bg-blue-600',
+    };
+    const subTextMap: Record<DotColor, string> = {
+        red:    'text-red-600',
+        amber:  'text-amber-600',
+        purple: 'text-purple-600',
+        blue:   'text-slate-400',
+    };
+    const alertBorderMap: Record<DotColor, string> = {
+        red:    count > 0 ? 'border-red-300 bg-red-50/40' : 'border-slate-200',
+        amber:  count > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200',
+        purple: 'border-slate-200',
+        blue:   'border-slate-200',
+    };
+    return (
+        <div
+            onClick={onClick}
+            className={clsx(
+                'flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 cursor-pointer shrink-0',
+                'border shadow-[0_2px_8px_rgba(0,0,0,0.07)] transition-all duration-200',
+                'hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(0,0,0,0.10)]',
+                isActive ? 'ring-2 ring-blue-500/40 bg-blue-50/30 border-blue-300' : alertBorderMap[dotColor]
+            )}
+            style={{ minWidth: 168 }}
+        >
+            <span className={clsx(
+                'w-2.5 h-2.5 rounded-full shrink-0',
+                isActive ? 'bg-blue-500' : dotMap[dotColor]
+            )} />
+            <div className="flex flex-col gap-0 min-w-0">
+                <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#111827]">{count}</span>
+                <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide truncate">{label}</span>
+                <span className={clsx('text-[11px] font-bold leading-snug', isActive ? 'text-blue-600' : subTextMap[dotColor])}>
+                    {subText}
+                </span>
+            </div>
+        </div>
+    );
+};
+
 // ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Dashboard navigation filter helpers ─────────────────────────────────────
+const DASH_STAGE_LABELS: Record<string, string> = {
+    'survey': 'Survey',
+    'assigned,permit_process,erfin_process,erfin_ready': 'Menunggu Permit',
+    'permit_ready': 'Permit Ready',
+    'akses_process,akses_ready': 'Akses Ready',
+    'implementasi,rfi_done,rfs_done': 'Implementasi',
+    'dokumen_done,bast': 'Proses BAST',
+    'invoice': 'Invoice',
+    'completed': 'Selesai',
+};
+type DashFilterState = {
+    type: 'stage' | 'has_issue' | 'has_paid_termin' | 'has_pending_termin';
+    stages: string[];
+    label: string;
+};
+
 const Sites = () => {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
@@ -198,7 +273,8 @@ const Sites = () => {
     const [activeTab, setActiveTab] = useState<'data' | 'history'>(initialTab as 'data' | 'history');
 
     useEffect(() => {
-        setSearchParams({ tab: activeTab });
+        // Preserve any dash filter params already in the URL; only update the tab key
+        setSearchParams(prev => { const n = new URLSearchParams(prev); n.set('tab', activeTab); return n; });
     }, [activeTab, setSearchParams]);
 
     // Modals
@@ -215,8 +291,25 @@ const Sites = () => {
     const [filterPo, setFilterPo] = useState<string>('All');
     const [filterBatch, setFilterBatch] = useState<string>('All');
 
-    // Quick-filter (Summary Pills)
+    // Quick-filter (action cards on this page)
     const [quickFilter, setQuickFilter] = useState<string | null>(null);
+
+    // Dashboard incoming filter — read once from URL on mount
+    const [dashFilter, setDashFilter] = useState<DashFilterState | null>(() => {
+        const p = new URLSearchParams(window.location.search);
+        const stage = p.get('stage');
+        const hasIssue = p.get('has_issue');
+        const hasPaid = p.get('has_paid_termin');
+        const hasPending = p.get('has_pending_termin');
+        if (stage) {
+            const stages = stage.split(',');
+            return { type: 'stage', stages, label: DASH_STAGE_LABELS[stage] || stages.map(s => s.replace(/_/g, ' ')).join(', ') };
+        }
+        if (hasIssue === 'true') return { type: 'has_issue', stages: [], label: 'Issue/Hold' };
+        if (hasPaid === 'true') return { type: 'has_paid_termin', stages: [], label: 'Termin Terbayar' };
+        if (hasPending === 'true') return { type: 'has_pending_termin', stages: [], label: 'Menunggu Approval' };
+        return null;
+    });
 
     // Column visibility
     const [visibilityMap, setVisibilityMap] = useState<Record<string, boolean>>(() => getInitialVisibility(LS_KEY, ALL_COLS));
@@ -235,20 +328,31 @@ const Sites = () => {
     const availablePOs = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => s.po_tsel).filter(Boolean))), []);
     const availableBatches = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => s.batch_ref).filter(Boolean))), []);
 
-    // Summary Stats
+    // Summary Stats — Action-signal cards
     const stats = useMemo(() => {
-        let filter = 0, combat = 0, unassigned = 0, selesai = 0, attention = 0;
+        const IN_14_DAYS = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+        const PERMIT_STAGES = ['permit_process', 'permit_ready', 'akses_process', 'akses_ready'];
+        let belumDitugaskan = 0, stuckCount = 0, permitExpiring = 0, terminMenunggu = 0;
+
         siteMasterRecords.forEach(s => {
-            if (s.project_type === 'FILTER') filter++;
-            else if (s.project_type === 'COMBAT') combat++;
-            if (s.status === 'unassigned') unassigned++;
-            if (s.stage === 'completed') selesai++;
-            if (s.stage !== 'imported' && s.stage_updated_at) {
-                const d = Math.floor((Date.now() - new Date(s.stage_updated_at).getTime()) / 86400000);
-                if (d > 14 || (s.stage as string) === 'issue_hold') attention++;
+            // Belum Ditugaskan: no team AND not completed/imported
+            if (!(s as any).team_assigned && !['completed', 'imported'].includes(s.stage as string)) {
+                belumDitugaskan++;
             }
+            // Stuck >14: days_in_stage > 14 AND not completed
+            if (s.stage !== 'completed' && s.stage_updated_at) {
+                const d = Math.floor((Date.now() - new Date(s.stage_updated_at).getTime()) / 86400000);
+                if (d > 14) stuckCount++;
+            }
+            // Permit Expiring: in permit stages + expiry within 14 days
+            if (PERMIT_STAGES.includes(s.stage as string)) {
+                const expiry = (s as any).extra_data?.permit_expiry_date;
+                if (expiry && new Date(expiry) <= IN_14_DAYS) permitExpiring++;
+            }
+            // Termin Menunggu: has a submitted pengajuan waiting approval
+            if (getTerminSummary(s.site_id).has_pending_approval) terminMenunggu++;
         });
-        return { total: siteMasterRecords.length, filter, combat, unassigned, selesai, attention };
+        return { total: siteMasterRecords.length, belumDitugaskan, stuckCount, permitExpiring, terminMenunggu };
     }, []);
 
     const resetFilters = () => {
@@ -271,19 +375,57 @@ const Sites = () => {
         return { text, isStuck, daysDiff };
     };
 
+    // Quick-filter label map (for table header)
+    const QUICK_FILTER_LABELS: Record<string, string> = {
+        belum_ditugaskan: 'Belum Ditugaskan',
+        stuck:            'Stuck >14 Hari',
+        permit_expiring:  'Permit Expiring',
+        termin_menunggu:  'Termin Menunggu',
+    };
+
     // Main Filtering
     const filteredSites = useMemo(() => {
-        return siteMasterRecords.filter(site => {
-            if (quickFilter === 'unassigned' && site.status !== 'unassigned') return false;
-            if (quickFilter === 'selesai' && site.stage !== 'completed') return false;
-            if (quickFilter === 'attention') {
-                if (site.stage === 'imported' || !site.stage_updated_at) return false;
-                const d = Math.floor((Date.now() - new Date(site.stage_updated_at).getTime()) / 86400000);
-                if (!(d > 14 || (site.stage as string) === 'issue_hold')) return false;
-            }
-            if (quickFilter === 'filter' && site.project_type !== 'FILTER') return false;
-            if (quickFilter === 'combat' && site.project_type !== 'COMBAT') return false;
+        const IN_14_DAYS = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+        const PERMIT_STAGES = ['permit_process', 'permit_ready', 'akses_process', 'akses_ready'];
 
+        return siteMasterRecords.filter(site => {
+            // ── Dashboard incoming filter (from URL params) ──
+            if (dashFilter) {
+                if (dashFilter.type === 'stage') {
+                    if (!dashFilter.stages.includes(site.stage as string)) return false;
+                } else if (dashFilter.type === 'has_issue') {
+                    const isIssue = (site.stage as string) === 'issue_hold' ||
+                        (site.stage as string) === 'survey_nok' ||
+                        site.stage_notes?.toLowerCase().includes('issue');
+                    if (!isIssue) return false;
+                } else if (dashFilter.type === 'has_paid_termin') {
+                    const termSum = getTerminSummary(site.site_id);
+                    const hasPaid = termSum?.summary &&
+                        Object.values(termSum.summary as Record<string, any>).some((t: any) => t?.status === 'paid' || t?.status === 'approved');
+                    if (!hasPaid) return false;
+                } else if (dashFilter.type === 'has_pending_termin') {
+                    if (!getTerminSummary(site.site_id).has_pending_approval) return false;
+                }
+            }
+            if (quickFilter === 'belum_ditugaskan') {
+                if ((site as any).team_assigned) return false;
+                if (['completed', 'imported'].includes(site.stage as string)) return false;
+            }
+            if (quickFilter === 'stuck') {
+                if (site.stage === 'completed' || !site.stage_updated_at) return false;
+                const d = Math.floor((Date.now() - new Date(site.stage_updated_at).getTime()) / 86400000);
+                if (d <= 14) return false;
+            }
+            if (quickFilter === 'permit_expiring') {
+                if (!PERMIT_STAGES.includes(site.stage as string)) return false;
+                const expiry = (site as any).extra_data?.permit_expiry_date;
+                if (!expiry || new Date(expiry) > IN_14_DAYS) return false;
+            }
+            if (quickFilter === 'termin_menunggu') {
+                if (!getTerminSummary(site.site_id).has_pending_approval) return false;
+            }
+
+            // ── Regular filters ──
             if (filterType !== 'All' && site.project_type !== filterType) return false;
             if (filterStage !== 'All' && site.stage !== filterStage) return false;
             if (filterCluster !== 'All' && site.cluster !== filterCluster) return false;
@@ -301,7 +443,7 @@ const Sites = () => {
             }
             return true;
         });
-    }, [searchTerm, filterType, filterStage, filterCluster, filterTeam, filterPo, filterBatch, quickFilter]);
+    }, [searchTerm, filterType, filterStage, filterCluster, filterTeam, filterPo, filterBatch, quickFilter, dashFilter]);
 
     // Main Sorting Logic (sort by longest days in stage descending by default)
     const sortedSites = useMemo(() => {
@@ -366,79 +508,76 @@ const Sites = () => {
                 </div>
             </div>
 
-            {/* ── 2. Summary Strip ───────────────────────────────────────── */}
-            <div className="relative">
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    <ModernKPICard
-                        title="Total Sites"
-                        value={stats.total.toString()}
-                        icon={Layers}
-                        iconClass="bg-blue-600 text-white"
-                        onClick={() => handlePillClick('total')}
-                        isActive={quickFilter === null}
-                        compact
-                        minWidth={170}
-                        className="shrink-0"
-                    />
-                    <ModernKPICard
-                        title="Filter Sites"
-                        value={stats.filter.toString()}
-                        icon={MapPin}
-                        iconClass="bg-emerald-500 text-white"
-                        onClick={() => handlePillClick('filter')}
-                        isActive={quickFilter === 'filter'}
-                        compact
-                        minWidth={170}
-                        className="shrink-0"
-                    />
-                    <ModernKPICard
-                        title="Combat Sites"
-                        value={stats.combat.toString()}
-                        icon={FolderKanban}
-                        iconClass="bg-amber-500 text-white"
-                        onClick={() => handlePillClick('combat')}
-                        isActive={quickFilter === 'combat'}
-                        compact
-                        minWidth={170}
-                        className="shrink-0"
-                    />
-                    <ModernKPICard
-                        title="Unassigned"
-                        value={stats.unassigned.toString()}
-                        icon={AlertCircle}
-                        iconClass={stats.unassigned > 0 ? "bg-red-500 text-white" : "bg-slate-300 text-white"}
-                        onClick={() => handlePillClick('unassigned')}
-                        isActive={quickFilter === 'unassigned'}
-                        trend={stats.unassigned > 0 ? { direction: 'down', label: 'Needs Assignment' } : undefined}
-                        compact
-                        minWidth={170}
-                        className="shrink-0"
-                    />
-                    <ModernKPICard
-                        title="Butuh Perhatian"
-                        value={stats.attention.toString()}
-                        icon={AlertCircle}
-                        iconClass={stats.attention > 0 ? "bg-amber-500 text-white" : "bg-slate-300 text-white"}
-                        onClick={() => handlePillClick('attention')}
-                        isActive={quickFilter === 'attention'}
-                        trend={stats.attention > 0 ? { direction: 'down', label: 'Stuck >14 days' } : undefined}
-                        compact
-                        minWidth={170}
-                        className="shrink-0"
-                    />
-                    <ModernKPICard
-                        title="Selesai"
-                        value={stats.selesai.toString()}
-                        icon={CheckCircle2}
-                        iconClass="bg-emerald-500 text-white"
-                        onClick={() => handlePillClick('selesai')}
-                        isActive={quickFilter === 'selesai'}
-                        trend={{ direction: 'up', label: 'Completed' }}
-                        compact
-                        minWidth={170}
-                        className="shrink-0"
-                    />
+            {/* ── 2. Action-Signal KPI Cards ─────────────────────────────── */}
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {/* Total Sites — blue, resets all filters */}
+                <div
+                    onClick={() => handlePillClick('total')}
+                    className={clsx(
+                        'flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 cursor-pointer shrink-0',
+                        'border shadow-[0_2px_8px_rgba(0,0,0,0.07)] transition-all duration-200',
+                        'hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(0,0,0,0.10)]',
+                        quickFilter === null ? 'ring-2 ring-blue-500/40 bg-blue-50/30 border-blue-300' : 'border-slate-200'
+                    )}
+                    style={{ minWidth: 168 }}
+                >
+                    <div className={clsx(
+                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
+                        'bg-blue-600 shadow-[0_4px_12px_rgba(37,99,235,0.35)]'
+                    )}>
+                        <Layers className="w-4 h-4 text-white" strokeWidth={2.2} />
+                    </div>
+                    <div className="flex flex-col gap-0 min-w-0">
+                        <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#111827]">{stats.total}</span>
+                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Total Sites</span>
+                        <span className="text-[11px] font-bold text-slate-400">Semua site</span>
+                    </div>
                 </div>
+
+                {/* Belum Ditugaskan — red */}
+                <ActionCard
+                    label="Belum Ditugaskan"
+                    count={stats.belumDitugaskan}
+                    subText="Perlu tim segera"
+                    dotColor="red"
+                    filterKey="belum_ditugaskan"
+                    activeFilter={quickFilter}
+                    onClick={() => handlePillClick('belum_ditugaskan')}
+                />
+
+                {/* Stuck >14 Hari — amber */}
+                <ActionCard
+                    label="Stuck >14 Hari"
+                    count={stats.stuckCount}
+                    subText="Butuh tindakan"
+                    dotColor="amber"
+                    filterKey="stuck"
+                    activeFilter={quickFilter}
+                    onClick={() => handlePillClick('stuck')}
+                />
+
+                {/* Permit Expiring — amber */}
+                <ActionCard
+                    label="Permit Expiring"
+                    count={stats.permitExpiring}
+                    subText="Dalam 14 hari"
+                    dotColor="amber"
+                    filterKey="permit_expiring"
+                    activeFilter={quickFilter}
+                    onClick={() => handlePillClick('permit_expiring')}
+                />
+
+                {/* Termin Menunggu — purple, hidden for field role */}
+                <ActionCard
+                    label="Termin Menunggu"
+                    count={stats.terminMenunggu}
+                    subText="Menunggu approval"
+                    dotColor="purple"
+                    filterKey="termin_menunggu"
+                    activeFilter={quickFilter}
+                    onClick={() => handlePillClick('termin_menunggu')}
+                    visible={!['field'].includes(currentUser.role)}
+                />
             </div>
 
             {/* ── 3. Tabs ─────────────────────────────────────────── */}
@@ -468,6 +607,19 @@ const Sites = () => {
             {/* ── 4. Main Content Area ───────────────────────────────────── */}
             {activeTab === 'data' ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {/* Breadcrumb: shown when coming from Dashboard */}
+                    {dashFilter && (
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => { setDashFilter(null); setSearchParams(prev => { const n = new URLSearchParams(prev); ['stage','has_issue','has_paid_termin','has_pending_termin'].forEach(k => n.delete(k)); return n; }); }}
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                            >
+                                ← Dashboard
+                            </button>
+                            <span className="text-slate-300">/</span>
+                            <span className="text-sm font-semibold text-slate-700">{dashFilter.label}</span>
+                        </div>
+                    )}
                     <div className="bg-white p-3 rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] border border-slate-200 flex flex-col gap-3">
                         <div className="flex flex-col md:flex-row gap-2 items-center">
                             <div className="relative flex-1 w-full min-w-[200px]">
@@ -497,14 +649,33 @@ const Sites = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-2">
                             <span className="text-sm text-slate-600 font-medium">
-                                Menampilkan <span className="font-bold text-slate-800">{sortedSites.length}</span> sites
-                                <span className="text-slate-500 italic"> — Diurutkan berdasarkan lama di stage</span>
+                                Menampilkan{' '}
+                                <span className="font-bold text-slate-800">{sortedSites.length}</span>{' '}sites
+                                {dashFilter
+                                    ? <span className="text-slate-700 font-semibold"> — dari Dashboard: {dashFilter.label}</span>
+                                    : quickFilter
+                                        ? <span className="text-slate-700 font-semibold"> — {QUICK_FILTER_LABELS[quickFilter] ?? quickFilter}</span>
+                                        : <span className="text-slate-400 italic"> — Diurutkan berdasarkan lama di stage</span>
+                                }
                             </span>
-                            {quickFilter && (
-                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
-                                    Filtered: {quickFilter} <button onClick={() => setQuickFilter(null)} className="ml-1 hover:text-blue-900">×</button>
-                                </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                                {dashFilter && (
+                                    <button
+                                        onClick={() => { setDashFilter(null); setSearchParams(prev => { const n = new URLSearchParams(prev); ['stage','has_issue','has_paid_termin','has_pending_termin'].forEach(k => n.delete(k)); return n; }); }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold rounded-full border border-blue-200 transition-colors"
+                                    >
+                                        Stage: {dashFilter.label} ×
+                                    </button>
+                                )}
+                                {quickFilter && (
+                                    <button
+                                        onClick={() => setQuickFilter(null)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-full border border-slate-200 transition-colors"
+                                    >
+                                        × Hapus Filter
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         <div className="overflow-x-auto">

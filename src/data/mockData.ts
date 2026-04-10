@@ -42,6 +42,7 @@ export interface TerminPengajuan {
 // ─────────────────────────────────────────────────────────────────────────────
 //  BAST DOCUMENT CHECKLIST
 // ─────────────────────────────────────────────────────────────────────────────
+// Obsolete BAST types (will be removed once fully migrated to SiteFile atp_checked)
 export type BastDocType =
   | 'as_built_drawing'
   | 'bap_implementasi'
@@ -1286,6 +1287,7 @@ export interface SiteFile {
     stage_log_id?: string;
     uploaded_by: string;
     uploaded_at: string;
+    atp_checked?: boolean;
     description?: string;
     tags?: string[];
 }
@@ -1298,13 +1300,14 @@ export const mockSiteFiles: SiteFile[] = [
         original_name: 'permit_tpas.pdf',
         file_url: '#',
         mime_type: 'application/pdf',
-        file_size: 2100000, // ~2.1MB
+        file_size: 2100000, 
         source: 'stage_update',
         stage_context: 'permit_process→permit_ready',
         stage_log_id: 'log-2',
         uploaded_by: 'Sari',
         uploaded_at: '2024-02-12T08:31:00Z',
-        tags: ['permit', 'TPAS']
+        tags: ['permit', 'TPAS'],
+        atp_checked: true
     },
     {
         id: 'file-2',
@@ -1313,12 +1316,13 @@ export const mockSiteFiles: SiteFile[] = [
         original_name: 'foto_site.jpg',
         file_url: '#',
         mime_type: 'image/jpeg',
-        file_size: 1400000, // ~1.4MB
+        file_size: 1400000, 
         source: 'stage_update',
         stage_context: 'permit_process→permit_ready',
         stage_log_id: 'log-2',
         uploaded_by: 'Sari',
-        uploaded_at: '2024-02-12T08:31:00Z'
+        uploaded_at: '2024-02-12T08:31:00Z',
+        atp_checked: true
     },
     {
         id: 'file-3',
@@ -1327,10 +1331,11 @@ export const mockSiteFiles: SiteFile[] = [
         original_name: 'spk_BKS598.pdf',
         file_url: '#',
         mime_type: 'application/pdf',
-        file_size: 1200000, // ~1.2MB
+        file_size: 1200000, 
         source: 'direct_upload',
         uploaded_by: 'Admin',
-        uploaded_at: '2024-02-10T10:00:00Z'
+        uploaded_at: '2024-02-10T10:00:00Z',
+        atp_checked: false
     }
 ];
 
