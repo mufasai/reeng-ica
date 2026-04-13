@@ -795,6 +795,13 @@ const SiteDetail = () => {
   
   const [isMultiUploadOpen, setIsMultiUploadOpen] = useState(false);
 
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   // ATP Document Checklist State (derived from localFiles)
   const [isAtpUploadOpen, setIsAtpUploadOpen] = useState(false);
 
@@ -810,7 +817,25 @@ const SiteDetail = () => {
   // --- ACTIONS ---
   const handleFileUpload = () => setIsMultiUploadOpen(true);
   const handleEvidenceUpload = () => evidenceInputRef.current?.click();
-  const handleSubmitCost = () => alert("Submit Cost Modal would open");
+
+  // Wire "Submit Pengajuan" button in the legacy CostsSection to the real Pengajuan modal.
+  // Finds the first termin that is unlocked (stage reached) but not yet submitted.
+  const handleSubmitCost = () => {
+    const stageIdx = STAGE_ORDER_IDX.indexOf(localStage);
+    const readyDef = STAGE_TERMIN_MAP.find(def => {
+      const ti = STAGE_ORDER_IDX.indexOf(def.stage);
+      if (stageIdx === -1 || ti === -1 || stageIdx < ti) return false;
+      return !localPengajuan.some(
+        p => p.termin_key === def.terminKey && ['submitted','approved','paid'].includes(p.status)
+      );
+    });
+    if (!readyDef) {
+      showToast('Tidak ada termin yang siap diajukan saat ini.', 'error');
+      return;
+    }
+    const estimated = site.budget > 0 ? Math.round(site.budget * readyDef.pct / 100) : 0;
+    handleAjukanTermin(readyDef.terminKey, estimated, readyDef.contextKeys);
+  };
   const handleUploadProof = (costId: string) => { proofInputRef.current?.click(); console.log('Uploading proof for cost:', costId); };
   const handleApproveCost = (costId: string) => alert(`Approve cost ${costId}`);
   const handleRejectCost = (costId: string) => alert(`Reject cost ${costId}`);
@@ -980,7 +1005,6 @@ const SiteDetail = () => {
   };
 
   const handleSubmitPengajuan = (payload: any) => {
-      console.log('Submitting pengajuan termin:', payload);
       const newPengajuan: TerminPengajuan = {
            id: `tp-new-${Date.now()}`,
            site_id: site.id,
@@ -994,7 +1018,7 @@ const SiteDetail = () => {
       };
       setLocalPengajuan([...localPengajuan, newPengajuan]);
       setIsPengajuanModalOpen(false);
-      alert(`Pengajuan ${payload.terminKey} berhasil diajukan!`);
+      showToast(`${payload.terminKey} berhasil diajukan — menunggu approval`);
   };
 
   const handleApproveTermin = (pengajuanId: string, nominal: number, terminKey: string, e: React.MouseEvent) => {
@@ -1043,15 +1067,35 @@ const SiteDetail = () => {
 
   // Compute whether any termin is unlocked & not yet submitted → drives tab badge
   const STAGE_ORDER_IDX = ['imported','assigned','permit_process','permit_ready','akses_process','akses_ready','implementasi','rfi_done','rfs_done','dokumen_done','bast','invoice','completed'];
-  const hasActionNeeded = STAGE_TERMIN_MAP.some(def => {
+  // Find the first ready-but-not-submitted termin key (e.g. 'T1') for badge display
+  const readyTerminKey = (() => {
     const ci = STAGE_ORDER_IDX.indexOf(localStage);
-    const ti = STAGE_ORDER_IDX.indexOf(def.stage);
-    if (ci === -1 || ti === -1 || ci < ti) return false;
-    return !localPengajuan.some(p => p.termin_key === def.terminKey && ['submitted','approved','paid'].includes(p.status));
-  });
+    for (const def of STAGE_TERMIN_MAP) {
+      const ti = STAGE_ORDER_IDX.indexOf(def.stage);
+      if (ci === -1 || ti === -1 || ci < ti) continue;
+      const alreadySubmitted = localPengajuan.some(
+        p => p.termin_key === def.terminKey && ['submitted','approved','paid'].includes(p.status)
+      );
+      if (!alreadySubmitted) return def.terminKey; // first unlocked & unsubmitted
+    }
+    return null;
+  })();
+  const hasActionNeeded = readyTerminKey !== null;
 
   return (
     <div className="break-words space-y-8 animate-in fade-in duration-500 pb-12">
+        {/* Toast Notification */}
+        {toast && (
+            <div className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border text-sm font-semibold animate-in slide-in-from-top-2 duration-300 ${
+                toast.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
+                <span>{toast.type === 'success' ? '✓' : '✗'}</span>
+                {toast.message}
+                <button onClick={() => setToast(null)} className="ml-2 text-current opacity-50 hover:opacity-100">&times;</button>
+            </div>
+        )}
         {/* Header */}
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -1262,8 +1306,8 @@ const SiteDetail = () => {
             </div>
         )}
 
-        {/* Payment Prompt Card — only for FILTER sites when action needed */}
-        {project.type === 'FILTER' && (
+        {/* Payment Prompt Card — for FILTER/RESCOPING, operational & admin only */}
+        {(project.type === 'FILTER' || project.type === 'RESCOPING') && can('financial.submit_pengajuan') && (
             <PaymentPromptCard
                 site={site}
                 localStage={localStage}
@@ -1467,9 +1511,12 @@ const SiteDetail = () => {
                             className={clsx("pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5", activeTab === 'costs' ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-500 hover:text-slate-700")}
                         >
                             Costs & Payments
-                            {project.type === 'FILTER' && hasActionNeeded && (
-                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full border border-amber-300 leading-none">
-                                    ⚡
+                            {(project.type === 'FILTER' || project.type === 'RESCOPING')
+                              && hasActionNeeded
+                              && can('financial.submit_pengajuan')
+                              && readyTerminKey && (
+                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full border border-amber-300 leading-none whitespace-nowrap">
+                                    {readyTerminKey} ⚡
                                 </span>
                             )}
                         </button>

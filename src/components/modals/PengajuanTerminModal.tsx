@@ -276,7 +276,7 @@ const PengajuanTerminModal = ({ isOpen, onClose, siteId, siteName, terminKey, no
             <button 
                 type="submit" 
                 form="pengajuanTerminForm"
-                disabled={files.length === 0 && existingDocs.length === 0}
+                disabled={!formData.nominal || Number(formData.nominal) <= 0}
                 className="px-5 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 Ajukan {terminKey} <Send className="w-4 h-4" />

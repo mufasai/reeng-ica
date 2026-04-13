@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { type Site, type TerminPengajuan } from '../../data/mockData';
-import { CheckCircle2, Lock, Zap, Clock, FileText, ChevronRight, DollarSign } from 'lucide-react';
+import { CheckCircle2, Lock, Zap, Clock, FileText, ChevronRight, DollarSign, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { STAGE_TERMIN_MAP } from './PaymentPromptCard';
 
@@ -49,8 +49,9 @@ const FilterPaymentSection = ({
     handleRejectTermin,
     initialExpandedTermin,
 }: FilterPaymentSectionProps) => {
-    const { currentUser } = useAuth();
+    const { currentUser, can } = useAuth();
     const isManagement = ['director', 'operational', 'admin'].includes(currentUser?.role ?? '');
+    const canSubmitTermin = can('financial.submit_pengajuan');
     
     // Normalize initialExpandedTermin to the internal keys (T1, T2a, etc.)
     let initStepId: string | null = null;
@@ -261,12 +262,18 @@ const FilterPaymentSection = ({
 
                                     <div className="flex items-center gap-2 shrink-0">
                                         {active.status === 'ready' && (
-                                            <button
-                                                onClick={() => handleAjukanTermin(active.key, amount, active.contextKeys)}
-                                                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center gap-1"
-                                            >
-                                                Ajukan <ChevronRight className="w-3.5 h-3.5" />
-                                            </button>
+                                            canSubmitTermin ? (
+                                                <button
+                                                    onClick={() => handleAjukanTermin(active.key, amount, active.contextKeys)}
+                                                    className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center gap-1"
+                                                >
+                                                    Ajukan <ChevronRight className="w-3.5 h-3.5" />
+                                                </button>
+                                            ) : (
+                                                <span className="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-200 text-xs font-semibold rounded-full flex items-center gap-1">
+                                                    <Lock className="w-3 h-3" /> Siap Diajukan
+                                                </span>
+                                            )
                                         )}
                                         {active.status === 'submitted' && isManagement && active.pengajuan && (
                                             <>
@@ -285,12 +292,18 @@ const FilterPaymentSection = ({
                                             </>
                                         )}
                                         {active.status === 'rejected' && (
-                                            <button
-                                                onClick={() => handleAjukanTermin(active.key, amount, active.contextKeys)}
-                                                className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
-                                            >
-                                                Ajukan Ulang <ChevronRight className="w-3.5 h-3.5" />
-                                            </button>
+                                            canSubmitTermin ? (
+                                                <button
+                                                    onClick={() => handleAjukanTermin(active.key, amount, active.contextKeys)}
+                                                    className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                                >
+                                                    Ajukan Ulang <ChevronRight className="w-3.5 h-3.5" />
+                                                </button>
+                                            ) : (
+                                                <span className="px-3 py-1 bg-red-50 text-red-600 border border-red-200 text-xs font-semibold rounded-full flex items-center gap-1">
+                                                    <XCircle className="w-3.5 h-3.5" /> Ditolak
+                                                </span>
+                                            )
                                         )}
                                         {active.status === 'submitted' && !isManagement && (
                                             <span className="px-3 py-1 bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold rounded-full">
