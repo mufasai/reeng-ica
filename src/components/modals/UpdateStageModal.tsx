@@ -354,7 +354,12 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
     const renderField = (field: string) => {
         switch (field) {
             case 'team_select':
-                const selectedTeam = teams.find(t => t.id === formData.team_id);
+                // Filter teams based on the site's project type
+                const eligibleTeams = teams.filter(t => t.status_aktif && t.project_type === projectType);
+                const selectedTeam = eligibleTeams.find(t => t.id === formData.team_id);
+                
+                // Get leaders for selected team
+                // We map teamMembersRecords (which acts as link table) where role === 'Team Leader' to the actual Person record
                 const fieldLeadersInTeam = selectedTeam
                     ? teamMembersRecords
                         .filter(tm => tm.team_id === selectedTeam.id && tm.role === 'Team Leader')
@@ -362,51 +367,86 @@ export default function UpdateStageModal({ isOpen, onClose, siteId, siteName = '
                         .filter(p => !!p)
                     : [];
 
+                // Side-effect mapping safely done in onChange, but we need to auto-select if exactly 1 leader.
+                // React requires doing this in effect or handler, but since we map inline, we can force the select value.
+                // However, doing data mutation in render is bad. We handle validation directly or trust the user.
+                
                 return (
-                    <div key={field} className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
-                        <div className="space-y-1">
-                            <label className="block text-sm font-medium text-slate-700">Tim Lapangan <span className="text-red-500">*</span></label>
-                            <select 
-                                required 
-                                className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm bg-white"
-                                value={(formData.team_id as string) || ''}
-                                onChange={(e) => {
-                                    handleFormChange('team_id', e.target.value);
-                                    handleFormChange('field_leader_id', ''); // Reset field leader when team changes
-                                }}
-                            >
-                                <option value="">Pilih tim lapangan...</option>
-                                {teams.filter(t => t.status_aktif).map(t => (
-                                    <option key={t.id} value={t.id}>{t.name} ({t.project_type})</option>
-                                ))}
-                            </select>
+                    <div key={field} className="space-y-4 border border-slate-200 p-5 rounded-xl bg-slate-50/50 shadow-sm">
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-bold text-slate-800">Tim Lapangan <span className="text-red-500">*</span></label>
+                            
+                            {eligibleTeams.length > 0 ? (
+                                <select 
+                                    required 
+                                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm bg-white font-medium text-slate-700"
+                                    value={(formData.team_id as string) || ''}
+                                    onChange={(e) => {
+                                        const newTeamId = e.target.value;
+                                        const newTeamLeaders = teamMembersRecords
+                                            .filter(tm => tm.team_id === newTeamId && tm.role === 'Team Leader')
+                                            .map(tm => people.find(p => p.id === tm.person_id))
+                                            .filter(p => !!p);
+                                        
+                                        // Auto select leader if only 1
+                                        const autoLeaderId = newTeamLeaders.length === 1 ? (newTeamLeaders[0]?.id || '') : '';
+                                        
+                                        setFormData(prev => ({ 
+                                            ...prev, 
+                                            team_id: newTeamId, 
+                                            field_leader_id: autoLeaderId 
+                                        }));
+                                    }}
+                                >
+                                    <option value="">Pilih tim lapangan...</option>
+                                    {eligibleTeams.map(t => {
+                                        const memberCount = teamMembersRecords.filter(tm => tm.team_id === t.id).length;
+                                        return (
+                                            <option key={t.id} value={t.id}>
+                                                {t.name} · {memberCount} anggota · {t.regional || '—'}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 p-3 rounded-lg border border-red-200">
+                                        <AlertTriangle className="w-5 h-5 shrink-0" />
+                                        <p>Belum ada tim aktif untuk tipe {projectType}.</p>
+                                    </div>
+                                    <a href="/workforce?tab=teams" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700">
+                                        + Buat Tim Baru <ChevronRight className="w-4 h-4" />
+                                    </a>
+                                </div>
+                            )}
                         </div>
 
                         {selectedTeam && (
-                            <div className="pl-4 border-l-2 border-blue-200 space-y-3 pt-1">
-                                <div className="space-y-1.5 pt-1">
-                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Field Leader <span className="text-red-500">*</span></label>
+                            <div className="pl-5 border-l-[3px] border-blue-200 space-y-3 pt-2">
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Field Leader</label>
                                     
                                     {fieldLeadersInTeam.length > 0 ? (
                                         <select 
-                                            required
-                                            className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm bg-white"
+                                            className="w-full px-3 py-2 border border-slate-300 rounded focus:border-blue-500 text-sm bg-white font-medium"
                                             value={(formData.field_leader_id as string) || ''}
                                             onChange={(e) => handleFormChange('field_leader_id', e.target.value)}
                                         >
-                                            <option value="">Pilih field leader...</option>
+                                            {fieldLeadersInTeam.length > 1 && <option value="">Pilih field leader...</option>}
                                             {fieldLeadersInTeam.map(fl => (
-                                                <option key={fl?.id} value={fl?.id}>{fl?.name}</option>
+                                                <option key={fl?.id} value={fl?.id}>
+                                                    {fl?.name} · {fl?.jabatan || 'Leader'} · {fl?.phone || 'No HP -'}
+                                                </option>
                                             ))}
                                         </select>
                                     ) : (
                                         <div className="space-y-2">
-                                            <select disabled className="w-full px-3 py-2 border border-slate-200 rounded text-sm bg-slate-100 text-slate-500 cursor-not-allowed">
+                                            <select disabled className="w-full px-3 py-2 border border-slate-200 rounded text-sm bg-slate-100 text-slate-400 cursor-not-allowed">
                                                 <option>— Belum ada field leader di tim ini</option>
                                             </select>
-                                            <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+                                            <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-200 font-medium">
                                                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                                                <p>Tim ini belum memiliki field leader. Tambahkan terlebih dahulu di halaman Teams.</p>
+                                                <p>Tim ini belum punya field leader. Assignment dapat disimpan dengan field leader kosong.</p>
                                             </div>
                                         </div>
                                     )}

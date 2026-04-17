@@ -21,8 +21,8 @@ import {
     sites, projects, teams, people, 
     siteMaterials, siteEvidence, siteCosts, filterTerms, combatTerms, skpRecords,
     siteMasterRecords, siteBoQRecords, siteStageLogs, mockSiteFiles,
-    terminPengajuanRecords, teamMembersRecords, bastDocumentChecklists, createBastChecklistForSite,
-    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan, type BastDocumentChecklistItem
+    terminPengajuanRecords, teamMembersRecords,
+    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan
 } from '../data/mockData';
 import {
     TableContainer,
@@ -50,88 +50,7 @@ interface InfoSectionProps {
     fieldLeader?: { id: string; name: string } | null;
 }
 
-const InfoSection = ({ site, project, team, teamMembers, canViewCosts, canManageUsers, fieldLeader }: InfoSectionProps) => {
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-            {/* Left: General Info */}
-            <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm h-full">
-                <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Informasi Site</h3>
-                <div className="space-y-3 text-sm">
-                    <div className="grid grid-cols-3"><span className="text-slate-500">ID</span><span className="col-span-2 font-mono text-slate-700">{site.id}</span></div>
-                    <div className="grid grid-cols-3"><span className="text-slate-500">Project</span><span className="col-span-2 text-slate-700">{project.name}</span></div>
-                    <div className="grid grid-cols-3"><span className="text-slate-500">Site Name</span><span className="col-span-2 font-medium text-slate-800">{site.name}</span></div>
-                    <div className="grid grid-cols-3"><span className="text-slate-500">Job Name</span><span className="col-span-2 text-slate-700">{site.jobName || '-'}</span></div>
-                    <div className="grid grid-cols-3"><span className="text-slate-500">Location</span><span className="col-span-2 text-slate-700">{site.location}</span></div>
-                    <div className="grid grid-cols-3"><span className="text-slate-500">Contract</span><span className="col-span-2 text-slate-700">{site.contractNumber || '-'}</span></div>
-                    <div className="grid grid-cols-3"><span className="text-slate-500">Source BoQ</span><span className="col-span-2 text-slate-700 truncate" title={site.import_source || 'Manual/DB'}>{site.import_source || 'Manual/DB'}</span></div>
-                </div>
-            </div>
 
-            {/* Middle: Schedule & Finance */}
-            <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm h-full flex flex-col">
-                <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Informasi Lainnya</h3>
-                <div className="space-y-3 text-sm flex-1">
-                    {canViewCosts && (
-                        <>
-                        <div className="grid grid-cols-3"><span className="text-slate-500">Max Value</span><span className="col-span-2 font-bold text-slate-800">Rp {site.budget.toLocaleString('id-ID')}</span></div>
-                        <div className="grid grid-cols-3"><span className="text-slate-500">Est. Cost</span><span className="col-span-2 text-slate-600">Rp {(site.budget * 0.8).toLocaleString('id-ID')}</span></div>
-                        {/* New Cost Dibayar and Sisa Fields */}
-                        <CostDibayarField siteId={site.id} budget={site.budget} />
-                        </>
-                    )}
-                    <div className="grid grid-cols-3"><span className="text-slate-500">Start Date</span><span className="col-span-2 text-slate-700">{site.startDate || '-'}</span></div>
-                    <div className="grid grid-cols-3"><span className="text-slate-500">End Date</span><span className="col-span-2 text-slate-700">{site.endDate || '-'}</span></div>
-                </div>
-            </div>
-
-            {/* Right: Team Info */}
-            <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm h-full flex flex-col">
-                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-                    <h3 className="font-semibold text-slate-800 text-sm">Team: <span className="text-blue-600">{team?.name || 'Unassigned'}</span></h3>
-                    {canManageUsers && (
-                        <button className="text-xs font-medium text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors">
-                            <Edit className="w-3.5 h-3.5" /> Edit
-                        </button>
-                    )}
-                </div>
-                
-                <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-2 h-[180px]">
-                    {/* Field Leader summary */}
-                    <div className="mb-4">
-                        <div className={clsx("border rounded p-3 text-center", fieldLeader ? "bg-blue-50 border-blue-100" : "bg-red-50 border-red-100")}>
-                            <span className="block text-[10px] uppercase font-semibold mb-1 tracking-wider flex items-center justify-center gap-1 shadow-sm">
-                                {fieldLeader && <span title="Field Leader">👑</span>} Field Lead
-                            </span>
-                            <span className={clsx("block text-sm font-bold truncate", fieldLeader ? "text-blue-700" : "text-red-600")}>
-                                {fieldLeader ? fieldLeader.name : '⚠ Belum di-set'}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <span className="text-xs font-semibold text-slate-500 mb-1 block">Anggota Lapangan:</span>
-                        {teamMembers.map(m => (
-                            <div key={m.id} className="flex items-center gap-3 bg-white p-1 rounded-md border border-transparent hover:border-slate-100 transition-colors">
-                                <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border shrink-0", m.isLeader ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-blue-100 text-blue-700 border-blue-200")}>
-                                    {m.name.charAt(0)}
-                                </div>
-                                <div className="flex flex-col min-w-0">
-                                    <span className="text-sm font-medium text-slate-700 leading-tight truncate flex items-center gap-1.5">
-                                        {m.name}
-                                    </span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-wider">{m.role.replace('_', ' ')}</span>
-                                </div>
-                            </div>
-                        ))}
-                        {teamMembers.length === 0 && (
-                            <div className="text-sm text-slate-500 italic py-4 text-center">No team members assigned</div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 // Helper component to calculate and display paid costs
 const CostDibayarField = ({ siteId, budget }: { siteId: string, budget: number }) => {
@@ -699,7 +618,7 @@ const SiteDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can, currentUser } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   
   const initialTab = searchParams.get('tab') === 'costs' ? 'costs' : (searchParams.get('tab') === 'evidence' ? 'evidence' : 'details');
   const [activeTab, setActiveTab] = useState<'details' | 'evidence' | 'costs'>(initialTab);
@@ -760,20 +679,10 @@ const SiteDetail = () => {
   const team = teams.find(t => t.id === activeTeamId);
   const fieldLeader = masterRecordForTeam?.field_leader_id ? people.find(p => p.id === masterRecordForTeam.field_leader_id) || null : null;
 
-  const teamMembers = team 
-      ? teamMembersRecords
-          .filter(tm => tm.team_id === team.id && tm.is_active) // active members only
-          .map(tm => {
-              const p = people.find(person => person.id === tm.person_id);
-              return p ? { id: p.id, name: p.name, role: tm.role, isLeader: tm.role === 'Team Leader' } : null;
-          })
-          .filter(Boolean) as { id: string; name: string; role: string; isLeader: boolean }[]
-      : [];
-
   // Filtered Data
   const [localMaterials, setLocalMaterials] = useState<any[]>(siteMaterials.filter((m: any) => m.siteId === id || m.site_id === id));
   const siteBoQsSource = siteBoQRecords.filter(b => b.siteId === id || b.siteId === site?.projectId);
-  const [localBoQs, setLocalBoQs] = useState<SiteBoQ[]>(siteBoQsSource);
+  const [localBoQs] = useState<SiteBoQ[]>(siteBoQsSource);
   const costs = siteCosts.filter(c => c.siteId === id);
   const filteredCombatTerms = combatTerms.filter(c => c.siteId === id);
 
@@ -1194,7 +1103,7 @@ const SiteDetail = () => {
                         } else {
                             switch (highestKey) {
                                 case 'assigned':
-                                    line2Text = `Tim: ${site.mitra || '-'} · Leader: Budi (FL)`;
+                                    line2Text = `Tim: ${team?.name || '-'} · Leader: ${fieldLeader?.name || '-'}`;
                                     break;
                                 case 'permit_process':
                                     line2Text = `Create: ${eData.permit_start_date ? new Date(eData.permit_start_date).toLocaleDateString('id-ID', {day:'numeric',month:'short'}) : '-'}`;
@@ -1220,7 +1129,7 @@ const SiteDetail = () => {
                                     line2Text = `BAST: ${eData.bast_date ? new Date(eData.bast_date).toLocaleDateString('id-ID', {day:'numeric',month:'short'}) : `${(new Date()).toLocaleDateString('id-ID', {day:'numeric',month:'short'})}`}`;
                                     break;
                                 case 'invoice':
-                                    line2Text = `Invoice: ${eData.invoice_number || `INV-${site.site_id}-01`}`;
+                                    line2Text = `Invoice: ${eData.invoice_number || `INV-${site.id}-01`}`;
                                     break;
                                 case 'completed':
                                     line2Text = '✓ Selesai';

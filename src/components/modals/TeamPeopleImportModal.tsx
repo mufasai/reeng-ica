@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, FileSpreadsheet, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { X, FileSpreadsheet, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import clsx from 'clsx';
 import * as XLSX from 'xlsx';
 
@@ -76,12 +76,19 @@ export default function TeamPeopleImportModal({ isOpen, onClose, onImportComplet
             h.forEach(header => {
                 const hl = header.toLowerCase();
                 if (hl.includes('nama') || hl.includes('name')) autoMap['name'] = header;
-                if (hl.includes('nik')) autoMap['nik'] = header;
+                if (hl.includes('ktp') || hl.includes('nik')) autoMap['nik'] = header;
                 if (hl.includes('hp') || hl.includes('telp')) autoMap['phone'] = header;
                 if (hl.includes('email')) autoMap['email'] = header;
                 if (hl.includes('jabatan') || hl.includes('posisi')) autoMap['role'] = header;
                 if (hl.includes('regional')) autoMap['regional'] = header;
-                if (hl.includes('project')) autoMap['project_type'] = header;
+                if (hl.includes('pekerjaan') || hl.includes('project')) autoMap['project_type'] = header;
+                if (hl.includes('tanggal') && hl.includes('lahir')) autoMap['birth_date'] = header;
+                if (hl.includes('tempat') && hl.includes('lahir')) autoMap['birth_place'] = header;
+                if (hl.includes('agama')) autoMap['religion'] = header;
+                if (hl.includes('kelamin')) autoMap['gender'] = header;
+                if (hl.includes('sertifikat')) autoMap['certificate'] = header;
+                if (hl.includes('expired')) autoMap['certificate_expired'] = header;
+                if (hl.includes('alamat') && !hl.includes('email')) autoMap['address'] = header;
             });
             setMapping(autoMap);
         }
@@ -154,17 +161,23 @@ export default function TeamPeopleImportModal({ isOpen, onClose, onImportComplet
     
     const requiredSystemFields = targetType === 'people' 
         ? ['name', 'nik'] 
-        : ['name', 'role', 'team_name']; // Just examples
+        : ['name', 'role']; // Just examples
 
     const systemFields = [
         { id: 'name', label: 'Nama / Name', required: true },
-        { id: 'nik', label: 'NIK / ID', required: targetType === 'people' },
+        { id: 'birth_date', label: 'Tanggal Lahir', required: false },
+        { id: 'birth_place', label: 'Tempat Lahir', required: false },
+        { id: 'religion', label: 'Agama', required: false },
+        { id: 'gender', label: 'Jenis Kelamin', required: false },
+        { id: 'nik', label: 'No. KTP / NIK', required: targetType === 'people' },
         { id: 'phone', label: 'No. HP', required: false },
         { id: 'email', label: 'Email', required: false },
         { id: 'role', label: 'Jabatan Lapangan', required: false },
+        { id: 'certificate', label: 'Sertifikat', required: false },
+        { id: 'certificate_expired', label: 'Expired Sertifikat', required: false },
         { id: 'regional', label: 'Regional', required: false },
-        { id: 'project_type', label: 'Project Type', required: false },
-        { id: 'team_name', label: 'Nama Tim (Untuk Generate Tim)', required: targetType === 'teams' },
+        { id: 'project_type', label: 'Pekerjaan / Project Type', required: false },
+        { id: 'address', label: 'Alamat', required: false },
     ];
 
     return (
@@ -374,7 +387,7 @@ export default function TeamPeopleImportModal({ isOpen, onClose, onImportComplet
                                 <h3 className="text-xl font-bold text-emerald-800 mb-2">Data Siap Diimpor!</h3>
                                 <p className="text-emerald-700">
                                     Ditemukan <strong>{rawData.length - headerRowIdx}</strong> baris data valid.
-                                    {targetType === 'teams' && " Sistem akan otomatis membuat Tim jika belum ada, lalu memasukkan Anggota ke dalamnya."}
+                                    Sistem akan otomatis mengekstrak informasi <strong>PEKERJAAN / Project Type</strong> untuk mengelompokkan personel, dengan nama Tim dibuat otomatis mengikuti nama Leader-nya (misal: "Tim Ervin").
                                 </p>
                             </div>
                             

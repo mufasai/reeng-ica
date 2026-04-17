@@ -6,7 +6,7 @@ import {
     Plus, Download, History, Layers
 } from 'lucide-react';
 import clsx from 'clsx';
-import { siteMasterRecords, type ProjectType, getTerminSummary } from '../data/mockData';
+import { siteMasterRecords, type ProjectType, getTerminSummary, people } from '../data/mockData';
 import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
 import ImportSiteModal from '../components/modals/ImportSiteModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
@@ -734,10 +734,17 @@ const Sites = () => {
                                                     {col('import_date') && <td className="px-4 py-3 text-slate-600 text-sm tabular-nums whitespace-nowrap">{formatImportDate(site.imported_at)}</td>}
                                                     {col('team') && (
                                                         <td className="px-4 py-3 text-xs">
-                                                            {(site as any).team_assigned
-                                                                ? <span className="font-medium text-slate-700">{(site as any).team_assigned}</span>
-                                                                : <span className="text-amber-500 font-medium italic select-none">Belum ditugaskan</span>
-                                                            }
+                                                            {(site as any).team_assigned ? (() => {
+                                                                const fl = people.find(p => p.id === site.field_leader_id);
+                                                                return (
+                                                                    <span className="font-medium text-slate-700">
+                                                                        {(site as any).team_assigned}
+                                                                        {fl ? <span className="text-slate-500 font-normal"> · {fl.name}</span> : ''}
+                                                                    </span>
+                                                                );
+                                                            })() : (
+                                                                <span className="text-amber-500 font-medium italic select-none">Belum ditugaskan</span>
+                                                            )}
                                                         </td>
                                                     )}
                                                     {col('stage') && (

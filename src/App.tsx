@@ -4,8 +4,7 @@ import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import SiteDetail from './pages/SiteDetail';
-import People from './pages/People';
-import Teams from './pages/Teams';
+import Workforce from './pages/Workforce';
 import DemoGuide from './pages/DemoGuide';
 import WorkOrders from './pages/WorkOrders';
 import WorkOrderDetail from './pages/WorkOrderDetail';
@@ -36,8 +35,9 @@ function App() {
           <Route path="sites/:id/termins/:terminId" element={<TerminDetail />} />
           <Route path="sites/:id/termins/:terminId/review" element={<TerminReview />} />
           <Route path="sites/:id/termins/:terminId/payment" element={<TerminPayment />} />
-          <Route path="people" element={<People />} />
-          <Route path="teams" element={<Teams />} />
+          <Route path="workforce" element={<Workforce />} />
+          <Route path="people" element={<Navigate to="/workforce" replace />} />
+          <Route path="teams" element={<Navigate to="/workforce" replace />} />
           <Route path="materials" element={<MaterialMaster />} />
           <Route path="spk" element={<Navigate to="/work-orders" replace />} />
           <Route path="rescoping" element={<Navigate to="/projects/type/rescoping/sites" replace />} />

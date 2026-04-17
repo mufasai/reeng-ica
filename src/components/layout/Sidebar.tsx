@@ -20,10 +20,10 @@ const Sidebar = () => {
   const { collapsed, toggle } = useSidebar();
 
   // Navigation config per confirmed RBAC matrix
-  const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
-    director:    ['dashboard', 'sites', 'people', 'teams', 'materials', 'options'],
-    operational: ['dashboard', 'sites', 'people', 'teams', 'materials', 'options'],
-    admin:       ['dashboard', 'sites', 'people', 'teams', 'materials', 'options'],
+    const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
+    director:    ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    operational: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    admin:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
     finance:     ['dashboard', 'sites', 'pembayaran'],
     field:       [],  // field role has no full sidebar — own sites view only
   };
@@ -38,11 +38,8 @@ const Sidebar = () => {
 
   // DATA & DOKUMEN
   const dataMasterItems: { icon: any, label: string, path: string, badge?: number }[] = [];
-  if (allowedSidebarItems.includes('people')) {
-    dataMasterItems.push({ icon: Users, label: 'People', path: '/people' });
-  }
-  if (allowedSidebarItems.includes('teams')) {
-    dataMasterItems.push({ icon: Users, label: 'Teams', path: '/teams' });
+  if (allowedSidebarItems.includes('workforce')) {
+    dataMasterItems.push({ icon: Users, label: 'Workforce', path: '/workforce' });
   }
   if (allowedSidebarItems.includes('materials')) {
     dataMasterItems.push({ icon: Package, label: 'Material Master', path: '/materials' });

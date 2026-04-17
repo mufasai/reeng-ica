@@ -352,6 +352,7 @@ export interface Site {
   budget: number;
   // New fields for Dashboard
   teamId?: string;
+  field_leader_id?: string;
   jobName?: string;
   contractNumber?: string;
   startDate?: string;
@@ -476,6 +477,8 @@ export interface Person {
     foto_ktp_url?: string;
     foto_diri_url?: string;
     status_aktif: boolean;
+    jabatan?: string; // Leader | Engineer | Member | Member 1 | Member 2 | SITAC | Transport | Lainnya
+    pekerjaan?: ProjectType | ''; // Project Type or ''
 
     // Legacy fields (keeping for backward compatibility if used elsewhere)
     email: string;
@@ -536,36 +539,72 @@ export const people: Person[] = [
     { 
         id: 'u1', name: 'John Doe', role: 'director', 
         no_ktp: '3171234567890001', email: 'director@demo.com', phone: '081234567890', 
-        vendor: 'Internal', joinedAt: '2023-01-15', avatar: 'https://i.pravatar.cc/150?u=u1', status_aktif: true
+        vendor: 'Internal', joinedAt: '2023-01-15', avatar: 'https://i.pravatar.cc/150?u=u1', status_aktif: true,
+        jabatan: 'Manager', pekerjaan: ''
     },
     { 
         id: 'u2', name: 'Budi Field', role: 'field', 
         no_ktp: '3171234567890002', email: 'budi@demo.com', phone: '081234567891', 
         vendor: 'Vendor X', deviceId: 'DEV-001', imei1: '123456789012345', imei2: '123456789012346',
-        joinedAt: '2023-03-10', foto_ktp_url: 'ktp_budi.jpg', foto_diri_url: 'selfie_budi.jpg', status_aktif: true
+        joinedAt: '2023-03-10', foto_ktp_url: 'ktp_budi.jpg', foto_diri_url: 'selfie_budi.jpg', status_aktif: true,
+        jabatan: 'Engineer', pekerjaan: 'FILTER', regional: 'Jabodetabek'
     },
     { 
-        id: 'u3', name: 'Bob Operational', role: 'operational', 
+        id: 'u3', name: 'Ervin Putra', role: 'operational', 
         no_ktp: '3171234567890003', email: 'bob.j@vendor-y.com', phone: '081234567892', 
         vendor: 'Vendor Y', deviceId: 'DEV-002', imei1: '987654321098765', 
-        joinedAt: '2023-02-20', status_aktif: true 
+        joinedAt: '2023-02-20', status_aktif: true,
+        jabatan: 'Leader', pekerjaan: 'BLACKSITE', regional: 'Jabodetabek'
     },
     { 
         id: 'u4', name: 'Alice Finance', role: 'finance', 
         no_ktp: '3171234567890004', email: 'finance@demo.com', phone: '081234567893', 
-        vendor: 'Internal', joinedAt: '2023-01-10', status_aktif: true 
+        vendor: 'Internal', joinedAt: '2023-01-10', status_aktif: true,
+        jabatan: 'Finance', pekerjaan: ''
     },
     { 
         id: 'u5', name: 'Charlie Field 2', role: 'field', 
         no_ktp: '3171234567890005', email: 'charlie.f@vendor-x.com', phone: '081234567894', 
         vendor: 'Vendor X', deviceId: 'DEV-003', imei1: '112233445566778',
-        joinedAt: '2023-06-01', status_aktif: true 
+        joinedAt: '2023-06-01', status_aktif: true,
+        jabatan: 'Engineer', pekerjaan: 'COMBAT', regional: 'Jawa Barat'
     },
     { 
         id: 'u6', name: 'Admin Backoffice', role: 'admin', 
         no_ktp: '3171234567890006', email: 'backoffice@demo.com', phone: '081234567895', 
-        vendor: 'Internal', joinedAt: '2023-01-01', status_aktif: true 
-    },
+        vendor: 'Internal', joinedAt: '2023-01-01', status_aktif: true,
+        jabatan: 'Admin', pekerjaan: ''
+    },,
+    // === CSV IMPORTS ===
+    { id: 'p_csv_1776399752105_1', name: 'Hairul Umam', role: 'field', no_ktp: '3672051007040002', email: 'umam45171@gmail.com', phone: '085691351474', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 1', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_2', name: 'Holil Jaelani', role: 'field', no_ktp: '3672072609000001', email: 'holiljaeni26@gmail.com', phone: '085774349836', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Engineer', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_3', name: 'Ervin Putra', role: 'field', no_ktp: '3672081709970002', email: 'ervinputra7@gmail.com', phone: '089528148622', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_4', name: 'Adia Fardan', role: 'field', no_ktp: '3672051903050001', email: 'adifauzan232@gmail.com', phone: '081280278681', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 2', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_5', name: 'Nusa Satria Wibowo', role: 'field', no_ktp: '3201132407790005', email: 'nusa.satria@gmail.com', phone: '081288235307', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: 'Filter', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_6', name: 'Supriadi Sihombing', role: 'field', no_ktp: '3603120202920015', email: 'supriadi.sihombing@gmail.co,', phone: '087856872575', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 2', pekerjaan: 'Filter', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_7', name: 'Rizky Maulana Fridiansyah', role: 'field', no_ktp: '3201170610040003', email: 'rizkymaulanafridiansyahh@gmail.com', phone: '0881011667544', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752105_8', name: 'Rivaldi', role: 'field', no_ktp: '3173031111991001', email: 'rivaldialdi4139@gmail.com', phone: '081285190136', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752105_9', name: 'Hamzah', role: 'field', no_ktp: '3173030708890001', email: 'hamzzahhbzah@gmail.com', phone: '087783208474', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_10', name: 'Dwi Prastiyo', role: 'field', no_ktp: '3672082304980003', email: 'dwiaksara038@gmail.com', phone: '082124008431', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_11', name: 'Suriya Berata', role: 'field', no_ktp: '3201170705080007', email: 'suryaberata9@gmail.com', phone: '083821328790', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_12', name: 'Irfan Kurniawan', role: 'field', no_ktp: '3175041512790015', email: 'elbadroen79@gmail.com', phone: '0882005596976', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_13', name: 'Arif Sarif Hidayat', role: 'field', no_ktp: '3205331005931005', email: 'sbalap732@gmail.com', phone: '083869060068', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_14', name: 'Rizal pangestu', role: 'field', no_ktp: '3303131601010002', email: 'nzallotsky427@gmail.com', phone: '08986627784', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_15', name: 'Wahyu Nur M Kahfi', role: 'field', no_ktp: '3275062210010022', email: 'mhmmd.kahfii13@gmail.com', phone: '0895401515685', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_16', name: 'Isbandi', role: 'field', no_ktp: '', email: 'isbandiconk@gmail.com', phone: '085928017725', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_17', name: 'Denny Suhendra', role: 'field', no_ktp: '1802231709890001', email: 'densuh44@gmail.com', phone: '087788712907', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_18', name: 'Septian Dwi Cahyo Ginting', role: 'field', no_ktp: '3637013010990003', email: 'septianginting24@gmail.com', phone: '087838074835', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_19', name: 'Sandi Sukardi', role: 'field', no_ktp: '3203110209880001', email: 'sandisukardi02@gmail.com', phone: '085393637988', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_20', name: 'Heri', role: 'field', no_ktp: '3203112808860010', email: 'toktokheri07@gmail.com', phone: '087797091552', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_21', name: 'Harco Setiawan', role: 'field', no_ktp: '3276011508900002', email: 'harco.setiawan@gmail.com', phone: '0895392148712', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_22', name: 'Herman Fitrianto', role: 'field', no_ktp: '3275040409780019', email: 'fitrianto.herman88@gmail.com', phone: '081276731861', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_23', name: 'Irvan Fadhila', role: 'field', no_ktp: '3174050410981002', email: 'irfanfadhila78@gmail.com', phone: '087885739880', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_24', name: 'Suryadi', role: 'field', no_ktp: '3275061807930007', email: 'adis94546@gmail.com', phone: '082116226863', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_25', name: 'Agus Mustofa', role: 'field', no_ktp: '3174092705860011', email: 'agusiyank@gmail.com', phone: '087785622266', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_26', name: 'Dede Robiulawal', role: 'field', no_ktp: '3175090412860003', email: 'dederobiulawal0412@gmail.com', phone: '085719357820', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_27', name: 'Hendhy Kurniawan', role: 'field', no_ktp: '3173022106820001', email: 'kenziehendhy@gmail.com', phone: '087874442334', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_28', name: 'Paberto', role: 'field', no_ktp: '3172040109890002', email: 'Bertocuy@gmail.com', phone: '082241837640', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
+    { id: 'p_csv_1776399752106_29', name: 'Iqbal Khoirul Rasyid', role: 'field', no_ktp: '3173012406980003', email: 'ikbalkhoirul12345@gmail.com', phone: '089525410233', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' }
 ];
 
 export const teams: Team[] = [
@@ -585,7 +624,41 @@ export const teams: Team[] = [
     },
     { 
         id: 't2', name: 'Bravo Team (Combat)', status_aktif: true, project_type: 'COMBAT', regional: 'Jawa Barat'
-    }, 
+    }, ,
+    // === CSV IMPORTS ===
+    { id: 't_csv_1776399752105_1', name: 'Team BLACKSITE (Ervin Putra)', status_aktif: true, project_type: 'BLACKSITE', regional: 'Jabodetabek', members: [
+            { id: 'tm_csv_p_csv_1776399752105_3', team_id: 't_csv_1776399752105_1', person_id: 'p_csv_1776399752105_3', jabatan: 'Leader', is_field_leader: true },
+            { id: 'tm_csv_p_csv_1776399752105_4', team_id: 't_csv_1776399752105_1', person_id: 'p_csv_1776399752105_4', jabatan: 'Member 2', is_field_leader: false }
+        ] },
+    { id: 't_csv_1776399752105_2', name: 'Team FILTER (Nusa Satria Wibowo)', status_aktif: true, project_type: 'FILTER', regional: 'Jabodetabek', members: [
+            { id: 'tm_csv_p_csv_1776399752105_5', team_id: 't_csv_1776399752105_2', person_id: 'p_csv_1776399752105_5', jabatan: 'Leader', is_field_leader: true },
+            { id: 'tm_csv_p_csv_1776399752105_6', team_id: 't_csv_1776399752105_2', person_id: 'p_csv_1776399752105_6', jabatan: 'Member 2', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752105_7', team_id: 't_csv_1776399752105_2', person_id: 'p_csv_1776399752105_7', jabatan: 'Member', is_field_leader: false }
+        ] },
+    { id: 't_csv_1776399752105_3', name: 'Team FILTER (Rivaldi)', status_aktif: true, project_type: 'FILTER', regional: 'Jabodetabek', members: [
+            { id: 'tm_csv_p_csv_1776399752105_8', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752105_8', jabatan: 'Leader', is_field_leader: true },
+            { id: 'tm_csv_p_csv_1776399752105_9', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752105_9', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_10', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_10', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_11', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_11', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_12', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_12', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_13', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_13', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_14', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_14', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_15', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_15', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_16', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_16', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_17', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_17', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_18', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_18', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_19', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_19', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_20', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_20', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_21', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_21', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_22', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_22', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_23', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_23', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_24', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_24', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_25', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_25', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_26', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_26', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_27', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_27', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_28', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_28', jabatan: '', is_field_leader: false },
+            { id: 'tm_csv_p_csv_1776399752106_29', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_29', jabatan: '', is_field_leader: false }
+        ] }
 ];
 
 export interface TeamMemberRecord {
@@ -598,11 +671,39 @@ export interface TeamMemberRecord {
 }
 
 export const teamMembersRecords: TeamMemberRecord[] = [
-    { id: 'tm-1', team_id: 't1', person_id: 'p1', role: 'Team Leader', is_active: true, joined_at: '2023-01-01' },
-    { id: 'tm-2', team_id: 't1', person_id: 'p2', role: 'Engineer', is_active: true, joined_at: '2023-01-15' },
-    { id: 'tm-3', team_id: 't2', person_id: 'p1', role: 'Koordinator', is_active: true, joined_at: '2023-06-01' },
-    { id: 'tm-4', team_id: 't2', person_id: 'p3', role: 'Engineer', is_active: true, joined_at: '2023-06-15' },
-    { id: 'tm5', team_id: 't2', person_id: 'u_lead', role: 'Team Leader', is_active: true, joined_at: '2023-01-05' }, // Adjusted to new interface
+    { id: 'tm-1', team_id: 't1', person_id: 'u3', role: 'Team Leader', is_active: true, joined_at: '2023-01-01' }, // Ervin
+    { id: 'tm-2', team_id: 't1', person_id: 'u2', role: 'Engineer', is_active: true, joined_at: '2023-01-15' }, // Budi
+    { id: 'tm-3', team_id: 't3', person_id: 'u3', role: 'Team Leader', is_active: true, joined_at: '2023-06-01' }, // Ervin
+    { id: 'tm-4', team_id: 't3', person_id: 'u5', role: 'Engineer', is_active: true, joined_at: '2023-06-15' }, // Charlie
+    { id: 'tm-5', team_id: 't2', person_id: 'u1', role: 'Koordinator', is_active: true, joined_at: '2023-06-01' }, // John,
+    // === CSV IMPORTS ===
+    { id: 'tm_csv_p_csv_1776399752105_3', team_id: 't_csv_1776399752105_1', person_id: 'p_csv_1776399752105_3', role: 'Team Leader', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752105_4', team_id: 't_csv_1776399752105_1', person_id: 'p_csv_1776399752105_4', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752105_5', team_id: 't_csv_1776399752105_2', person_id: 'p_csv_1776399752105_5', role: 'Team Leader', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752105_6', team_id: 't_csv_1776399752105_2', person_id: 'p_csv_1776399752105_6', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752105_7', team_id: 't_csv_1776399752105_2', person_id: 'p_csv_1776399752105_7', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752105_8', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752105_8', role: 'Team Leader', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752105_9', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752105_9', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_10', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_10', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_11', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_11', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_12', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_12', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_13', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_13', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_14', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_14', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_15', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_15', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_16', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_16', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_17', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_17', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_18', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_18', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_19', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_19', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_20', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_20', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_21', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_21', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_22', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_22', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_23', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_23', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_24', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_24', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_25', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_25', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_26', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_26', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_27', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_27', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_28', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_28', role: 'Engineer', is_active: true, joined_at: '2024-04-17' },
+    { id: 'tm_csv_p_csv_1776399752106_29', team_id: 't_csv_1776399752105_3', person_id: 'p_csv_1776399752106_29', role: 'Engineer', is_active: true, joined_at: '2024-04-17' }
 ];
 
 export const termins: Termin[] = [

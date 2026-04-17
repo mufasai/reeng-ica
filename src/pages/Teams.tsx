@@ -227,8 +227,8 @@ const TeamDetailModal = ({ isOpen, onClose, team }: TeamDetailModalProps) => {
                                         <tr key={m.person_id} className="hover:bg-slate-50">
                                             <td className="py-3 px-4 font-medium text-slate-800">{p.name}</td>
                                             <td className="py-3 px-4">
-                                                <span className={clsx("px-2 py-0.5 rounded text-xs font-bold uppercase", m.is_field_leader ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
-                                                    {m.jabatan} {m.is_field_leader ? '👑' : ''}
+                                                <span className={clsx("px-2 py-0.5 rounded text-xs font-bold uppercase", m.role === 'Team Leader' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
+                                                    {m.role} {m.role === 'Team Leader' ? '👑' : ''}
                                                 </span>
                                             </td>
                                             <td className="py-3 px-4 text-slate-500 capitalize">{p.role.replace('_', ' ')}</td>
@@ -248,7 +248,10 @@ const TeamDetailModal = ({ isOpen, onClose, team }: TeamDetailModalProps) => {
 
 
 // --- MAIN PAGE ---
-const Teams = () => {
+interface TeamsProps {
+    isSubView?: boolean;
+}
+const Teams = ({ isSubView = false }: TeamsProps) => {
     const { can } = useAuth();
     const [teams, setTeams] = useState<Team[]>(initialTeams);
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -311,39 +314,48 @@ const Teams = () => {
     };
 
     return (
-        <div className="p-8 space-y-6 animate-in fade-in duration-500">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Teams</h1>
-                    <p className="text-slate-500 text-sm">Manage field teams and memberships</p>
+        <div className={clsx("animate-in fade-in duration-500", !isSubView && "p-8 space-y-6")}>
+            {!isSubView && (
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800">Teams</h1>
+                        <p className="text-slate-500 text-sm">Manage field teams and memberships</p>
+                    </div>
+                </div>
+            )}
+
+            <div className={clsx("flex justify-between items-center mb-6", isSubView && "mt-2")}>
+                <div className="flex-1 w-full max-w-xl">
+                    <FilterBar
+                        searchValue={searchTerm}
+                        onSearchChange={(val) => { setSearchTerm(val); setCurrentPage(1); }}
+                        searchPlaceholder="Search teams..."
+                        statusOptions={[
+                            { label: 'Active', value: 'active' },
+                            { label: 'Inactive', value: 'inactive' },
+                        ]}
+                        statusValue={statusFilter}
+                        onStatusChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
+                        onExport={(type) => console.log(type)}
+                    />
                 </div>
                 <div className="flex gap-2">
-                    <Tooltip content="Create a new team">
-                        <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all">
+                    <Tooltip content="Create a new team" className="z-50">
+                        <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all whitespace-nowrap">
                             <Plus className="w-4 h-4" /> Add Team
                         </button>
                     </Tooltip>
-                    <Tooltip content="Import dari Excel">
-                        <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all">
-                            <FileSpreadsheet className="w-4 h-4" /> Import Excel
-                        </button>
-                    </Tooltip>
+                    {!isSubView && (
+                        <Tooltip content="Import dari Excel" className="z-50">
+                            <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded flex items-center gap-2 shadow-sm transition-all whitespace-nowrap">
+                                <FileSpreadsheet className="w-4 h-4" /> Import Excel
+                            </button>
+                        </Tooltip>
+                    )}
                 </div>
             </div>
 
             <TableContainer>
-                <FilterBar
-                    searchValue={searchTerm}
-                    onSearchChange={(val) => { setSearchTerm(val); setCurrentPage(1); }}
-                    searchPlaceholder="Search teams..."
-                    statusOptions={[
-                        { label: 'Active', value: 'active' },
-                        { label: 'Inactive', value: 'inactive' },
-                    ]}
-                    statusValue={statusFilter}
-                    onStatusChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
-                    onExport={(type) => console.log(type)}
-                />
 
                 <DataTable>
                     <TableHeader>
@@ -378,7 +390,7 @@ const Teams = () => {
                                     <TableCell>
                                         <div className="flex -space-x-2">
                                             {teamMembersRecords.filter(tm => tm.team_id === team.id).slice(0, 4).map((m, i) => (
-                                                <div key={i} className={clsx("w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] shadow-sm font-bold", m.is_field_leader ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600")} title={m.jabatan}>
+                                                <div key={i} className={clsx("w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] shadow-sm font-bold", m.role === 'Team Leader' ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600")} title={m.role}>
                                                     {allPeople.find(p => p.id === m.person_id)?.name.charAt(0) || '?'}
                                                 </div>
                                             ))}
