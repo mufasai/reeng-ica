@@ -1,21 +1,31 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, Upload, Camera, Edit2, Archive, Activity, Info, Link as LinkIcon } from 'lucide-react';
-import { materialMasterRecords, type MaterialMaster, siteMaterials } from '../data/mockData';
+import { Search, Plus, Upload, Camera, Edit2, Archive, Activity, Info, Link as LinkIcon, FileText, ArrowDown, ArrowUp, CheckCircle2 } from 'lucide-react';
+import { materialMasterRecords, siteMaterials, materialTransactions } from '../data/mockData';
 import clsx from 'clsx';
 // Import Modals (we will create these next)
 import MaterialMasterModals from '../components/modals/MaterialMasterModals';
+import MultiSheetExcelModal from '../components/modals/MultiSheetExcelModal';
 
 const MaterialMasterPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('Semua');
     const [statusFilter, setStatusFilter] = useState<'Semua' | 'Aktif' | 'Nonaktif'>('Semua');
 
+    const [activeTab, setActiveTab] = useState<'master' | 'ledger'>('master');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState<'manual' | 'excel' | 'ocr'>('manual');
+    const [modalMode, setModalMode] = useState<'manual' | 'ocr'>('manual');
+    const [isMultiSheetOpen, setIsMultiSheetOpen] = useState(false);
+
+    // Ledger state
+    const [ledgerSearch, setLedgerSearch] = useState('');
 
     const handleOpenModal = (mode: 'manual' | 'excel' | 'ocr') => {
-        setModalMode(mode);
-        setIsModalOpen(true);
+        if (mode === 'excel') {
+            setIsMultiSheetOpen(true);
+        } else {
+            setModalMode(mode);
+            setIsModalOpen(true);
+        }
     };
 
     // Calculate usage
@@ -55,6 +65,24 @@ const MaterialMasterPage: React.FC = () => {
         }).format(val);
     };
 
+    const filteredLedger = useMemo(() => {
+        return materialTransactions.filter(t => 
+            t.material_nama?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+            t.imported_from?.toLowerCase().includes(ledgerSearch.toLowerCase())
+        ).sort((a,b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+    }, [ledgerSearch]);
+
+    // Compute aggregated view for ledger Summary
+    const ledgerSummary = useMemo(() => {
+        let totalIn = 0;
+        let totalOut = 0;
+        filteredLedger.forEach(t => {
+            if (t.direction === 'IN') totalIn += t.quantity;
+            else if (t.direction === 'OUT') totalOut += t.quantity;
+        });
+        return { totalIn, totalOut, netBalance: totalIn - totalOut };
+    }, [filteredLedger]);
+
     return (
         <div className="p-6 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
             {/* Page Header */}
@@ -85,12 +113,30 @@ const MaterialMasterPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Summary Strip */}
-            <div className="bg-slate-100 rounded-lg p-3 px-5 mb-6 text-sm font-medium text-slate-600 flex items-center justify-center border border-slate-200">
-                <span className="text-blue-700 font-bold">{sumActive}</span> <span className="ml-1 mr-3">material aktif</span> •
-                <span className="text-blue-700 font-bold ml-3">{sumCategories}</span> <span className="ml-1 mr-3">kategori</span> •
-                <span className="text-blue-700 font-bold ml-3">{sumUsedActive}</span> <span className="ml-1">berbagai site aktif sedang digunakan</span>
+            {/* Tabs Header */}
+            <div className="flex border-b border-slate-200 mb-6">
+                <button
+                    onClick={() => setActiveTab('master')}
+                    className={clsx("px-5 py-3 font-semibold text-sm border-b-2 transition-colors", activeTab === 'master' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300')}
+                >
+                    Master Data
+                </button>
+                <button
+                    onClick={() => setActiveTab('ledger')}
+                    className={clsx("px-5 py-3 font-semibold text-sm border-b-2 transition-colors", activeTab === 'ledger' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300')}
+                >
+                    Riwayat Stok (Ledger)
+                </button>
             </div>
+
+            {activeTab === 'master' && (
+                <div className="animate-in slide-in-from-left-4 duration-300">
+                    {/* Summary Strip */}
+                    <div className="bg-slate-100 rounded-lg p-3 px-5 mb-6 text-sm font-medium text-slate-600 flex items-center justify-center border border-slate-200">
+                        <span className="text-blue-700 font-bold">{sumActive}</span> <span className="ml-1 mr-3">material aktif</span> •
+                        <span className="text-blue-700 font-bold ml-3">{sumCategories}</span> <span className="ml-1 mr-3">kategori</span> •
+                        <span className="text-blue-700 font-bold ml-3">{sumUsedActive}</span> <span className="ml-1">berbagai site aktif sedang digunakan</span>
+                    </div>
 
             {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -226,6 +272,116 @@ const MaterialMasterPage: React.FC = () => {
                     </table>
                 </div>
             </div>
+            </div>
+            )}
+
+            {activeTab === 'ledger' && (
+                <div className="animate-in slide-in-from-right-4 duration-300">
+                    {/* Ledger Summary Strip */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6 flex flex-col md:flex-row gap-6 justify-around items-center divide-x divide-slate-100">
+                        <div className="flex flex-col items-center px-6">
+                            <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-xs font-bold mb-1 border border-emerald-100">
+                                <ArrowDown className="w-3 h-3" /> Total Stock In
+                            </div>
+                            <div className="text-2xl font-black text-slate-800">{ledgerSummary.totalIn} <span className="text-sm font-semibold text-slate-500">units</span></div>
+                        </div>
+                        <div className="flex flex-col items-center px-6">
+                            <div className="flex items-center gap-2 text-red-600 bg-red-50 px-2 py-0.5 rounded-full text-xs font-bold mb-1 border border-red-100">
+                                <ArrowUp className="w-3 h-3" /> Total Stock Out
+                            </div>
+                            <div className="text-2xl font-black text-slate-800">{ledgerSummary.totalOut} <span className="text-sm font-semibold text-slate-500">units</span></div>
+                        </div>
+                        <div className="flex flex-col items-center px-6">
+                            <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-xs font-bold mb-1 border border-blue-100">
+                                <Activity className="w-3 h-3" /> Net Balance
+                            </div>
+                            <div className="text-2xl font-black text-slate-800">{ledgerSummary.netBalance} <span className="text-sm font-semibold text-slate-500">units</span></div>
+                        </div>
+                    </div>
+
+                    {/* Ledger Filters */}
+                    <div className="relative max-w-md mb-6">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Cari transaksi material..." 
+                            value={ledgerSearch}
+                            onChange={(e) => setLedgerSearch(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-slate-700"
+                        />
+                    </div>
+
+                    {/* Ledger Table */}
+                    <div className="bg-white border text-sm border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th className="p-4 font-semibold text-slate-600">Terdaftar</th>
+                                        <th className="p-4 font-semibold text-slate-600">Material</th>
+                                        <th className="p-4 font-semibold text-slate-600 text-center">Tipe</th>
+                                        <th className="p-4 font-semibold text-slate-600 text-right">Quantity</th>
+                                        <th className="p-4 font-semibold text-slate-600">Source Dokumen</th>
+                                        <th className="p-4 font-semibold text-slate-600">Vendor / Pengirim</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredLedger.map((trx) => (
+                                        <tr key={trx.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <td className="p-4 text-slate-500 whitespace-nowrap">
+                                                {trx.created_at ? new Date(trx.created_at).toLocaleDateString('id-ID', {day:'numeric',month:'short'}) : '-'}
+                                                <div className="text-xs">{trx.created_at ? new Date(trx.created_at).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}) : ''}</div>
+                                            </td>
+                                            <td className="p-4">
+                                                <p className="font-bold text-slate-800">{trx.material_nama}</p>
+                                                {trx.material_master_id ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200 mt-1 uppercase tracking-wide font-bold">
+                                                        <CheckCircle2 className="w-3 h-3" /> Master Link
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 mt-1 uppercase tracking-wide font-bold">
+                                                        Unlinked
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                {trx.direction === 'IN' ? (
+                                                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-black tracking-wider border border-emerald-200">IN</span>
+                                                ) : (
+                                                    <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-black tracking-wider border border-red-200">OUT</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <span className={clsx("font-bold text-lg", trx.direction === 'IN' ? "text-emerald-600" : "text-red-600")}>
+                                                    {trx.direction === 'IN' ? '+' : '-'}{trx.quantity}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-slate-600 text-xs">
+                                                <div className="font-medium">{trx.delivery_note_no || trx.po_number || '-'}</div>
+                                                <div className="text-slate-400 mt-0.5">Date: {trx.delivery_date || '-'}</div>
+                                            </td>
+                                            <td className="p-4 text-slate-600 text-sm">
+                                                <div className="font-medium text-slate-800">{trx.vendor_pengirim || '-'}</div>
+                                                <div className="text-slate-500 text-xs">Sender: {trx.sender || '-'}</div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredLedger.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="p-8 text-center text-slate-500">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <FileText className="w-8 h-8 text-slate-300 mb-2" />
+                                                    <p>Belum ada riwayat pergerakan stok.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modals Placeholder */}
             {isModalOpen && (
@@ -233,6 +389,16 @@ const MaterialMasterPage: React.FC = () => {
                     mode={modalMode} 
                     isOpen={isModalOpen} 
                     onClose={() => setIsModalOpen(false)} 
+                />
+            )}
+            {isMultiSheetOpen && (
+                <MultiSheetExcelModal
+                    isOpen={isMultiSheetOpen}
+                    onClose={() => setIsMultiSheetOpen(false)}
+                    onImportComplete={(summary) => {
+                        console.log('Processed Multi-Sheet from Material:', summary);
+                        setIsMultiSheetOpen(false);
+                    }}
                 />
             )}
         </div>

@@ -574,14 +574,14 @@ export const people: Person[] = [
         no_ktp: '3171234567890006', email: 'backoffice@demo.com', phone: '081234567895', 
         vendor: 'Internal', joinedAt: '2023-01-01', status_aktif: true,
         jabatan: 'Admin', pekerjaan: ''
-    },,
+    },
     // === CSV IMPORTS ===
-    { id: 'p_csv_1776399752105_1', name: 'Hairul Umam', role: 'field', no_ktp: '3672051007040002', email: 'umam45171@gmail.com', phone: '085691351474', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 1', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
-    { id: 'p_csv_1776399752105_2', name: 'Holil Jaelani', role: 'field', no_ktp: '3672072609000001', email: 'holiljaeni26@gmail.com', phone: '085774349836', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Engineer', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
-    { id: 'p_csv_1776399752105_3', name: 'Ervin Putra', role: 'field', no_ktp: '3672081709970002', email: 'ervinputra7@gmail.com', phone: '089528148622', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
-    { id: 'p_csv_1776399752105_4', name: 'Adia Fardan', role: 'field', no_ktp: '3672051903050001', email: 'adifauzan232@gmail.com', phone: '081280278681', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 2', pekerjaan: 'Blacksite', regional: 'Jabodetabek' },
-    { id: 'p_csv_1776399752105_5', name: 'Nusa Satria Wibowo', role: 'field', no_ktp: '3201132407790005', email: 'nusa.satria@gmail.com', phone: '081288235307', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: 'Filter', regional: 'Jabodetabek' },
-    { id: 'p_csv_1776399752105_6', name: 'Supriadi Sihombing', role: 'field', no_ktp: '3603120202920015', email: 'supriadi.sihombing@gmail.co,', phone: '087856872575', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 2', pekerjaan: 'Filter', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_1', name: 'Hairul Umam', role: 'field', no_ktp: '3672051007040002', email: 'umam45171@gmail.com', phone: '085691351474', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 1', pekerjaan: 'BLACKSITE', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_2', name: 'Holil Jaelani', role: 'field', no_ktp: '3672072609000001', email: 'holiljaeni26@gmail.com', phone: '085774349836', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Engineer', pekerjaan: 'BLACKSITE', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_3', name: 'Ervin Putra', role: 'field', no_ktp: '3672081709970002', email: 'ervinputra7@gmail.com', phone: '089528148622', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: 'BLACKSITE', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_4', name: 'Adia Fardan', role: 'field', no_ktp: '3672051903050001', email: 'adifauzan232@gmail.com', phone: '081280278681', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 2', pekerjaan: 'BLACKSITE', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_5', name: 'Nusa Satria Wibowo', role: 'field', no_ktp: '3201132407790005', email: 'nusa.satria@gmail.com', phone: '081288235307', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: 'FILTER', regional: 'Jabodetabek' },
+    { id: 'p_csv_1776399752105_6', name: 'Supriadi Sihombing', role: 'field', no_ktp: '3603120202920015', email: 'supriadi.sihombing@gmail.co,', phone: '087856872575', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member 2', pekerjaan: 'FILTER', regional: 'Jabodetabek' },
     { id: 'p_csv_1776399752105_7', name: 'Rizky Maulana Fridiansyah', role: 'field', no_ktp: '3201170610040003', email: 'rizkymaulanafridiansyahh@gmail.com', phone: '0881011667544', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Member', pekerjaan: '', regional: '' },
     { id: 'p_csv_1776399752105_8', name: 'Rivaldi', role: 'field', no_ktp: '3173031111991001', email: 'rivaldialdi4139@gmail.com', phone: '081285190136', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: 'Leader', pekerjaan: '', regional: '' },
     { id: 'p_csv_1776399752105_9', name: 'Hamzah', role: 'field', no_ktp: '3173030708890001', email: 'hamzzahhbzah@gmail.com', phone: '087783208474', vendor: 'Internal', joinedAt: '2024-04-17', status_aktif: true, jabatan: '', pekerjaan: '', regional: '' },
@@ -624,7 +624,7 @@ export const teams: Team[] = [
     },
     { 
         id: 't2', name: 'Bravo Team (Combat)', status_aktif: true, project_type: 'COMBAT', regional: 'Jawa Barat'
-    }, ,
+    },
     // === CSV IMPORTS ===
     { id: 't_csv_1776399752105_1', name: 'Team BLACKSITE (Ervin Putra)', status_aktif: true, project_type: 'BLACKSITE', regional: 'Jabodetabek', members: [
             { id: 'tm_csv_p_csv_1776399752105_3', team_id: 't_csv_1776399752105_1', person_id: 'p_csv_1776399752105_3', jabatan: 'Leader', is_field_leader: true },
@@ -797,10 +797,63 @@ export interface MaterialMaster {
     harga_satuan: number | null;
     keterangan: string | null;
     status_aktif: boolean;
-    created_by?: string;
     created_at?: string;
     updated_at?: string;
 }
+
+export interface MaterialTransaction {
+    id: string;
+    material_master_id: string | null;
+    material_nama: string;
+    material_type: string | null;
+    direction: 'IN' | 'OUT';
+    quantity: number;
+    delivery_date: string | null;
+    delivery_note_no: string | null;
+    po_number: string | null;
+    vendor_pengirim: string | null;
+    sender: string | null;
+    receiver: string | null;
+    catatan: string | null;
+    imported_from: string | null;
+    created_at?: string;
+}
+
+export const materialTransactions: MaterialTransaction[] = [
+    {
+        id: 'trx-1',
+        material_master_id: 'mm-1',
+        material_nama: 'Semen Portland',
+        material_type: 'Sipil',
+        direction: 'IN',
+        quantity: 100,
+        delivery_date: '2024-04-01',
+        delivery_note_no: 'DN-001',
+        po_number: 'PO-001',
+        vendor_pengirim: 'PT Pemasok',
+        sender: 'Agus',
+        receiver: 'Budi',
+        catatan: '',
+        imported_from: 'legacy.xlsx',
+        created_at: '2024-04-01T10:00:00Z'
+    }
+];
+
+export interface ATPTask {
+  id: string;
+  site_id: string; // references SiteMaster.id or SiteMaster.site_id depending on usage, we'll use site_id like "BKS598"
+  pdid: string | null;
+  tiket_atp: string | null;
+  tagging_status: 'pending' | 'done' | 'na';
+  cell_capture_done: boolean;
+  catatan: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export const atpTasks: ATPTask[] = [
+  { id: 'atp-1', site_id: 'JKT010', pdid: null, tiket_atp: 'ATP000000282692', tagging_status: 'pending', cell_capture_done: false, catatan: 'Need PDID', updated_by: 'u1', updated_at: '2024-03-01T10:00:00Z' }
+];
 
 export const materialMasterRecords: MaterialMaster[] = [
     {
@@ -1308,6 +1361,89 @@ export const siteMasterRecords: SiteMaster[] = [
         imported_by: 'u_adm',
         imported_at: '2024-02-10T10:00:00Z',
         // Intentional: missing coordinates to test "missing coordinates" logic
+    },
+    {
+        id: 'sm-real-1',
+        unique_key: 'BKS025-3',
+        site_id: 'BKS025',
+        ne_id: 'BKS025MT1',
+        site_name: 'TBG/CIBARUSOHTL15M',
+        sector: '3',
+        tower_provider: 'TBG', // inferred
+        plan_capex: 'Batch#2',
+        area: 'Area 2',
+        region: 'R03 Jakarta & Banten',
+        nop: '',
+        sow_eqp: 'R0009678385',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '4200052273',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'permit_process',
+        ineom_registered: true,
+        batch_ref: 'Real-Excel-Data',
+        imported_by: 'system',
+        imported_at: '2026-04-21T00:00:00Z',
+        latitude: -6.44299,
+        longitude: 107.065261,
+        team_id: 't2',
+        extra_data: {
+            "PROJECT TYPE": "FILTERING",
+            "SITE MOVING STATUS": "Fix",
+            "FINAL SITE ID": "BKS025",
+            "TP NAME": "TBG",
+            "IOMS REGISTERED": "Registered",
+            "PERMIT STATUS": "1. Planning",
+            "ISSUE PROBLEM": "1. NO ISSUE",
+            "IMPLEMENTASI STATUS": "Scheduled",
+            "TEAM": "Denny Suhendra",
+            "STATUS ATP": "REQUEST PDID",
+            "PRIO CAPEX FINAL": "Batch#2",
+        }
+    },
+    {
+        id: 'sm-real-2',
+        unique_key: 'JTX540-3',
+        site_id: 'JTX540',
+        ne_id: 'JTX540MT1',
+        site_name: 'JTX540-PERMANENCOMBATPASARKRAMATDJATI-PTI-MACRO',
+        sector: '3',
+        tower_provider: 'PTI',
+        plan_capex: 'Batch#2',
+        area: 'Area 2',
+        region: 'R03 Jakarta & Banten',
+        nop: '',
+        sow_eqp: 'R0009678886',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '4200052273',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Real-Excel-Data',
+        imported_by: 'system',
+        imported_at: '2026-04-21T00:00:00Z',
+        latitude: -6.29509,
+        longitude: 106.86988,
+        team_id: 't2',
+        extra_data: {
+            "PROJECT TYPE": "FILTERING",
+            "SITE MOVING STATUS": "Fix",
+            "FINAL SITE ID": "JTX540",
+            "TP NAME": "PTI",
+            "IOMS REGISTERED": "Registered",
+            "PERMIT STATUS": "5. Permit Released",
+            "ISSUE PROBLEM": "1. NO ISSUE",
+            "IMPLEMENTASI STATUS": "RFS",
+            "TEAM": "Nusa Satria Wibowo",
+            "TEAM ONSITE STATUS": "ONSITE",
+            "STATUS ATP": "UPLOAD TAGGING DONE",
+            "PRIO CAPEX FINAL": "Batch#2",
+        }
     }
 ];
 
@@ -1508,3 +1644,13 @@ export const activityFeed: ActivityLog[] = [
     { id: 'act-7', userId: 'u_eng', action: 'marked SKP Received', target: 'Site Cruz Alpha', timestamp: '3 hari lalu' },
     { id: 'act-8', userId: 'u_fin', action: 'processed payment for Termin 2', target: 'Site 1C', timestamp: '4 hari lalu' },
 ];
+
+// --- MAPPING PERSISTENCE ---
+export interface SavedExcelTemplate {
+    id: string;
+    sheetType: 'stage_update' | 'site_technical' | 'inventory_movement' | 'workforce';
+    columnMappings: Record<string, string>; // Excel Header -> System Field
+    valueNormalizations: Record<string, string>; // Raw Cell Value (status) -> System Stage
+}
+
+export const savedExcelTemplates: SavedExcelTemplate[] = [];

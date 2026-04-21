@@ -8,7 +8,7 @@ import {
 import clsx from 'clsx';
 import { siteMasterRecords, type ProjectType, getTerminSummary, people } from '../data/mockData';
 import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
-import ImportSiteModal from '../components/modals/ImportSiteModal';
+import MultiSheetExcelModal from '../components/modals/MultiSheetExcelModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
 import { useAuth } from '../context/AuthContext';
 
@@ -471,15 +471,6 @@ const Sites = () => {
     }, []);
 
     // Handlers
-    const handleImportData = (parsedData: any[]) => {
-        let newCount = 0;
-        parsedData.forEach(newRow => {
-            const existingIndex = siteMasterRecords.findIndex(r => r.unique_key === newRow.unique_key);
-            if (existingIndex < 0) newCount++;
-        });
-        setSummaryData({ totalProcessed: parsedData.length, newCreated: newCount, updated: 0, coordsUpdated: 0, nameUpdated: 0, errors: 0 });
-    };
-
     return (
         <div className="space-y-6 animate-in fade-in duration-300 pb-16">
 
@@ -858,11 +849,14 @@ const Sites = () => {
 
             {/* ── Modals ─────────────────────────────────────────────────── */}
             <BulkStageUpdateModal isOpen={isBulkOpen} onClose={() => setIsBulkOpen(false)} />
-            <ImportSiteModal
+            <MultiSheetExcelModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
-                onAddManual={() => { setIsImportModalOpen(false); }}
-                onImportExcel={(parsedData) => { handleImportData(parsedData); setIsImportModalOpen(false); }}
+                onImportComplete={(summary) => {
+                    console.log('Processed Multi-Sheet:', summary);
+                    setSummaryData(summary);
+                    setIsImportModalOpen(false);
+                }}
             />
             <ImportSummaryModal
                 isOpen={!!summaryData}
