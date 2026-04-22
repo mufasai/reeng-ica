@@ -23,15 +23,15 @@ const MaterialMasterPage: React.FC = () => {
     const [ledgerStartDate, setLedgerStartDate] = useState('');
     const [ledgerEndDate, setLedgerEndDate] = useState('');
 
-    const handleOpenModal = (mode: 'manual' | 'excel' | 'ocr', defaultFilter?: any[]) => {
+    const handleOpenModal = (mode: 'manual' | 'excel' | 'ocr') => {
         if (mode === 'excel') {
-            setImportDefaultFilter(defaultFilter);
             setIsMultiSheetOpen(true);
         } else {
             setModalMode(mode);
             setIsModalOpen(true);
         }
     };
+
 
     // Calculate usage
     const getUsageCount = (materialId: string) => {
@@ -400,7 +400,7 @@ const MaterialMasterPage: React.FC = () => {
                             </div>
                             <div className="flex items-end">
                                 <button 
-                                    onClick={() => handleOpenModal('excel', ['inventory_movement'])}
+                                    onClick={() => handleOpenModal('excel')}
                                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors text-sm shadow-sm shadow-emerald-600/20 whitespace-nowrap h-[38px]"
                                 >
                                     <ListPlus className="w-4 h-4" /> Import Excel Inventory
