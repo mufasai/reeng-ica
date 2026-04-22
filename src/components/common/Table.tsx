@@ -9,7 +9,7 @@ import clsx from 'clsx';
 
 // --- TABLE CONTAINER ---
 export const TableContainer = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-    <div className={clsx("bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden", className)}>
+    <div className={clsx("bg-white border border-slate-200 rounded-lg shadow-sm", className)}>
         {children}
     </div>
 );
@@ -30,6 +30,9 @@ interface FilterBarProps {
     
     // Exports
     onExport?: (type: 'csv' | 'excel' | 'print' | 'copy') => void;
+    
+    // Extra custom actions
+    extraActions?: React.ReactNode;
 }
 
 export const FilterBar = ({
@@ -40,7 +43,8 @@ export const FilterBar = ({
     statusValue,
     onStatusChange,
     showDateRange,
-    onExport
+    onExport,
+    extraActions
 }: FilterBarProps) => {
     return (
         <div className="p-4 border-b border-slate-200 bg-white flex flex-col md:flex-row gap-4 justify-between items-center">
@@ -81,8 +85,9 @@ export const FilterBar = ({
                 </div>
             )}
 
-            {/* RIGHT: Export Buttons */}
+            {/* RIGHT: Export Buttons & Extra Actions */}
             <div className="flex items-center gap-2">
+                {extraActions}
                 {[
                     { type: 'copy', icon: Copy, label: 'Copy' },
                     { type: 'csv', icon: FileSpreadsheet, label: 'CSV' },

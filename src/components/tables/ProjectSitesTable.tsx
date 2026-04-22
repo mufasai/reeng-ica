@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { type SiteMaster, teams, workOrders, filterTerms, combatTerms, siteStageLogs, USERS, teamMembersRecords } from '../../data/mockData';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { type SiteMaster, teams, workOrders, filterTerms, combatTerms, siteStageLogs, USERS, teamMembersRecords, people } from '../../data/mockData';
+import { ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { 
     TableContainer, 
     FilterBar, 
@@ -17,6 +17,8 @@ import {
     EmptyState 
 } from '../common/Table';
 import clsx from 'clsx';
+import { useTableColumns } from '../../hooks/useTableColumns';
+import TableColumnToggle from '../common/TableColumnToggle';
 
 interface ProjectSitesTableProps {
   sites: SiteMaster[];
@@ -33,6 +35,29 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [openStageMenuId, setOpenStageMenuId] = useState<string | null>(null);
+
+  const canBulkAction = ['operational', 'admin'].includes(currentUser.role);
+  const [selectedSiteIds, setSelectedSiteIds] = useState<Set<string>>(new Set());
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>, visibleSiteIds: string[]) => {
+      if (e.target.checked) {
+          setSelectedSiteIds(new Set(visibleSiteIds));
+      } else {
+          setSelectedSiteIds(new Set());
+      }
+  };
+
+  const handleSelectRow = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+      e.stopPropagation();
+      const next = new Set(selectedSiteIds);
+      if (e.target.checked) next.add(id);
+      else next.delete(id);
+      setSelectedSiteIds(next);
+  };
+
+  // Column visibility
+  const { visibilityMap, handleVisibilityChange, resetToDefault, col, currentCols } = useTableColumns(currentUser.id);
   
   const toggleRow = (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
@@ -199,6 +224,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
   };
 
   return (
+    <>
     <TableContainer>
        <FilterBar 
             searchValue={searchTerm}
@@ -206,21 +232,45 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
             searchPlaceholder="Cari site..."
             // No status filter for sites in mock data currently, but could add later
             onExport={(type) => console.log('Exporting sites', type)}
+            extraActions={<TableColumnToggle visibilityMap={visibilityMap} onChange={handleVisibilityChange} onReset={resetToDefault} currentCols={currentCols} />}
        />
 
        <DataTable>
            <TableHeader>
-               <TableHead className="w-16">SITE_ID</TableHead>
-               <TableHead sortable>Site Name</TableHead>
-               <TableHead>Sector</TableHead>
-               <TableHead>Cluster</TableHead>
-               <TableHead>Region</TableHead>
-               <TableHead>Team</TableHead>
-               <TableHead>Stage</TableHead>
-               <TableHead className="w-[80px]">Termin</TableHead>
-               <TableHead>Last Updated</TableHead>
-               <TableHead className="w-10"> </TableHead>
-               <TableHead className="text-right">Actions</TableHead>
+               {canBulkAction && (
+                   <TableHead className="w-10">
+                       <input 
+                           type="checkbox" 
+                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                           checked={paginatedSites.length > 0 && selectedSiteIds.size === paginatedSites.length}
+                           onChange={(e) => handleSelectAll(e, paginatedSites.map(s => s.id))}
+                       />
+                   </TableHead>
+               )}
+               {col('site_id') && <TableHead className="w-16">SITE_ID</TableHead>}
+               {col('site_name') && <TableHead sortable>Site Name</TableHead>}
+               {col('type') && <TableHead>Type</TableHead>}
+               {col('sector') && <TableHead>Sector</TableHead>}
+               {col('cluster') && <TableHead>Cluster</TableHead>}
+               {col('team') && <TableHead>Team</TableHead>}
+               {col('stage') && <TableHead>Stage</TableHead>}
+               {col('days') && <TableHead>Last Updated</TableHead>}
+               {col('termin') && <TableHead className="w-[80px]">Termin</TableHead>}
+               
+               {col('po_tsel') && <TableHead>PO Tsel</TableHead>}
+               {col('region') && <TableHead>Region</TableHead>}
+               {col('tp_name') && <TableHead>TP Name</TableHead>}
+               {col('priority') && <TableHead>Priority</TableHead>}
+               {col('batch') && <TableHead>Batch</TableHead>}
+               {col('atp_status') && <TableHead>ATP Status</TableHead>}
+               {col('lat_long') && <TableHead>Lat/Long</TableHead>}
+               {col('ioms') && <TableHead>IOMS</TableHead>}
+               {col('sow_id') && <TableHead>SOW ID</TableHead>}
+               {col('field_leader') && <TableHead>Field Leader</TableHead>}
+               {col('permit_expiry') && <TableHead>Permit Expiry</TableHead>}
+               
+               {col('actions') && <TableHead className="w-10"> </TableHead>}
+               {col('actions') && <TableHead className="text-right">Actions</TableHead>}
            </TableHeader>
            <TableBody>
                {paginatedSites.length === 0 ? (
@@ -245,7 +295,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                        const isExpanded = expandedRowId === site.id;
                        
                        // Derived Expandable Data
-                       const eData = site.extra_data || {};
+                       const eData = site.raw_data || {};
                        const renderBool = (val: boolean | null | undefined) => {
                            if (val === true) return <span className="text-emerald-500 font-bold">✓</span>;
                            if (val === false) return <span className="text-red-500 font-bold">✗</span>;
@@ -270,53 +320,115 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                isSurveyNok ? "bg-red-50/20 border-l-[3px] border-l-red-500" : (isStale ? "bg-amber-50/30" : ""), 
                                isExpanded ? "border-b-0" : ""
                            )}>
-                               <TableCell className="font-mono font-bold text-slate-800">{site.site_id}</TableCell>
-                               <TableCell>
-                                   <Link to={`/sites/${site.site_id}`} className="font-medium text-[var(--blue-400)] hover:underline">
-                                       <div className="max-w-[150px] truncate" title={site.site_name}>
-                                           {site.site_name}
-                                       </div>
-                                   </Link>
-                               </TableCell>
-                               <TableCell className="text-[var(--text-primary)]">{site.sector || '—'}</TableCell>
-                               <TableCell className="text-[var(--text-primary)]">{site.cluster || '—'}</TableCell>
-                               <TableCell>
-                                   <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200" title={site.region}>
-                                       {regionAbbr}
-                                   </span>
-                               </TableCell>
-                               <TableCell>
-                                   {team ? (
-                                       <span className="text-sm text-slate-700 font-medium">{team.name}</span>
-                                   ) : (
-                                       <span className="text-amber-600 text-sm font-medium flex items-center gap-1">Belum ditugaskan</span>
-                                   )}
-                               </TableCell>
-                               <TableCell>
-                                   <span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border whitespace-nowrap", stageProps.color)}>
-                                       {stageProps.label}
-                                   </span>
-                               </TableCell>
-                               <TableCell>
-                                   {renderTerminDots(site)}
-                               </TableCell>
-                               {/* 
-                                 // TODO: activate hover tooltip if team requests it
-                                 <TableCell className="text-xs text-[var(--text-secondary)]" title={`Di stage ini sejak ${updateInfo.daysInStage} hari lalu`}>
-                               */}
-                               <TableCell className="text-xs font-medium text-slate-600">
-                                    {updateInfo.text}
-                               </TableCell>
-                               <TableCell className="px-0 w-10 text-center">
-                                   <button 
-                                      onClick={(e) => toggleRow(site.id, e)}
-                                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded md:block hidden transition-colors"
-                                      title={isExpanded ? "Collapse Details" : "Expand Details"}
-                                   >
-                                       {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                   </button>
-                               </TableCell>
-                               <TableCell className="text-right">
+                               {canBulkAction && (
+                                   <TableCell onClick={e => e.stopPropagation()} className="w-10">
+                                       <input 
+                                           type="checkbox" 
+                                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                           checked={selectedSiteIds.has(site.id)}
+                                           onChange={e => handleSelectRow(site.id, e)}
+                                       />
+                                   </TableCell>
+                               )}
+                               {col('site_id') && <TableCell className="font-mono font-bold text-slate-800">{site.site_id}</TableCell>}
+                               {col('site_name') && (
+                                   <TableCell>
+                                       <Link to={`/sites/${site.site_id}`} className="font-medium text-[var(--blue-400)] hover:underline">
+                                           <div className="max-w-[150px] truncate" title={site.site_name}>
+                                               {site.site_name}
+                                           </div>
+                                       </Link>
+                                   </TableCell>
+                               )}
+                               {col('type') && <TableCell><span className="text-xs uppercase tracking-wider font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{site.project_type}</span></TableCell>}
+                               {col('sector') && <TableCell className="text-[var(--text-primary)]">{site.sector || '—'}</TableCell>}
+                               {col('cluster') && <TableCell className="text-[var(--text-primary)]">{site.cluster || '—'}</TableCell>}
+                               {col('team') && (
+                                   <TableCell>
+                                       {team ? (
+                                           <span className="text-sm text-slate-700 font-medium">{team.name}</span>
+                                       ) : (
+                                           <span className="text-amber-600 text-sm font-medium flex items-center gap-1">Belum ditugaskan</span>
+                                       )}
+                                   </TableCell>
+                               )}
+                               {col('stage') && (
+                                   <TableCell className="relative">
+                                       <button 
+                                           onClick={(e) => { e.stopPropagation(); setOpenStageMenuId(prev => prev === site.id ? null : site.id); }}
+                                           className={clsx("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border whitespace-nowrap group hover:ring-2 ring-offset-1 transition-all", stageProps.color, openStageMenuId === site.id ? 'ring-2' : '')}
+                                       >
+                                           <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+                                           {stageProps.label}
+                                           <ChevronDown className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+                                       </button>
+
+                                       {openStageMenuId === site.id && (
+                                           <>
+                                                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpenStageMenuId(null); }} />
+                                                <div className="absolute top-full left-4 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-200 z-50 py-1"
+                                                     onClick={e => e.stopPropagation()}>
+                                                    <div className="px-3 py-1.5 text-xs text-slate-500 border-b border-slate-100 mb-1 flex items-center gap-2">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                                        {stageProps.label} (current)
+                                                    </div>
+                                                    <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-between">
+                                                        → Akses Process
+                                                    </button>
+                                                    <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 font-medium">
+                                                        Update Stage →
+                                                    </button>
+                                                    <div className="border-t border-slate-100 my-1"></div>
+                                                    <button className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+                                                        Laporkan Issue
+                                                    </button>
+                                                </div>
+                                           </>
+                                       )}
+                                   </TableCell>
+                               )}
+                               {col('days') && (
+                                   <TableCell className="text-xs font-medium text-slate-600">
+                                        {updateInfo.text}
+                                   </TableCell>
+                               )}
+                               {col('termin') && (
+                                   <TableCell>
+                                       {renderTerminDots(site)}
+                                   </TableCell>
+                               )}
+                               
+                               {col('po_tsel') && <TableCell className="text-slate-600 text-xs font-mono">{site.po_tsel || '—'}</TableCell>}
+                               {col('region') && (
+                                   <TableCell>
+                                       <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200" title={site.region}>
+                                           {regionAbbr}
+                                       </span>
+                                   </TableCell>
+                               )}
+                               {col('tp_name') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</TableCell>}
+                               {col('priority') && <TableCell className="text-slate-600 text-xs">{site.raw_data?.['PRIO CAPEX FINAL'] || site.raw_data?.['PRIO'] || '—'}</TableCell>}
+                               {col('batch') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.batch_ref || site.import_source || '—'}</TableCell>}
+                               {col('atp_status') && <TableCell className="text-slate-600 text-xs truncate max-w-[120px]">{site.raw_data?.['STATUS ATP'] || '—'}</TableCell>}
+                               {col('lat_long') && <TableCell className="text-slate-500 text-[10px] font-mono">{(site.latitude && site.longitude) ? `${site.latitude.toFixed(4)}, ${site.longitude.toFixed(4)}` : '—'}</TableCell>}
+                               {col('ioms') && <TableCell className="text-center">{site.ineom_registered ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-slate-300">—</span>}</TableCell>}
+                               {col('sow_id') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.sow_eqp || '—'}</TableCell>}
+                               {col('field_leader') && <TableCell className="text-slate-600 text-xs">{(() => { const fl = people.find(p => p.id === site.field_leader_id); return fl ? fl.name : '—'; })()}</TableCell>}
+                               {col('permit_expiry') && <TableCell className="text-slate-600 text-xs tabular-nums">{site.raw_data?.permit_expiry_date ? new Date(site.raw_data.permit_expiry_date).toLocaleDateString('id-ID') : '—'}</TableCell>}
+
+                               {col('actions') && (
+                                   <TableCell className="px-0 w-10 text-center">
+                                       <button 
+                                          onClick={(e) => toggleRow(site.id, e)}
+                                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded md:block hidden transition-colors"
+                                          title={isExpanded ? "Collapse Details" : "Expand Details"}
+                                       >
+                                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                       </button>
+                                   </TableCell>
+                               )}
+                               {col('actions') && (
+                                   <TableCell className="text-right">
                                    <div className="flex justify-end items-center gap-2">
                                        {/* Standard Actions */}
                                        <ActionButton type="view" onClick={() => navigate(`/sites/${site.site_id}`)} />
@@ -329,10 +441,11 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                        )}
                                    </div>
                                </TableCell>
+                               )}
                            </TableRow>
                            {isExpanded && (
                                <tr className="bg-[#F8FAFC]">
-                                   <td colSpan={11} className="p-0 border-b border-slate-200">
+                                   <td colSpan={100} className="p-0 border-b border-slate-200">
                                        <div className="flex w-full overflow-hidden animate-in slide-in-from-top-2 duration-200">
                                            {/* Colored left border indicating stage */}
                                            <div className={clsx("w-[3px] shrink-0", stageProps.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-500'))} />
@@ -458,6 +571,18 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
             onPageChange={setCurrentPage}
        />
     </TableContainer>
+
+    {selectedSiteIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white rounded-full shadow-2xl border border-slate-200 px-4 py-2 flex items-center gap-4 z-[100] animate-in slide-in-from-bottom-10">
+            <span className="text-sm font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-full">{selectedSiteIds.size} sites dipilih</span>
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+                <button className="text-sm font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm transition-colors">Assign Tim</button>
+                <button className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg shadow-sm transition-colors">Update Stage</button>
+                <button className="text-sm font-medium text-slate-500 hover:text-slate-700 px-2 py-1.5" onClick={() => setSelectedSiteIds(new Set())}>✕ Batal</button>
+            </div>
+        </div>
+    )}
+    </>
   );
 };
 

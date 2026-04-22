@@ -817,6 +817,9 @@ export interface MaterialTransaction {
     catatan: string | null;
     imported_from: string | null;
     created_at?: string;
+    source_file?: string;
+    imported_at?: string;
+    raw_data?: Record<string, any>;
 }
 
 export const materialTransactions: MaterialTransaction[] = [
@@ -1129,9 +1132,10 @@ export interface SiteMaster {
     ineom_registered: boolean;
     import_source?: string;
     notes?: string;
-    extra_data?: Record<string, any>;
+    raw_data?: Record<string, any>;
 
     impl_cico_done?: boolean;
+    impl_rfi_done?: boolean;
     impl_rfs_done?: boolean;
     impl_dokumen_done?: boolean;
 
@@ -1203,7 +1207,7 @@ export const siteMasterRecords: SiteMaster[] = [
         imported_at: '2024-02-10T10:00:00Z',
         latitude: -6.2479,
         longitude: 106.5844,
-        extra_data: {
+        raw_data: {
             permit_start_date: '2026-02-10',
             permit_expiry_date: '2026-06-10',
             tpas_status: true,
@@ -1255,7 +1259,7 @@ export const siteMasterRecords: SiteMaster[] = [
         imported_at: '2024-02-10T10:05:00Z',
         latitude: -6.2255,
         longitude: 106.8016,
-        extra_data: {
+        raw_data: {
             permit_start_date: '2026-02-15',
             permit_expiry_date: '2026-03-20', // Expiring soon
             tpas_status: true,
@@ -1389,7 +1393,7 @@ export const siteMasterRecords: SiteMaster[] = [
         latitude: -6.44299,
         longitude: 107.065261,
         team_id: 't2',
-        extra_data: {
+        raw_data: {
             "PROJECT TYPE": "FILTERING",
             "SITE MOVING STATUS": "Fix",
             "FINAL SITE ID": "BKS025",
@@ -1430,7 +1434,7 @@ export const siteMasterRecords: SiteMaster[] = [
         latitude: -6.29509,
         longitude: 106.86988,
         team_id: 't2',
-        extra_data: {
+        raw_data: {
             "PROJECT TYPE": "FILTERING",
             "SITE MOVING STATUS": "Fix",
             "FINAL SITE ID": "JTX540",
@@ -1648,9 +1652,57 @@ export const activityFeed: ActivityLog[] = [
 // --- MAPPING PERSISTENCE ---
 export interface SavedExcelTemplate {
     id: string;
-    sheetType: 'stage_update' | 'site_technical' | 'inventory_movement' | 'workforce';
+    sheetType: 'stage_update' | 'site_technical' | 'inventory_movement' | 'workforce' | 'material_master';
     columnMappings: Record<string, string>; // Excel Header -> System Field
     valueNormalizations: Record<string, string>; // Raw Cell Value (status) -> System Stage
 }
 
 export const savedExcelTemplates: SavedExcelTemplate[] = [];
+
+export interface SiteTechnicalDetail {
+    id: string;
+    site_id: string;
+    ne_id?: string;
+    layer?: string;          // 'ML', 'MR', 'L1800', 'L2100' etc.
+    sector?: number | string;
+    freq_band?: string;
+    longitude?: number;
+    latitude?: number;
+    ant_type?: string;
+    height?: number | string;
+    tp_id?: string;
+    tp_name?: string;
+    site_type?: string;
+    cell_name?: string;
+    enodeb_id?: number | string;
+    cell_id?: number | string;
+    local_cell_id?: number | string;
+    tal?: number | string;
+    tac?: number | string;
+    area?: string;
+    bsc?: string;
+    site_name?: string;
+    provinsi?: string;
+    address?: string;
+    kecamatan?: string;
+    kabupaten?: string;
+    desa?: string;
+    cluster?: string;
+    branch?: string;
+    region?: string;
+    raw_data?: Record<string, any>;
+    source_file?: string;
+    imported_at?: string;
+}
+
+// Seed with realistic demo data for testing
+export const siteTechnicalDetails: SiteTechnicalDetail[] = [
+    // 6 rows for first mock site: 2 layers (ML + MR) × 3 sectors
+    { id: 'tech-001', site_id: 'BKS001', ne_id: 'BKS001MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 107.015, latitude: -6.215, ant_type: 'ZTE ATR518R14v06', height: 32, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_1800_1', enodeb_id: 50401, cell_id: 1, local_cell_id: 1, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
+    { id: 'tech-002', site_id: 'BKS001', ne_id: 'BKS001MT2', layer: 'ML', sector: 2, freq_band: 'L1800', longitude: 107.015, latitude: -6.215, ant_type: 'ZTE ATR518R14v06', height: 32, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_1800_2', enodeb_id: 50401, cell_id: 2, local_cell_id: 2, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
+    { id: 'tech-003', site_id: 'BKS001', ne_id: 'BKS001MT3', layer: 'ML', sector: 3, freq_band: 'L1800', longitude: 107.015, latitude: -6.215, ant_type: 'ZTE ATR518R14v06', height: 32, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_1800_3', enodeb_id: 50401, cell_id: 3, local_cell_id: 3, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
+    { id: 'tech-004', site_id: 'BKS001', ne_id: 'BKS001MR1', layer: 'MR', sector: 1, freq_band: 'L2100', longitude: 107.015, latitude: -6.215, ant_type: 'Huawei AAU5613', height: 30, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_2100_1', enodeb_id: 50402, cell_id: 4, local_cell_id: 1, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
+    { id: 'tech-005', site_id: 'BKS001', ne_id: 'BKS001MR2', layer: 'MR', sector: 2, freq_band: 'L2100', longitude: 107.015, latitude: -6.215, ant_type: 'Huawei AAU5613', height: 30, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_2100_2', enodeb_id: 50402, cell_id: 5, local_cell_id: 2, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
+    { id: 'tech-006', site_id: 'BKS001', ne_id: 'BKS001MR3', layer: 'MR', sector: 3, freq_band: 'L2100', longitude: 107.015, latitude: -6.215, ant_type: 'Huawei AAU5613', height: 30, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_2100_3', enodeb_id: 50402, cell_id: 6, local_cell_id: 3, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
+];
+

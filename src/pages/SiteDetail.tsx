@@ -19,10 +19,10 @@ import PengajuanTerminModal from '../components/modals/PengajuanTerminModal';
 import MultiFileUploadModal, { type QueuedFile } from '../components/modals/MultiFileUploadModal';
 import {
     sites, projects, teams, people, 
-    siteMaterials, siteEvidence, siteCosts, filterTerms, combatTerms, skpRecords,
+    siteMaterials, siteEvidence, siteCosts, combatTerms, skpRecords,
     siteMasterRecords, siteBoQRecords, siteStageLogs, mockSiteFiles,
-    terminPengajuanRecords, teamMembersRecords, atpTasks,
-    type Site, type Project, type Team, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan, type ATPTask
+    terminPengajuanRecords, atpTasks, siteTechnicalDetails,
+    type Site, type Project, type SiteMaterial, type SiteEvidence, type SiteCost, type SKP, type SiteBoQ, type SiteStageLog, type SiteFile, type TerminPengajuan, type ATPTask, type SiteTechnicalDetail
 } from '../data/mockData';
 import {
     TableContainer,
@@ -39,52 +39,6 @@ import {
 } from '../components/common/Table';
 
 // --- SUB-COMPONENTS ---
-
-interface InfoSectionProps {
-    site: Site;
-    project: Project;
-    team?: Team;
-    teamMembers: { id: string; name: string; role: string; isLeader?: boolean }[];
-    canViewCosts: boolean;
-    canManageUsers: boolean;
-    fieldLeader?: { id: string; name: string } | null;
-}
-
-
-
-// Helper component to calculate and display paid costs
-const CostDibayarField = ({ siteId, budget }: { siteId: string, budget: number }) => {
-    // Calculate total paid across FILTER/COMBAT depending on project type implicitly via mock terms
-    const siteFilterTerms = filterTerms.filter(t => t.siteId === siteId && t.status === 'paid');
-    const siteCombatTerms = combatTerms.filter(t => t.siteId === siteId);
-    
-    let totalPaid = 0;
-    
-    // Sum filter terms
-    totalPaid += siteFilterTerms.reduce((sum, term) => sum + (term.amountPaid || 0), 0);
-    
-    // Sum combat substeps
-    siteCombatTerms.forEach(term => {
-        term.subSteps.filter(s => s.status === 'paid').forEach(sub => {
-            totalPaid += (sub.amountPaid || 0);
-        });
-    });
-
-    // Also include general costs if any are paid
-    const siteGeneralCosts = siteCosts.filter(c => c.siteId === siteId && c.status === 'paid');
-    totalPaid += siteGeneralCosts.reduce((sum, cost) => sum + (cost.jumlahPembayaran || 0), 0);
-
-    const sisa = budget - totalPaid;
-
-    return (
-        <>
-        <div className="grid grid-cols-3"><span className="text-slate-500">Cost Dibayar</span><span className="col-span-2 font-medium text-emerald-600">Rp {totalPaid.toLocaleString('id-ID')}</span></div>
-        <div className="grid grid-cols-3"><span className="text-slate-500">Sisa</span><span className="col-span-2 font-bold text-amber-600">Rp {sisa.toLocaleString('id-ID')}</span></div>
-        </>
-    );
-}
-
-
 
 interface EvidenceSectionProps {
     evidences: SiteEvidence[];
@@ -620,8 +574,8 @@ const SiteDetail = () => {
   const { can, currentUser } = useAuth();
   const [searchParams] = useSearchParams();
   
-  const initialTab = searchParams.get('tab') === 'costs' ? 'costs' : (searchParams.get('tab') === 'evidence' ? 'evidence' : 'details');
-  const [activeTab, setActiveTab] = useState<'details' | 'evidence' | 'costs'>(initialTab);
+  const initialTab = searchParams.get('tab') === 'costs' ? 'costs' : (searchParams.get('tab') === 'files' ? 'files' : 'overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'files' | 'costs'>(initialTab as any);
   
   const initialExpand = searchParams.get('expand') || undefined;
 
@@ -703,6 +657,66 @@ const SiteDetail = () => {
   });
   
   const [isMultiUploadOpen, setIsMultiUploadOpen] = useState(false);
+
+  // Raw Data State
+  const [localRawData, setLocalRawData] = useState<Record<string, any>>(masterRecordForTeam?.raw_data || {});
+  const [isEditingRawData, setIsEditingRawData] = useState(false);
+  const [tempRawData, setTempRawData] = useState<Record<string, any>>({});
+
+  // Technical RF Data
+  const siteTechRecords = siteTechnicalDetails.filter(t => t.site_id === id || t.site_id === site?.id);
+  const [techSortCol, setTechSortCol] = useState<keyof SiteTechnicalDetail | null>(null);
+  const [techSortDir, setTechSortDir] = useState<'asc' | 'desc'>('asc');
+  const sortedTechRecords = [...siteTechRecords].sort((a, b) => {
+      if (!techSortCol) return 0;
+      const av = String(a[techSortCol] ?? ''), bv = String(b[techSortCol] ?? '');
+      const cmp = av.localeCompare(bv, undefined, { numeric: true });
+      return techSortDir === 'asc' ? cmp : -cmp;
+  });
+  const handleTechSort = (col: keyof SiteTechnicalDetail) => {
+      if (techSortCol === col) setTechSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      else { setTechSortCol(col); setTechSortDir('asc'); }
+  };
+  const TechSortIcon = ({ col }: { col: keyof SiteTechnicalDetail }) => {
+      if (techSortCol !== col) return <span className="text-slate-300 ml-1">↕</span>;
+      return <span className="text-blue-500 ml-1">{techSortDir === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  // Section Expansion State
+  const STAGE_ORDER_IDX = ['imported','assigned','permit_process','permit_ready','akses_process','akses_ready','implementasi','rfi_done','rfs_done','dokumen_done','bast','invoice','completed'];
+  
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+      try {
+          const saved = localStorage.getItem(`site_sections_${id}`);
+          if (saved) return JSON.parse(saved);
+      } catch (e) {
+          console.error('Failed to parse section state', e);
+      }
+      
+      const role = currentUser?.role || '';
+      const defaults: Record<string, boolean> = {
+          info: false, permit: false, impl: false, atp: false, teknis: false, tambahan: false
+      };
+      
+      if (['admin', 'operational'].includes(role)) {
+          defaults.info = true; defaults.permit = true; defaults.impl = true;
+      } else if (role === 'director') {
+          defaults.info = true; defaults.impl = true; defaults.atp = true;
+      } else if (role === 'field') {
+          defaults.impl = true;
+      } else {
+          defaults.info = true; // Fallback
+      }
+      return defaults;
+  });
+
+  const toggleSection = (key: string) => {
+      setExpandedSections(prev => {
+          const next = { ...prev, [key]: !prev[key] };
+          localStorage.setItem(`site_sections_${id}`, JSON.stringify(next));
+          return next;
+      });
+  };
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -977,7 +991,7 @@ const SiteDetail = () => {
     // (Stage entered logic removed as per design changes)
 
   // Compute whether any termin is unlocked & not yet submitted → drives tab badge
-  const STAGE_ORDER_IDX = ['imported','assigned','permit_process','permit_ready','akses_process','akses_ready','implementasi','rfi_done','rfs_done','dokumen_done','bast','invoice','completed'];
+  // STAGE_ORDER_IDX already defined above
   // Find the first ready-but-not-submitted termin key (e.g. 'T1') for badge display
   const readyTerminKey = (() => {
     const ci = STAGE_ORDER_IDX.indexOf(localStage);
@@ -1405,75 +1419,7 @@ const SiteDetail = () => {
             </div>
         )}
 
-        {/* --- ATP / INEOM SUBMISSION SECTION --- */}
-        {((localStage === 'rfs_done' || localStage === 'dokumen_done') || STAGE_ORDER_IDX.indexOf(localStage) >= STAGE_ORDER_IDX.indexOf('bast')) && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in zoom-in-95 duration-300">
-                 <div className="px-6 py-4 flex items-center justify-between border-b border-slate-100 bg-emerald-50/50">
-                    <div className="flex items-center gap-2">
-                        <Send className="w-5 h-5 text-emerald-600" />
-                        <h3 className="text-base font-bold text-slate-800">ATP / INEOM Submission</h3>
-                    </div>
-                    {can('site.update_stage') && (
-                        <button 
-                            onClick={() => setIsEditAtpModalOpen(true)}
-                            className="text-xs font-bold px-3 py-1.5 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-md shadow-sm transition-colors"
-                        >
-                            Update Data
-                        </button>
-                    )}
-                 </div>
-                 
-                 <div className="p-6">
-                    {!localAtpTask ? (
-                         <div className="text-center py-4 bg-slate-50 border border-dashed border-slate-200 rounded-lg text-slate-500 text-sm">
-                             Belum ada task submission ATP/INEOM yang diinisialisasi.
-                         </div>
-                    ) : (
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div className="space-y-4">
-                                   <div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tiket ATP / Number</div>
-                                        <div className="text-sm font-semibold text-slate-800 border-b border-slate-100 pb-2">
-                                            {localAtpTask.tiket_atp || '-'}
-                                        </div>
-                                   </div>
-                                   <div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">PDID</div>
-                                        <div className="text-sm font-semibold text-slate-800 border-b border-slate-100 pb-2">
-                                            {localAtpTask.pdid || <span className="text-amber-500 italic">REQUEST PDID</span>}
-                                        </div>
-                                   </div>
-                              </div>
-                              <div className="space-y-4">
-                                   <div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tagging Status</div>
-                                        <div className="text-sm pb-2">
-                                            {localAtpTask.tagging_status === 'done' && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-200">DONE</span>}
-                                            {localAtpTask.tagging_status === 'pending' && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold border border-blue-200">PENDING</span>}
-                                            {localAtpTask.tagging_status === 'na' && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-bold border border-slate-200">N/A</span>}
-                                        </div>
-                                   </div>
-                                   <div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cell Capture</div>
-                                        <div className="text-sm pb-2 flex items-center gap-2">
-                                            <div className={clsx("w-4 h-4 rounded-sm flex items-center justify-center", localAtpTask.cell_capture_done ? "bg-emerald-500" : "bg-slate-200")}>
-                                                {localAtpTask.cell_capture_done && <CheckCircle2 className="w-3 h-3 text-white" />}
-                                            </div>
-                                            <span className="font-semibold text-slate-700">{localAtpTask.cell_capture_done ? 'Selesai' : 'Belum Selesai'}</span>
-                                        </div>
-                                   </div>
-                              </div>
-                              <div className="col-span-1 md:col-span-2 mt-2">
-                                   <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Catatan Telkom / INEOM</div>
-                                   <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded border border-slate-200 italic">
-                                        {localAtpTask.catatan || 'Tidak ada catatan.'}
-                                   </div>
-                              </div>
-                         </div>
-                    )}
-                 </div>
-            </div>
-        )}
+        {/* --- ATP / INEOM SUBMISSION SECTION MOVED --- */}
 
 
 
@@ -1481,10 +1427,16 @@ const SiteDetail = () => {
 
                 <div className="border-b border-slate-200 flex gap-6 mt-8">
                     <button
-                        onClick={() => setActiveTab('details')}
-                        className={clsx("pb-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'details' ? "border-blue-500 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+                        onClick={() => setActiveTab('overview')}
+                        className={clsx("pb-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'overview' ? "border-blue-500 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
                     >
-                        Details & Evidence
+                        Overview
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('files')}
+                        className={clsx("pb-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'files' ? "border-blue-500 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+                    >
+                        Files & Materials
                     </button>
                     {can('view_financials') && (
                          <button
@@ -1504,8 +1456,369 @@ const SiteDetail = () => {
                     )}
                 </div>
 
-                {activeTab === 'details' && (
+                {activeTab === 'overview' && (
+                    <div className="space-y-4 mt-6">
+                        {/* 1. INFO DASAR */}
+                        <details 
+                            open={expandedSections['info']} 
+                            onToggle={(e) => { if (e.currentTarget.open !== expandedSections['info']) toggleSection('info'); }}
+                            className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden group"
+                        >
+                            <summary className="px-6 py-4 font-semibold text-slate-700 cursor-pointer select-none hover:bg-slate-50 transition-colors flex justify-between items-center list-none border-b border-slate-100 bg-slate-50/50">
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-blue-600" />
+                                    <span>Info Dasar</span>
+                                </div>
+                                <span className="text-slate-400 group-open:rotate-180 transform transition-transform duration-200 block border-t-2 border-r-2 border-slate-400 w-2.5 h-2.5 rotate-[135deg] mr-2" />
+                            </summary>
+                            <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                                <div><div className="text-slate-500 font-medium mb-1">Site ID</div><div className="font-bold text-slate-800">{site.id}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Site Name</div><div className="font-bold text-slate-800">{site.name}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Project Type</div><div className="font-bold text-slate-800">{project.type}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Region</div><div className="font-bold text-slate-800">{site.location}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Cluster</div><div className="font-bold text-slate-800">{masterRecordForTeam?.cluster || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Sector</div><div className="font-bold text-slate-800">{masterRecordForTeam?.sector || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">PO Tsel</div><div className="font-bold text-slate-800">{masterRecordForTeam?.po_tsel || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">SOW ID / Pekerjaan</div><div className="font-bold text-slate-800">{site.jobName}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Tower Provider</div><div className="font-bold text-slate-800">{masterRecordForTeam?.tower_provider || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Batch</div><div className="font-bold text-slate-800">{masterRecordForTeam?.batch_ref || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Lat/Long</div><div className="font-bold text-blue-600 hover:underline cursor-pointer">{masterRecordForTeam?.latitude || '-'}, {masterRecordForTeam?.longitude || '-'}</div></div>
+                            </div>
+                        </details>
+
+                        {/* 2. PERMIT & AKSES */}
+                        <details 
+                            open={expandedSections['permit']} 
+                            onToggle={(e) => { if (e.currentTarget.open !== expandedSections['permit']) toggleSection('permit'); }}
+                            className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden group"
+                        >
+                            <summary className="px-6 py-4 font-semibold text-slate-700 cursor-pointer select-none hover:bg-slate-50 transition-colors flex justify-between items-center list-none border-b border-slate-100 bg-slate-50/50">
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-amber-600" />
+                                    <span>Permit & Akses</span>
+                                </div>
+                                <span className="text-slate-400 group-open:rotate-180 transform transition-transform duration-200 block border-t-2 border-r-2 border-slate-400 w-2.5 h-2.5 rotate-[135deg] mr-2" />
+                            </summary>
+                            <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                                <div><div className="text-slate-500 font-medium mb-1">Permit Status</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.permit_status || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Create Date</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.permit_start_date || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Expiry Date</div><div className="font-bold text-amber-600">{masterRecordForTeam?.raw_data?.permit_expiry_date || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">TPAS/TP/CAF</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.permit_type || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Jenis Kunci</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.akses_kunci || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">PIC Nama</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.akses_pic || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">PIC Telp</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.akses_telp || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Status Akses</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.akses_status || '-'}</div></div>
+                            </div>
+                        </details>
+
+                        {/* 3. IMPLEMENTASI */}
+                        <details 
+                            open={expandedSections['impl']} 
+                            onToggle={(e) => { if (e.currentTarget.open !== expandedSections['impl']) toggleSection('impl'); }}
+                            className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden group"
+                        >
+                            <summary className="px-6 py-4 font-semibold text-slate-700 cursor-pointer select-none hover:bg-slate-50 transition-colors flex justify-between items-center list-none border-b border-slate-100 bg-slate-50/50">
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-indigo-600" />
+                                    <span>Implementasi</span>
+                                </div>
+                                <span className="text-slate-400 group-open:rotate-180 transform transition-transform duration-200 block border-t-2 border-r-2 border-slate-400 w-2.5 h-2.5 rotate-[135deg] mr-2" />
+                            </summary>
+                            <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                                <div><div className="text-slate-500 font-medium mb-1">Team</div><div className="font-bold text-slate-800">{team?.name || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Field Leader</div><div className="font-bold text-slate-800">{fieldLeader?.name || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Tanggal Plan</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.impl_plan || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">Tanggal Aktual</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.impl_aktual || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">CI Date/Time</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.impl_ci || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">CO Date/Time</div><div className="font-bold text-slate-800">{masterRecordForTeam?.raw_data?.impl_co || '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">RFI Done</div><div className="font-bold text-slate-800">{masterRecordForTeam?.impl_rfi_done ? 'Selesai' : '-'}</div></div>
+                                <div><div className="text-slate-500 font-medium mb-1">RFS Done</div><div className="font-bold text-slate-800">{masterRecordForTeam?.impl_rfs_done ? 'Selesai' : '-'}</div></div>
+                            </div>
+                        </details>
+
+                        {/* 4. ATP / INEOM */}
+                        <details 
+                            open={expandedSections['atp']} 
+                            onToggle={(e) => { if (e.currentTarget.open !== expandedSections['atp']) toggleSection('atp'); }}
+                            className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden group"
+                        >
+                            <summary className="px-6 py-4 font-semibold text-slate-700 cursor-pointer select-none hover:bg-slate-50 transition-colors flex justify-between items-center list-none border-b border-slate-100 bg-slate-50/50">
+                                <div className="flex items-center gap-2">
+                                    <Send className="w-5 h-5 text-emerald-600" />
+                                    <span>ATP / INEOM</span>
+                                </div>
+                                <span className="text-slate-400 group-open:rotate-180 transform transition-transform duration-200 block border-t-2 border-r-2 border-slate-400 w-2.5 h-2.5 rotate-[135deg] mr-2" />
+                            </summary>
+                            <div className="p-6">
+                                {!localAtpTask ? (
+                                    <div className="text-center py-4 bg-slate-50 border border-dashed border-slate-200 rounded-lg text-slate-500 text-sm">
+                                        Belum ada task submission ATP/INEOM yang diinisialisasi.
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <div>
+                                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tiket ATP / Number</div>
+                                                    <div className="text-sm font-semibold text-slate-800 border-b border-slate-100 pb-2">
+                                                        {localAtpTask.tiket_atp || '-'}
+                                                    </div>
+                                            </div>
+                                            <div>
+                                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">PDID</div>
+                                                    <div className="text-sm font-semibold text-slate-800 border-b border-slate-100 pb-2">
+                                                        {localAtpTask.pdid || <span className="text-amber-500 italic">REQUEST PDID</span>}
+                                                    </div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div>
+                                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tagging Status</div>
+                                                    <div className="text-sm pb-2">
+                                                        {localAtpTask.tagging_status === 'done' && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-200">DONE</span>}
+                                                        {localAtpTask.tagging_status === 'pending' && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold border border-blue-200">PENDING</span>}
+                                                        {localAtpTask.tagging_status === 'na' && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-bold border border-slate-200">N/A</span>}
+                                                    </div>
+                                            </div>
+                                            <div>
+                                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cell Capture</div>
+                                                    <div className="text-sm pb-2 flex items-center gap-2">
+                                                        <div className={clsx("w-4 h-4 rounded-sm flex items-center justify-center", localAtpTask.cell_capture_done ? "bg-emerald-500" : "bg-slate-200")}>
+                                                            {localAtpTask.cell_capture_done && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                                        </div>
+                                                        <span className="font-semibold text-slate-700">{localAtpTask.cell_capture_done ? 'Selesai' : 'Belum Selesai'}</span>
+                                                    </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-span-1 md:col-span-2 mt-2">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Catatan Telkom / INEOM</div>
+                                                {can('site.update_stage') && (
+                                                    <button 
+                                                        onClick={() => setIsEditAtpModalOpen(true)}
+                                                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                                                    >
+                                                        <Edit className="w-3 h-3" /> Edit ATP Data
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded border border-slate-200 italic">
+                                                    {localAtpTask.catatan || 'Tidak ada catatan.'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </details>
+
+                        {/* 5. DATA TEKNIS RF */}
+                        <details 
+                            open={expandedSections['teknis']} 
+                            onToggle={(e) => { if (e.currentTarget.open !== expandedSections['teknis']) toggleSection('teknis'); }}
+                            className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden group"
+                        >
+                            <summary className="px-6 py-4 font-semibold text-slate-700 cursor-pointer select-none hover:bg-slate-50 transition-colors flex justify-between items-center list-none border-b border-slate-100 bg-slate-50/50">
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-violet-600" />
+                                    <span>Data Teknis RF</span>
+                                    {sortedTechRecords.length > 0 && (
+                                        <span className="ml-1 px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full text-xs font-bold border border-violet-200">
+                                            {sortedTechRecords.length} records
+                                        </span>
+                                    )}
+                                </div>
+                                <span className="text-slate-400 group-open:rotate-180 transform transition-transform duration-200 block border-t-2 border-r-2 border-slate-400 w-2.5 h-2.5 rotate-[135deg] mr-2" />
+                            </summary>
+                            <div className="p-6">
+                                {sortedTechRecords.length === 0 ? (
+                                    <div className="text-center py-8 bg-slate-50 border border-dashed border-slate-200 rounded-lg">
+                                        <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                        <p className="text-sm font-medium text-slate-500">Belum ada data teknis.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Upload Detail Site-ID sheet untuk menambahkan.</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                                        <table className="w-full text-left text-sm whitespace-nowrap">
+                                            <thead className="bg-slate-50 border-b border-slate-200">
+                                                <tr>
+                                                    {([
+                                                        { key: 'ne_id', label: 'NE ID' },
+                                                        { key: 'layer', label: 'Layer' },
+                                                        { key: 'sector', label: 'Sector' },
+                                                        { key: 'freq_band', label: 'Freq Band' },
+                                                        { key: 'cell_name', label: 'Cell Name' },
+                                                        { key: 'ant_type', label: 'Ant Type' },
+                                                        { key: 'height', label: 'Height' },
+                                                    ] as { key: keyof SiteTechnicalDetail; label: string }[]).map(col => (
+                                                        <th
+                                                            key={col.key}
+                                                            onClick={() => handleTechSort(col.key)}
+                                                            className="p-3 font-semibold text-slate-600 cursor-pointer hover:bg-slate-100 select-none transition-colors"
+                                                        >
+                                                            {col.label}<TechSortIcon col={col.key} />
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {sortedTechRecords.map(row => (
+                                                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-3 font-mono text-xs text-slate-700">{row.ne_id || '-'}</td>
+                                                        <td className="p-3">
+                                                            <span className={clsx(
+                                                                "px-2 py-0.5 rounded text-xs font-bold",
+                                                                row.layer === 'ML' ? 'bg-blue-100 text-blue-700' :
+                                                                row.layer === 'MR' ? 'bg-violet-100 text-violet-700' :
+                                                                'bg-slate-100 text-slate-600'
+                                                            )}>{row.layer || '-'}</span>
+                                                        </td>
+                                                        <td className="p-3 text-center font-semibold text-slate-700">{String(row.sector ?? '-')}</td>
+                                                        <td className="p-3">
+                                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-semibold border border-emerald-200">
+                                                                {row.freq_band || '-'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 font-mono text-xs text-slate-600">{row.cell_name || '-'}</td>
+                                                        <td className="p-3 text-slate-600 max-w-[140px] truncate" title={row.ant_type}>{row.ant_type || '-'}</td>
+                                                        <td className="p-3 text-slate-600">{row.height ? `${row.height}m` : '-'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                                {sortedTechRecords.length > 0 && (
+                                    <p className="mt-2 text-xs text-slate-400 text-right">
+                                        Sumber: {sortedTechRecords[0].source_file || 'Import'} — klik header untuk sort
+                                    </p>
+                                )}
+                            </div>
+                        </details>
+
+                        {/* 6. DATA TAMBAHAN (Raw Data) */}
+                        {['director', 'operational', 'admin'].includes(currentUser?.role || '') && (Object.keys(localRawData).length > 0 || isEditingRawData) && (
+                            <details 
+                                open={expandedSections['tambahan']} 
+                                onToggle={(e) => { if (e.currentTarget.open !== expandedSections['tambahan']) toggleSection('tambahan'); }}
+                                className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden group"
+                            >
+                                <summary className="px-6 py-4 font-semibold text-slate-700 cursor-pointer select-none hover:bg-slate-50 transition-colors flex justify-between items-center list-none border-b border-slate-100 bg-slate-50/50">
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-indigo-600" />
+                                        <span>Data Tambahan dari Import — {Object.keys(localRawData).length} fields</span>
+                                    </div>
+                                    <span className="text-slate-400 group-open:rotate-180 transform transition-transform duration-200 block border-t-2 border-r-2 border-slate-400 w-2.5 h-2.5 rotate-[135deg] mr-2" />
+                                </summary>
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <p className="text-sm text-slate-500">Field kustom yang diekstrak secara otomatis dari Excel.</p>
+                                        {!isEditingRawData ? (
+                                            <button 
+                                                onClick={() => { setTempRawData(localRawData); setIsEditingRawData(true); }}
+                                                className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 flex items-center gap-2"
+                                            >
+                                                <Edit className="w-4 h-4" /> Edit Data
+                                            </button>
+                                        ) : (
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => setIsEditingRawData(false)}
+                                                    className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50"
+                                                >
+                                                    Batal
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setLocalRawData(tempRawData); setIsEditingRawData(false); showToast('Data tambahan berhasil disimpan.'); }}
+                                                    className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
+                                                >
+                                                    Simpan
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                                        <table className="w-full text-left text-sm">
+                                            <thead className="bg-slate-50 border-b border-slate-200">
+                                                <tr>
+                                                    <th className="p-3 font-semibold text-slate-600 w-1/3">Field / Kolom</th>
+                                                    <th className="p-3 font-semibold text-slate-600">Nilai</th>
+                                                    {isEditingRawData && <th className="p-3 w-10"></th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {Object.entries(isEditingRawData ? tempRawData : localRawData).map(([key, val]) => (
+                                                    <tr key={key} className="hover:bg-slate-50">
+                                                        <td className="p-3 font-medium text-slate-700">
+                                                            {isEditingRawData ? (
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={key} 
+                                                                    onChange={(e) => {
+                                                                        const newKey = e.target.value;
+                                                                        const newData = { ...tempRawData };
+                                                                        newData[newKey] = newData[key];
+                                                                        delete newData[key];
+                                                                        setTempRawData(newData);
+                                                                    }}
+                                                                    className="w-full border border-slate-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                                                />
+                                                            ) : key}
+                                                        </td>
+                                                        <td className="p-3 text-slate-600">
+                                                            {isEditingRawData ? (
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={String(val || '')} 
+                                                                    onChange={(e) => setTempRawData({ ...tempRawData, [key]: e.target.value })}
+                                                                    className="w-full border border-slate-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                                                />
+                                                            ) : String(val || '-')}
+                                                        </td>
+                                                        {isEditingRawData && (
+                                                            <td className="p-3 text-right">
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        const newData = { ...tempRawData };
+                                                                        delete newData[key];
+                                                                        setTempRawData(newData);
+                                                                    }}
+                                                                    className="text-red-500 hover:text-red-700 p-1"
+                                                                >
+                                                                    <X className="w-4 h-4" />
+                                                                </button>
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                ))}
+                                                {isEditingRawData && (
+                                                    <tr>
+                                                        <td colSpan={3} className="p-3 bg-slate-50 text-center">
+                                                            <button 
+                                                                onClick={() => setTempRawData({ ...tempRawData, [`new_field_${Date.now()}`]: '' })}
+                                                                className="text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center justify-center w-full gap-1"
+                                                            >
+                                                                <Plus className="w-4 h-4" /> Tambah Field
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {Object.keys(localRawData).length === 0 && !isEditingRawData && (
+                                                    <tr>
+                                                        <td colSpan={2} className="p-4 text-center text-slate-500">Tidak ada data tambahan.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </details>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'files' && (
                     <div className="space-y-8 mt-6">
+
                         <EvidenceSection
                             evidences={localEvidences}
                             canUploadEvidence={can('upload_evidence')}

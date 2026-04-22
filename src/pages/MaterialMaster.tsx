@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, Upload, Camera, Edit2, Archive, Activity, Info, Link as LinkIcon, FileText, ArrowDown, ArrowUp, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, Upload, Camera, Edit2, Archive, Activity, Info, Link as LinkIcon, FileText, CheckCircle2, ListPlus } from 'lucide-react';
 import { materialMasterRecords, siteMaterials, materialTransactions } from '../data/mockData';
 import clsx from 'clsx';
 // Import Modals (we will create these next)
@@ -18,9 +18,14 @@ const MaterialMasterPage: React.FC = () => {
 
     // Ledger state
     const [ledgerSearch, setLedgerSearch] = useState('');
+    const [ledgerTypeFilter, setLedgerTypeFilter] = useState('Semua');
+    const [ledgerDirectionFilter, setLedgerDirectionFilter] = useState('Semua');
+    const [ledgerStartDate, setLedgerStartDate] = useState('');
+    const [ledgerEndDate, setLedgerEndDate] = useState('');
 
-    const handleOpenModal = (mode: 'manual' | 'excel' | 'ocr') => {
+    const handleOpenModal = (mode: 'manual' | 'excel' | 'ocr', defaultFilter?: any[]) => {
         if (mode === 'excel') {
+            setImportDefaultFilter(defaultFilter);
             setIsMultiSheetOpen(true);
         } else {
             setModalMode(mode);
@@ -65,23 +70,55 @@ const MaterialMasterPage: React.FC = () => {
         }).format(val);
     };
 
-    const filteredLedger = useMemo(() => {
-        return materialTransactions.filter(t => 
-            t.material_nama?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
-            t.imported_from?.toLowerCase().includes(ledgerSearch.toLowerCase())
-        ).sort((a,b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
-    }, [ledgerSearch]);
+    const ledgerTypes = useMemo(() => {
+        const types = new Set(materialTransactions.map(t => t.material_type).filter(Boolean) as string[]);
+        return ['Semua', ...Array.from(types)];
+    }, []);
 
-    // Compute aggregated view for ledger Summary
-    const ledgerSummary = useMemo(() => {
-        let totalIn = 0;
-        let totalOut = 0;
-        filteredLedger.forEach(t => {
-            if (t.direction === 'IN') totalIn += t.quantity;
-            else if (t.direction === 'OUT') totalOut += t.quantity;
+    const filteredLedger = useMemo(() => {
+        return materialTransactions.filter(t => {
+            const matchSearch = t.material_nama?.toLowerCase().includes(ledgerSearch.toLowerCase()) || 
+                                t.delivery_note_no?.toLowerCase().includes(ledgerSearch.toLowerCase()) || 
+                                t.po_number?.toLowerCase().includes(ledgerSearch.toLowerCase());
+            
+            const matchType = ledgerTypeFilter === 'Semua' || t.material_type === ledgerTypeFilter;
+            const matchDir = ledgerDirectionFilter === 'Semua' || t.direction === ledgerDirectionFilter;
+            
+            let matchDate = true;
+            if (ledgerStartDate || ledgerEndDate) {
+                const dateVal = t.delivery_date || t.created_at;
+                if (dateVal) {
+                    const date = new Date(dateVal);
+                    if (ledgerStartDate) matchDate = matchDate && date >= new Date(ledgerStartDate);
+                    if (ledgerEndDate) matchDate = matchDate && date <= new Date(ledgerEndDate);
+                }
+            }
+            
+            return matchSearch && matchType && matchDir && matchDate;
+        }).sort((a,b) => {
+            const dateA = a.delivery_date || a.created_at || '';
+            const dateB = b.delivery_date || b.created_at || '';
+            return new Date(dateB).getTime() - new Date(dateA).getTime();
         });
-        return { totalIn, totalOut, netBalance: totalIn - totalOut };
-    }, [filteredLedger]);
+    }, [ledgerSearch, ledgerTypeFilter, ledgerDirectionFilter, ledgerStartDate, ledgerEndDate]);
+
+    // Compute aggregated stock per material for summary cards
+    const ledgerSummaryCards = useMemo(() => {
+        const groups: Record<string, { totalIn: number, totalOut: number, stock: number }> = {};
+        materialTransactions.forEach(t => {
+            if (!groups[t.material_nama]) {
+                groups[t.material_nama] = { totalIn: 0, totalOut: 0, stock: 0 };
+            }
+            if (t.direction === 'IN') {
+                groups[t.material_nama].totalIn += t.quantity;
+                groups[t.material_nama].stock += t.quantity;
+            } else {
+                groups[t.material_nama].totalOut += t.quantity;
+                groups[t.material_nama].stock -= t.quantity;
+            }
+        });
+        return Object.entries(groups).map(([name, data]) => ({ name, ...data })).sort((a,b) => b.stock - a.stock);
+    }, []);
 
     return (
         <div className="p-6 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
@@ -277,38 +314,99 @@ const MaterialMasterPage: React.FC = () => {
 
             {activeTab === 'ledger' && (
                 <div className="animate-in slide-in-from-right-4 duration-300">
-                    {/* Ledger Summary Strip */}
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6 flex flex-col md:flex-row gap-6 justify-around items-center divide-x divide-slate-100">
-                        <div className="flex flex-col items-center px-6">
-                            <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-xs font-bold mb-1 border border-emerald-100">
-                                <ArrowDown className="w-3 h-3" /> Total Stock In
+                    {/* Ledger Summary Cards */}
+                    <div className="flex gap-4 overflow-x-auto pb-4 mb-6 scrollbar-hide snap-x">
+                        {ledgerSummaryCards.map(card => (
+                            <div key={card.name} className="min-w-[280px] bg-white rounded-xl shadow-sm border border-slate-200 p-5 snap-center flex flex-col justify-between hover:shadow-md transition-shadow">
+                                <h3 className="font-bold text-slate-800 text-lg mb-4 truncate" title={card.name}>{card.name}</h3>
+                                <div className="mb-4">
+                                    <div className="text-sm text-slate-500 font-medium mb-1">Stok</div>
+                                    <div className="text-3xl font-black text-blue-700">{card.stock} <span className="text-sm font-semibold text-slate-400">unit</span></div>
+                                </div>
+                                <div className="flex justify-between items-center text-sm font-semibold pt-3 border-t border-slate-100">
+                                    <div className="flex items-center gap-1.5 text-emerald-600">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> IN: {card.totalIn}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-red-600">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> OUT: {card.totalOut}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="text-2xl font-black text-slate-800">{ledgerSummary.totalIn} <span className="text-sm font-semibold text-slate-500">units</span></div>
-                        </div>
-                        <div className="flex flex-col items-center px-6">
-                            <div className="flex items-center gap-2 text-red-600 bg-red-50 px-2 py-0.5 rounded-full text-xs font-bold mb-1 border border-red-100">
-                                <ArrowUp className="w-3 h-3" /> Total Stock Out
+                        ))}
+                        {ledgerSummaryCards.length === 0 && (
+                            <div className="w-full text-center p-8 bg-white rounded-xl border border-dashed border-slate-300 text-slate-500">
+                                Belum ada data stok material.
                             </div>
-                            <div className="text-2xl font-black text-slate-800">{ledgerSummary.totalOut} <span className="text-sm font-semibold text-slate-500">units</span></div>
-                        </div>
-                        <div className="flex flex-col items-center px-6">
-                            <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-xs font-bold mb-1 border border-blue-100">
-                                <Activity className="w-3 h-3" /> Net Balance
-                            </div>
-                            <div className="text-2xl font-black text-slate-800">{ledgerSummary.netBalance} <span className="text-sm font-semibold text-slate-500">units</span></div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Ledger Filters */}
-                    <div className="relative max-w-md mb-6">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="Cari transaksi material..." 
-                            value={ledgerSearch}
-                            onChange={(e) => setLedgerSearch(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-slate-700"
-                        />
+                    <div className="flex flex-col md:flex-row gap-4 mb-6 items-end">
+                        <div className="relative flex-1">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Pencarian</label>
+                            <Search className="absolute left-3 top-[34px] -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input 
+                                type="text" 
+                                placeholder="Cari material, PO, Surat Jalan..." 
+                                value={ledgerSearch}
+                                onChange={(e) => setLedgerSearch(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-slate-700"
+                            />
+                        </div>
+                        
+                        <div className="flex gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Type</label>
+                                <select 
+                                    value={ledgerTypeFilter}
+                                    onChange={(e) => setLedgerTypeFilter(e.target.value)}
+                                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium w-[140px]"
+                                >
+                                    {ledgerTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">IN/OUT</label>
+                                <select 
+                                    value={ledgerDirectionFilter}
+                                    onChange={(e) => setLedgerDirectionFilter(e.target.value)}
+                                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium w-[120px]"
+                                >
+                                    <option value="Semua">Semua</option>
+                                    <option value="IN">IN</option>
+                                    <option value="OUT">OUT</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Start Date</label>
+                                    <input 
+                                        type="date" 
+                                        value={ledgerStartDate}
+                                        onChange={(e) => setLedgerStartDate(e.target.value)}
+                                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium"
+                                    />
+                                </div>
+                                <div className="mt-6 text-slate-400 font-medium">-</div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">End Date</label>
+                                    <input 
+                                        type="date" 
+                                        value={ledgerEndDate}
+                                        onChange={(e) => setLedgerEndDate(e.target.value)}
+                                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex items-end">
+                                <button 
+                                    onClick={() => handleOpenModal('excel', ['inventory_movement'])}
+                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors text-sm shadow-sm shadow-emerald-600/20 whitespace-nowrap h-[38px]"
+                                >
+                                    <ListPlus className="w-4 h-4" /> Import Excel Inventory
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Ledger Table */}
@@ -317,30 +415,37 @@ const MaterialMasterPage: React.FC = () => {
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
-                                        <th className="p-4 font-semibold text-slate-600">Terdaftar</th>
+                                        <th className="p-4 font-semibold text-slate-600">No</th>
+                                        <th className="p-4 font-semibold text-slate-600 text-center">Type</th>
                                         <th className="p-4 font-semibold text-slate-600">Material</th>
-                                        <th className="p-4 font-semibold text-slate-600 text-center">Tipe</th>
-                                        <th className="p-4 font-semibold text-slate-600 text-right">Quantity</th>
-                                        <th className="p-4 font-semibold text-slate-600">Source Dokumen</th>
-                                        <th className="p-4 font-semibold text-slate-600">Vendor / Pengirim</th>
+                                        <th className="p-4 font-semibold text-slate-600 text-center">IN/OUT</th>
+                                        <th className="p-4 font-semibold text-slate-600 text-right">Qty</th>
+                                        <th className="p-4 font-semibold text-slate-600">Tanggal</th>
+                                        <th className="p-4 font-semibold text-slate-600">No Surat Jalan</th>
+                                        <th className="p-4 font-semibold text-slate-600">PO</th>
+                                        <th className="p-4 font-semibold text-slate-600">Vendor</th>
+                                        <th className="p-4 font-semibold text-slate-600">Sender</th>
+                                        <th className="p-4 font-semibold text-slate-600">Receiver</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {filteredLedger.map((trx) => (
+                                    {filteredLedger.map((trx, i) => (
                                         <tr key={trx.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="p-4 text-slate-500 whitespace-nowrap">
-                                                {trx.created_at ? new Date(trx.created_at).toLocaleDateString('id-ID', {day:'numeric',month:'short'}) : '-'}
-                                                <div className="text-xs">{trx.created_at ? new Date(trx.created_at).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}) : ''}</div>
+                                            <td className="p-4 text-slate-500 font-medium">
+                                                {i + 1}
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                {trx.material_type ? (
+                                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-semibold uppercase tracking-wider">{trx.material_type}</span>
+                                                ) : (
+                                                    <span className="text-slate-300">-</span>
+                                                )}
                                             </td>
                                             <td className="p-4">
                                                 <p className="font-bold text-slate-800">{trx.material_nama}</p>
-                                                {trx.material_master_id ? (
+                                                {trx.material_master_id && (
                                                     <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200 mt-1 uppercase tracking-wide font-bold">
                                                         <CheckCircle2 className="w-3 h-3" /> Master Link
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 mt-1 uppercase tracking-wide font-bold">
-                                                        Unlinked
                                                     </span>
                                                 )}
                                             </td>
@@ -356,13 +461,23 @@ const MaterialMasterPage: React.FC = () => {
                                                     {trx.direction === 'IN' ? '+' : '-'}{trx.quantity}
                                                 </span>
                                             </td>
-                                            <td className="p-4 text-slate-600 text-xs">
-                                                <div className="font-medium">{trx.delivery_note_no || trx.po_number || '-'}</div>
-                                                <div className="text-slate-400 mt-0.5">Date: {trx.delivery_date || '-'}</div>
+                                            <td className="p-4 text-slate-600 whitespace-nowrap">
+                                                {trx.delivery_date || (trx.created_at ? new Date(trx.created_at).toISOString().split('T')[0] : '-')}
                                             </td>
-                                            <td className="p-4 text-slate-600 text-sm">
+                                            <td className="p-4 text-slate-600 font-medium whitespace-nowrap">
+                                                {trx.delivery_note_no || '-'}
+                                            </td>
+                                            <td className="p-4 text-slate-600 font-medium whitespace-nowrap">
+                                                {trx.po_number || '-'}
+                                            </td>
+                                            <td className="p-4 text-slate-600">
                                                 <div className="font-medium text-slate-800">{trx.vendor_pengirim || '-'}</div>
-                                                <div className="text-slate-500 text-xs">Sender: {trx.sender || '-'}</div>
+                                            </td>
+                                            <td className="p-4 text-slate-600">
+                                                {trx.sender || '-'}
+                                            </td>
+                                            <td className="p-4 text-slate-600">
+                                                {trx.receiver || '-'}
                                             </td>
                                         </tr>
                                     ))}
@@ -392,9 +507,10 @@ const MaterialMasterPage: React.FC = () => {
                 />
             )}
             {isMultiSheetOpen && (
-                <MultiSheetExcelModal
+            <MultiSheetExcelModal
                     isOpen={isMultiSheetOpen}
                     onClose={() => setIsMultiSheetOpen(false)}
+                    pageContext="materials"
                     onImportComplete={(summary) => {
                         console.log('Processed Multi-Sheet from Material:', summary);
                         setIsMultiSheetOpen(false);

@@ -12,7 +12,9 @@ import {
 } from 'lucide-react';
 import ModernKPICard from '../components/stats/ModernKPICard';
 import MapWidget from '../components/MapWidget';
-import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
+import MultiSheetExcelModal from '../components/modals/MultiSheetExcelModal';
+import ImportSiteModal from '../components/modals/ImportSiteModal';
+import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
 import { 
   filterTerms,
   combatTerms,
@@ -51,10 +53,12 @@ const COMPACT_GROUPS_RESCOPING = [
 const TypeSiteList = () => {
   const { type } = useParams<{ type: string }>();
   const { currentUser } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const [stageFilter, setStageFilter] = useState<string | null>(() => new URLSearchParams(window.location.search).get('stage'));
-  const [isBulkUpdateOpen, setIsBulkUpdateOpen] = useState(false);
-  const canBulkUpdate = ['operational', 'admin'].includes(currentUser.role);
+  const [isMultiSheetOpen, setIsMultiSheetOpen] = useState(false);
+  const [isBoqOpen, setIsBoqOpen] = useState(false);
+  const [summaryData, setSummaryData] = useState<ImportSummaryData | null>(null);
+  const hasImportAccess = ['operational', 'admin', 'director'].includes(currentUser.role);
 
   const handleStripToggle = (key: string) => {
     const next = stageFilter === key ? null : key;
@@ -284,14 +288,22 @@ const TypeSiteList = () => {
               
               {/* RIGHT SIDE ACTIONS */}
               <div className="ml-auto flex items-center gap-3">
-                  {canBulkUpdate && (
-                      <button
-                          onClick={() => setIsBulkUpdateOpen(true)}
-                          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg text-sm transition-colors shadow-sm"
-                      >
-                          <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-                          ⬆ Bulk Update Stage
-                      </button>
+                  {hasImportAccess && (
+                      <>
+                          <button
+                              onClick={() => setIsMultiSheetOpen(true)}
+                              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg text-sm transition-colors shadow-sm"
+                          >
+                              <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                              Import / Update Excel
+                          </button>
+                          <button
+                              onClick={() => setIsBoqOpen(true)}
+                              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition-colors shadow-blue-500/20"
+                          >
+                              <CheckCircle2 className="w-4 h-4" /> Import BoQ
+                          </button>
+                      </>
                   )}
                   {/* VIEW TOGGLE */}
                   <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
@@ -496,10 +508,12 @@ const TypeSiteList = () => {
                       <div className="bg-[var(--glass-bg)] text-[var(--text-secondary)] px-3 py-1 rounded-full text-sm font-medium border border-[var(--glass-border)]">
                           Showing: {finalFilteredSites.length} of {matchedSites.length}
                       </div>
-                      <button onClick={() => setIsBulkUpdateOpen(true)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-lg text-xs transition-colors shadow-sm flex items-center gap-2">
-                          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
-                          Bulk Update Stage
-                      </button>
+                      {hasImportAccess && (
+                          <button onClick={() => setIsMultiSheetOpen(true)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-lg text-xs transition-colors shadow-sm flex items-center gap-2">
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
+                              Import / Update Excel
+                          </button>
+                      )}
                   </div>
               </div>
 
@@ -538,10 +552,25 @@ const TypeSiteList = () => {
           </div>
       )}
 
-      <BulkStageUpdateModal 
-          isOpen={isBulkUpdateOpen} 
-          onClose={() => setIsBulkUpdateOpen(false)}
-          projectType={upperType}
+      <ImportSiteModal 
+          isOpen={isBoqOpen} 
+          onClose={() => setIsBoqOpen(false)} 
+          onImportExcel={(data, fileName) => { console.log('BoQ Excel imported:', fileName, data.length, 'rows'); setIsBoqOpen(false); }}
+          onAddManual={() => { setIsBoqOpen(false); }}
+      />
+      <MultiSheetExcelModal
+          isOpen={isMultiSheetOpen}
+          onClose={() => setIsMultiSheetOpen(false)}
+          pageContext="sites"
+          onImportComplete={(summary) => {
+              setSummaryData(summary);
+              setIsMultiSheetOpen(false);
+          }}
+      />
+      <ImportSummaryModal
+          isOpen={!!summaryData}
+          onClose={() => setSummaryData(null)}
+          summary={summaryData}
       />
     </div>
   );

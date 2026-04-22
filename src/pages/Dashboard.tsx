@@ -8,6 +8,7 @@ import {
 import clsx from 'clsx';
 import MapWidget from '../components/MapWidget';
 import ModernKPICard from '../components/stats/ModernKPICard';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { 
     sites, activityFeed, people,
     filterTerms, combatTerms, siteMasterRecords, type ProjectType,
@@ -382,6 +383,83 @@ const Dashboard = () => {
                                     </Link>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    {/* ROW 3.5: CHARTS */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                        {/* CHART 1: Pipeline Distribution */}
+                        <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
+                            <h3 className="font-bold text-[14px] text-[#111827] mb-4">Distribusi Status Site</h3>
+                            <div className="h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={[
+                                                { name: 'Menunggu Permit', value: stageSummary.menungguPermit, color: '#64748B' },
+                                                { name: 'Permit Ready', value: stageSummary.permitReady, color: '#F59E0B' },
+                                                { name: 'Akses Ready', value: stageSummary.aksesReady, color: '#3B82F6' },
+                                                { name: 'Implementasi', value: stageSummary.implementasi, color: '#8B5CF6' },
+                                                { name: 'Proses BAST', value: stageSummary.prosBast, color: '#F97316' },
+                                                { name: 'Selesai', value: stageSummary.selesai, color: '#10B981' }
+                                            ].filter(d => d.value > 0)}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={60}
+                                            outerRadius={90}
+                                            paddingAngle={2}
+                                            dataKey="value"
+                                        >
+                                            {
+                                                [
+                                                    { name: 'Menunggu Permit', value: stageSummary.menungguPermit, color: '#64748B' },
+                                                    { name: 'Permit Ready', value: stageSummary.permitReady, color: '#F59E0B' },
+                                                    { name: 'Akses Ready', value: stageSummary.aksesReady, color: '#3B82F6' },
+                                                    { name: 'Implementasi', value: stageSummary.implementasi, color: '#8B5CF6' },
+                                                    { name: 'Proses BAST', value: stageSummary.prosBast, color: '#F97316' },
+                                                    { name: 'Selesai', value: stageSummary.selesai, color: '#10B981' }
+                                                ].filter(d => d.value > 0).map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                                ))
+                                            }
+                                        </Pie>
+                                        <RechartsTooltip formatter={(value) => [`${value} Sites`, 'Jumlah']} />
+                                        <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* CHART 2: Project Type Breakdown */}
+                        <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
+                            <h3 className="font-bold text-[14px] text-[#111827] mb-4">Progress per Tipe Pekerjaan</h3>
+                            <div className="h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                        data={projectTypes.map(t => {
+                                            const sum = getTypeSummary(t.id);
+                                            return {
+                                                name: t.label,
+                                                Permit: sum.permit,
+                                                Akses: sum.akses,
+                                                Impl: sum.impl,
+                                                Selesai: sum.selesai
+                                            };
+                                        })}
+                                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
+                                        <RechartsTooltip cursor={{fill: '#F3F4F6'}} />
+                                        <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                                        <Bar dataKey="Permit" stackId="a" fill="#F59E0B" radius={[0, 0, 4, 4]} />
+                                        <Bar dataKey="Akses" stackId="a" fill="#3B82F6" />
+                                        <Bar dataKey="Impl" stackId="a" fill="#8B5CF6" />
+                                        <Bar dataKey="Selesai" stackId="a" fill="#10B981" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
 

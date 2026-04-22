@@ -1,13 +1,13 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Search, Filter as FilterIcon, ArrowRight, AlertCircle, RefreshCw, FileSpreadsheet,
-    Columns, Check, ChevronDown, ChevronUp, Edit3,
+    Check, Edit3,
     Plus, Download, History, Layers
 } from 'lucide-react';
 import clsx from 'clsx';
 import { siteMasterRecords, type ProjectType, getTerminSummary, people } from '../data/mockData';
-import BulkStageUpdateModal from '../components/modals/BulkStageUpdateModal';
+import ImportSiteModal from '../components/modals/ImportSiteModal';
 import MultiSheetExcelModal from '../components/modals/MultiSheetExcelModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
 import { useAuth } from '../context/AuthContext';
@@ -88,87 +88,8 @@ const TerminDots = ({ summaryData }: { summaryData: any }) => {
     );
 };
 
-// ─── Columns Definitions & Visibility ─────────────────────────────────────────
-interface ColDef { key: string; label: string; defaultVisible: boolean; }
-const ALL_COLS: ColDef[] = [
-    { key: 'site_id', label: 'SITE_ID', defaultVisible: true },
-    { key: 'site_name', label: 'Site Name', defaultVisible: true },
-    { key: 'type', label: 'Type', defaultVisible: true },
-    { key: 'sector', label: 'Sector', defaultVisible: true },
-    { key: 'cluster', label: 'Cluster', defaultVisible: true },
-    { key: 'region', label: 'Region', defaultVisible: false },
-    { key: 'po_tsel', label: 'PO Tsel', defaultVisible: true },
-    { key: 'qty', label: 'Qty', defaultVisible: false },
-    { key: 'imported_from', label: 'Imported From', defaultVisible: false },
-    { key: 'import_date', label: 'Import Date', defaultVisible: false },
-    { key: 'team', label: 'Team', defaultVisible: true },
-    { key: 'stage', label: 'Stage', defaultVisible: true },
-    { key: 'days', label: 'Last Updated', defaultVisible: true },
-    { key: 'termin', label: 'Termin', defaultVisible: true },
-    { key: 'ineom', label: 'INEOM', defaultVisible: false },
-    { key: 'actions', label: 'Actions', defaultVisible: true },
-];
-
-const LS_KEY = 'sites_columns_all';
-
-const getInitialVisibility = (key: string, defs: ColDef[]): Record<string, boolean> => {
-    try {
-        const stored = localStorage.getItem(key);
-        if (stored) return JSON.parse(stored);
-    } catch { /* ignore */ }
-    return Object.fromEntries(defs.map(c => [c.key, c.defaultVisible]));
-};
-
-const ColumnsToggle = ({ visibility, onChange, currentCols }: {
-    visibility: Record<string, boolean>;
-    onChange: (key: string, val: boolean) => void;
-    currentCols: ColDef[];
-}) => {
-    const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
-
-    const toggleable = currentCols.filter(c => c.key !== 'site_id' && c.key !== 'actions');
-    return (
-        <div className="relative shrink-0" ref={ref}>
-            <button
-                onClick={() => setOpen(o => !o)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
-                title="Toggle columns"
-            >
-                <Columns className="w-4 h-4" />
-                Columns
-                {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-            {open && (
-                <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-2">
-                    <p className="px-3 pb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">Show / Hide</p>
-                    {toggleable.map(col => (
-                        <label
-                            key={col.key}
-                            className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 transition-colors"
-                        >
-                            <input
-                                type="checkbox"
-                                checked={!!visibility[col.key]}
-                                onChange={e => onChange(col.key, e.target.checked)}
-                                className="accent-blue-500 w-3.5 h-3.5"
-                            />
-                            <span className="text-sm text-slate-700">{col.label}</span>
-                        </label>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
+import { useTableColumns } from '../hooks/useTableColumns';
+import TableColumnToggle from '../components/common/TableColumnToggle';
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
@@ -278,7 +199,7 @@ const Sites = () => {
     }, [activeTab, setSearchParams]);
 
     // Modals
-    const [isBulkOpen, setIsBulkOpen] = useState(false);
+    const [isBoqOpen, setIsBoqOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [summaryData, setSummaryData] = useState<ImportSummaryData | null>(null);
 
@@ -312,14 +233,7 @@ const Sites = () => {
     });
 
     // Column visibility
-    const [visibilityMap, setVisibilityMap] = useState<Record<string, boolean>>(() => getInitialVisibility(LS_KEY, ALL_COLS));
-
-    const handleVisChange = (key: string, val: boolean) => {
-        setVisibilityMap(pr => { const nx = { ...pr, [key]: val }; try { localStorage.setItem(LS_KEY, JSON.stringify(nx)); } catch { } return nx; });
-    };
-
-    const col = (key: string) => visibilityMap[key] !== false;
-    const currentCols = ALL_COLS;
+    const { visibilityMap, handleVisibilityChange, resetToDefault, col, currentCols } = useTableColumns(currentUser.id);
 
     // derived dropdown data
     const availableStages = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => s.stage))), []);
@@ -481,20 +395,22 @@ const Sites = () => {
                     <p className="text-slate-500 mt-1 text-sm font-medium">Semua site pekerjaan — registry dan progress operasional</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => setIsBulkOpen(true)}
-                        className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
-                    >
-                        <FileSpreadsheet className="w-4 h-4 text-slate-500" />
-                        Bulk Update Stage
-                    </button>
                     {hasImportAccess && (
-                        <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition-colors shadow-blue-500/20"
-                        >
-                            <Plus className="w-4 h-4" /> Import BoQ
-                        </button>
+                        <>
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
+                            >
+                                <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+                                Import / Update Excel
+                            </button>
+                            <button
+                                onClick={() => setIsBoqOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition-colors shadow-blue-500/20"
+                            >
+                                <Plus className="w-4 h-4" /> Import BoQ
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -630,7 +546,7 @@ const Sites = () => {
                                 <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none shrink-0"><option value="All">All Teams</option>{availableTeams.map(t => <option key={t} value={t}>{t}</option>)}</select>
                                 <select value={filterPo} onChange={e => setFilterPo(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none shrink-0"><option value="All">All POs</option>{availablePOs.map(po => <option key={po} value={po}>{po}</option>)}</select>
                                 <select value={filterBatch} onChange={e => setFilterBatch(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none shrink-0 min-w-[150px]"><option value="All">All Batches</option>{availableBatches.map(b => <option key={b} value={b}>{truncate(b, 20)}</option>)}</select>
-                                <ColumnsToggle visibility={visibilityMap} onChange={handleVisChange} currentCols={currentCols} />
+                                <TableColumnToggle visibilityMap={visibilityMap} onChange={handleVisibilityChange} onReset={resetToDefault} currentCols={currentCols} />
                                 <button onClick={resetFilters} className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-700 shrink-0 transition-colors" title="Reset all filters"><RefreshCw className="w-4 h-4" /></button>
                             </div>
                         </div>
@@ -678,16 +594,22 @@ const Sites = () => {
                                         {col('type') && <th className="px-4 py-3 font-semibold text-slate-600">Type</th>}
                                         {col('sector') && <th className="px-4 py-3 font-semibold text-slate-600">Sector</th>}
                                         {col('cluster') && <th className="px-4 py-3 font-semibold text-slate-600">Cluster</th>}
-                                        {col('region') && <th className="px-4 py-3 font-semibold text-slate-600">Region</th>}
-                                        {col('po_tsel') && <th className="px-4 py-3 font-semibold text-slate-600">PO Tsel</th>}
-                                        {col('qty') && <th className="px-4 py-3 font-semibold text-slate-600 text-center">Qty</th>}
-                                        {col('imported_from') && <th className="px-4 py-3 font-semibold text-slate-600">Imported From</th>}
-                                        {col('import_date') && <th className="px-4 py-3 font-semibold text-slate-600">Import Date</th>}
                                         {col('team') && <th className="px-4 py-3 font-semibold text-slate-600">Team</th>}
                                         {col('stage') && <th className="px-4 py-3 font-semibold text-slate-600">Stage</th>}
                                         {col('days') && <th className="px-4 py-3 font-semibold text-slate-600">Last Updated</th>}
                                         {col('termin') && <th className="px-4 py-3 font-semibold text-slate-600">Termin</th>}
-                                        {col('ineom') && <th className="px-4 py-3 font-semibold text-slate-600 text-center">INEOM</th>}
+                                        
+                                        {col('po_tsel') && <th className="px-4 py-3 font-semibold text-slate-600">PO Tsel</th>}
+                                        {col('region') && <th className="px-4 py-3 font-semibold text-slate-600">Region</th>}
+                                        {col('tp_name') && <th className="px-4 py-3 font-semibold text-slate-600">TP Name</th>}
+                                        {col('priority') && <th className="px-4 py-3 font-semibold text-slate-600">Priority</th>}
+                                        {col('batch') && <th className="px-4 py-3 font-semibold text-slate-600">Batch</th>}
+                                        {col('atp_status') && <th className="px-4 py-3 font-semibold text-slate-600">ATP Status</th>}
+                                        {col('lat_long') && <th className="px-4 py-3 font-semibold text-slate-600">Lat/Long</th>}
+                                        {col('ioms') && <th className="px-4 py-3 font-semibold text-slate-600 text-center">IOMS</th>}
+                                        {col('sow_id') && <th className="px-4 py-3 font-semibold text-slate-600">SOW ID</th>}
+                                        {col('field_leader') && <th className="px-4 py-3 font-semibold text-slate-600">Field Leader</th>}
+                                        {col('permit_expiry') && <th className="px-4 py-3 font-semibold text-slate-600">Permit Expiry</th>}
                                         {col('actions') && <th className="px-4 py-3 font-semibold text-slate-600 text-right">Actions</th>}
                                     </tr>
                                 </thead>
@@ -718,22 +640,11 @@ const Sites = () => {
                                                     {col('type') && <td className="px-4 py-3">{typeObj && <span className={clsx('px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border', typeObj.color)}>{typeObj.label}</span>}</td>}
                                                     {col('sector') && <td className="px-4 py-3">{site.sector ? <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-sm">S{site.sector}</span> : <span className="text-slate-300">—</span>}</td>}
                                                     {col('cluster') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[120px]">{site.cluster || '—'}</td>}
-                                                    {col('region') && <td className="px-4 py-3 text-slate-500 text-xs max-w-[110px] truncate">{site.region || '—'}</td>}
-                                                    {col('po_tsel') && <td className="px-4 py-3 text-slate-600 text-xs font-mono">{site.po_tsel || '—'}</td>}
-                                                    {col('qty') && <td className="px-4 py-3 text-center font-medium text-slate-700">{site.quantity}</td>}
-                                                    {col('imported_from') && <td className="px-4 py-3"><ImportedFromBadge value={site.batch_ref || site.import_source} /></td>}
-                                                    {col('import_date') && <td className="px-4 py-3 text-slate-600 text-sm tabular-nums whitespace-nowrap">{formatImportDate(site.imported_at)}</td>}
                                                     {col('team') && (
                                                         <td className="px-4 py-3 text-xs">
-                                                            {(site as any).team_assigned ? (() => {
-                                                                const fl = people.find(p => p.id === site.field_leader_id);
-                                                                return (
-                                                                    <span className="font-medium text-slate-700">
-                                                                        {(site as any).team_assigned}
-                                                                        {fl ? <span className="text-slate-500 font-normal"> · {fl.name}</span> : ''}
-                                                                    </span>
-                                                                );
-                                                            })() : (
+                                                            {(site as any).team_assigned ? (
+                                                                <span className="font-medium text-slate-700">{(site as any).team_assigned}</span>
+                                                            ) : (
                                                                 <span className="text-amber-500 font-medium italic select-none">Belum ditugaskan</span>
                                                             )}
                                                         </td>
@@ -764,7 +675,18 @@ const Sites = () => {
                                                             )}
                                                         </td>
                                                     )}
-                                                    {col('ineom') && <td className="px-4 py-3 text-center">{site.ineom_registered ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-slate-300">—</span>}</td>}
+                                                    
+                                                    {col('po_tsel') && <td className="px-4 py-3 text-slate-600 text-xs font-mono">{site.po_tsel || '—'}</td>}
+                                                    {col('region') && <td className="px-4 py-3 text-slate-500 text-xs max-w-[110px] truncate">{site.region || '—'}</td>}
+                                                    {col('tp_name') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</td>}
+                                                    {col('priority') && <td className="px-4 py-3 text-slate-600 text-xs">{site.raw_data?.['PRIO CAPEX FINAL'] || site.raw_data?.['PRIO'] || '—'}</td>}
+                                                    {col('batch') && <td className="px-4 py-3"><ImportedFromBadge value={site.batch_ref || site.import_source} /></td>}
+                                                    {col('atp_status') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[120px]">{site.raw_data?.['STATUS ATP'] || '—'}</td>}
+                                                    {col('lat_long') && <td className="px-4 py-3 text-slate-500 text-[10px] font-mono">{(site.latitude && site.longitude) ? `${site.latitude.toFixed(4)}, ${site.longitude.toFixed(4)}` : '—'}</td>}
+                                                    {col('ioms') && <td className="px-4 py-3 text-center">{site.ineom_registered ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-slate-300">—</span>}</td>}
+                                                    {col('sow_id') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.sow_eqp || '—'}</td>}
+                                                    {col('field_leader') && <td className="px-4 py-3 text-slate-600 text-xs">{(() => { const fl = people.find(p => p.id === site.field_leader_id); return fl ? fl.name : '—'; })()}</td>}
+                                                    {col('permit_expiry') && <td className="px-4 py-3 text-slate-600 text-xs tabular-nums">{site.raw_data?.permit_expiry_date ? new Date(site.raw_data.permit_expiry_date).toLocaleDateString('id-ID') : '—'}</td>}
                                                     {col('actions') && (
                                                         <td className="px-4 py-3 text-right">
                                                             <div className="flex items-center justify-end gap-2">
@@ -848,10 +770,16 @@ const Sites = () => {
             )}
 
             {/* ── Modals ─────────────────────────────────────────────────── */}
-            <BulkStageUpdateModal isOpen={isBulkOpen} onClose={() => setIsBulkOpen(false)} />
+            <ImportSiteModal 
+                isOpen={isBoqOpen} 
+                onClose={() => setIsBoqOpen(false)}
+                onImportExcel={(data, fileName) => { console.log('BoQ Excel imported:', fileName, data.length, 'rows'); setIsBoqOpen(false); }}
+                onAddManual={() => { setIsBoqOpen(false); }}
+            />
             <MultiSheetExcelModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
+                pageContext="sites"
                 onImportComplete={(summary) => {
                     console.log('Processed Multi-Sheet:', summary);
                     setSummaryData(summary);
