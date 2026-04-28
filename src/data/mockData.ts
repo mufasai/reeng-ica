@@ -1,9 +1,7 @@
-
-
-export type ProjectType = 'FILTER' | 'COMBAT' | 'BLACKSITE' | 'L2H' | 'RESCOPING';
+import type { ProjectType, SiteStage } from '../types';
+export type { ProjectType, SiteStage };
 
 export type WOStatus = 'Unassigned' | 'Assigned' | 'Pending SPK Approval' | 'SPK Created' | 'Active' | 'Implementasi' | 'BAST' | 'Invoice' | 'Completed';
-
 export interface WorkOrder {
   id: string;
   woNumber: string;
@@ -26,9 +24,10 @@ export interface WorkOrder {
 export interface TerminPengajuan {
   id: string; // auto
   site_id: string; // -> site reference
-  termin_key: 'T1' | 'T2a' | 'T2b' | 'T2c' | 'T3' | 'T4';
+  termin_key: 'T1' | 'T2a' | 'T2b' | 'T2c' | 'T3' | 'T4' | 'Biaya Perizinan' | 'Transportasi' | 'Material Tambahan' | 'Sewa Alat' | 'Lainnya';
+  deskripsi?: string;
   nominal: number;
-  status: 'submitted' | 'approved' | 'paid' | 'rejected';
+  status: 'draft' | 'submitted' | 'approved' | 'paid' | 'rejected';
   catatan?: string;
   submitted_by: string; // -> users.id
   submitted_at: string; // datetime
@@ -208,6 +207,7 @@ export const terminPengajuanRecords: TerminPengajuan[] = [
         id: 'tp-jkt010-t3',
         site_id: 'JKT010',
         termin_key: 'T3',
+        deskripsi: 'Pengajuan Termin T3 (30%)',
         nominal: 15000000,
         status: 'submitted',
         catatan: 'Pengajuan Termin 3 menunggu approve',
@@ -217,6 +217,35 @@ export const terminPengajuanRecords: TerminPengajuan[] = [
         history: [
             { action: 'submitted', by: 'Sari Admin', at: '2026-03-09T09:12:00Z' }
         ]
+    },
+    // Mock new items
+    {
+        id: 'tp-jks509-izin',
+        site_id: 'JKS509',
+        termin_key: 'Biaya Perizinan',
+        deskripsi: 'Fee untuk Tower Provider JKS509',
+        nominal: 2500000,
+        status: 'submitted',
+        catatan: 'Harap segera approve untuk mulai pekerjaan',
+        submitted_by: 'u_ops',
+        submitted_at: '2026-03-15T09:12:00Z',
+        documents: [],
+        history: [
+            { action: 'submitted', by: 'u_ops', at: '2026-03-15T09:12:00Z' }
+        ]
+    },
+    {
+        id: 'tp-jks509-transport',
+        site_id: 'JKS509',
+        termin_key: 'Transportasi',
+        deskripsi: 'Sewa mobil pick-up untuk tim instalasi',
+        nominal: 800000,
+        status: 'draft',
+        catatan: '',
+        submitted_by: 'u_field',
+        submitted_at: '2026-03-18T09:12:00Z',
+        documents: [],
+        history: []
     }
 ];
 
@@ -727,12 +756,17 @@ export const termins: Termin[] = [
 export interface SiteEvidence {
     id: string;
     siteId: string;
+    work_order_id?: string;
     filename: string;
     originalName: string;
     uploadedBy: string; // user name or id
     uploadedAt: string;
     progressTag: string; // e.g., "50%", "BAST Final", "Material Arrival"
     url?: string; // mock url
+    tag?: string; // e.g. 'implementasi_foto'
+    engineer_caption?: string;
+    admin_caption?: string | null;
+    atp_checked?: boolean;
 }
 
 export type CostStatus = 'pengajuan' | 'approved' | 'paid' | 'rejected';
@@ -910,6 +944,8 @@ export const siteMaterials: SiteMaterial[] = [
 export const siteEvidence: SiteEvidence[] = [
     { id: 'e1', siteId: 's1', filename: 'prog_0.jpg', originalName: 'sitac_clear.jpg', uploadedBy: 'u_eng', uploadedAt: '2024-01-10', progressTag: '0% Start' },
     { id: 'e2', siteId: 's1', filename: 'prog_30.jpg', originalName: 'pondasi_done.jpg', uploadedBy: 'u_eng', uploadedAt: '2024-01-25', progressTag: '30% Pondasi' },
+    { id: 'e3', siteId: 'JKS509', work_order_id: 'atp-wo-1', filename: 'rru_instalasi.jpg', originalName: 'rru.jpg', uploadedBy: 'u_field', uploadedAt: '2026-03-22T10:00:00Z', progressTag: 'Instalasi', url: 'https://images.unsplash.com/photo-1544377193-33dcf4d68fb5?w=500&h=500&fit=crop', tag: 'implementasi_foto', engineer_caption: 'RRU', admin_caption: null, atp_checked: false },
+    { id: 'e4', siteId: 'JKS509', work_order_id: 'atp-wo-1', filename: 'kabel_power.jpg', originalName: 'kabel.jpg', uploadedBy: 'u_field', uploadedAt: '2026-03-22T10:05:00Z', progressTag: 'Instalasi', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&h=500&fit=crop', tag: 'implementasi_foto', engineer_caption: '', admin_caption: null, atp_checked: false },
 ];
 
 export const siteCosts: SiteCost[] = [
@@ -1103,7 +1139,6 @@ export const combatTerms: CombatTerm[] = [
 
 export type SiteMasterStatus = 'unassigned' | 'assigned' | 'spk_active' | 'completed' | 'reallocated' | 'on_hold';
 
-export type SiteStage = 'imported' | 'assigned' | 'permit_process' | 'permit_ready' | 'akses_process' | 'akses_ready' | 'implementasi' | 'rfi_done' | 'rfs_done' | 'dokumen_done' | 'bast' | 'invoice' | 'completed' | 'survey' | 'survey_nok' | 'erfin_process' | 'erfin_ready';
 
 export interface SiteMaster {
     id: string; // BIGINT equivalent
@@ -1179,6 +1214,32 @@ export const siteMasterRecords: SiteMaster[] = [
         imported_at: '2026-03-10T09:00:00Z',
         team_id: 't1',
         geom: '-6.200000, 106.816666'
+    },
+    {
+        id: 'sm-jks509',
+        unique_key: 'JKS509',
+        site_id: 'JKS509',
+        ne_id: 'JKS509MT1',
+        site_name: 'MSJDBBSSALAM',
+        cluster: 'JAKSEL',
+        plan_capex: 'CAPEX FILTER 2026',
+        area: 'Area 2',
+        region: 'R03 Jakarta',
+        nop: 'NOP JAKARTA SELATAN',
+        sow_eqp: 'EQP FILTER',
+        quantity: 1,
+        sow_pekerjaan: 'Instalasi Filter',
+        po_tsel: '4200052178',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'assigned',
+        stage: 'imported',
+        ineom_registered: true,
+        batch_ref: 'EPROC20260310002_Smartelco_BoQ_Filter_Batch1',
+        imported_by: 'u_adm',
+        imported_at: '2026-03-01T09:00:00Z',
+        latitude: -6.2255,
+        longitude: 106.8016,
     },
     {
         id: 'sm1',
@@ -1448,6 +1509,257 @@ export const siteMasterRecords: SiteMaster[] = [
             "STATUS ATP": "UPLOAD TAGGING DONE",
             "PRIO CAPEX FINAL": "Batch#2",
         }
+    },
+    // --- UNASSIGNED SITES (from Detail Site-ID) ---
+    {
+        id: 'sm-tnx240',
+        unique_key: 'TNX240',
+        site_id: 'TNX240',
+        ne_id: 'TNX240MT1',
+        site_name: 'AeonmallbsdAptBranz-IBS-M',
+        region: 'R03 Jakarta Banten',
+        cluster: 'KAB TANGERANG',
+        plan_capex: 'CAPEX FILTER 2026',
+        area: 'Area 2',
+        nop: 'NOP TANGERANG',
+        sow_eqp: 'EQP FILTER',
+        quantity: 1,
+        sow_pekerjaan: 'Instalasi Filter',
+        po_tsel: '',
+        mitra: '',
+        project_type: 'FILTER',
+        status: 'unassigned',
+        stage: 'imported',
+        ineom_registered: false,
+        batch_ref: 'Detail_Site-ID',
+        imported_by: 'u_adm',
+        imported_at: '2026-03-20T09:00:00Z',
+        latitude: -6.30501,
+        longitude: 106.64217,
+        tower_provider: 'INTI BANGUN SEJAHTERA'
+    },
+    {
+        id: 'sm-jsx887',
+        unique_key: 'JSX887',
+        site_id: 'JSX887',
+        ne_id: 'JSX887MT1',
+        site_name: 'SomeSite-Jakarta',
+        region: 'R03 Jakarta',
+        cluster: 'JAKSEL',
+        plan_capex: 'CAPEX FILTER 2026',
+        area: 'Area 2',
+        nop: 'NOP JAKARTA SELATAN',
+        sow_eqp: 'EQP FILTER',
+        quantity: 1,
+        sow_pekerjaan: 'Instalasi Filter',
+        po_tsel: '',
+        mitra: '',
+        project_type: 'FILTER',
+        status: 'unassigned',
+        stage: 'imported',
+        ineom_registered: false,
+        batch_ref: 'Detail_Site-ID',
+        imported_by: 'u_adm',
+        imported_at: '2026-03-21T09:00:00Z',
+        latitude: -6.2255,
+        longitude: 106.8016,
+        tower_provider: 'MITRATEL'
+    },
+    {
+        id: 'sm-tgr463',
+        unique_key: 'TGR463',
+        site_id: 'TGR463',
+        ne_id: 'TGR463MT1',
+        site_name: 'E_TGR463_Jlkpcrewed-TBG',
+        region: 'R03 Jakarta Banten',
+        cluster: 'TANGERANG',
+        plan_capex: 'CAPEX FILTER 2026',
+        area: 'Area 2',
+        nop: 'NOP TANGERANG',
+        sow_eqp: 'EQP FILTER',
+        quantity: 1,
+        sow_pekerjaan: 'Instalasi Filter',
+        po_tsel: '',
+        mitra: '',
+        project_type: 'FILTER',
+        status: 'unassigned',
+        stage: 'imported',
+        ineom_registered: false,
+        batch_ref: 'Detail_Site-ID',
+        imported_by: 'u_adm',
+        imported_at: '2026-03-22T09:00:00Z',
+        latitude: -6.216991,
+        longitude: 106.538491,
+        tower_provider: 'TOWER BERSAMA'
+    },
+    {
+        id: 'sm-tgr317',
+        unique_key: 'TGR317',
+        site_id: 'TGR317',
+        ne_id: 'TGR317MT1',
+        site_name: 'E_TGR317_Cangkudubalarajapermai-TBG',
+        region: 'R03 Jakarta Banten',
+        cluster: 'TANGERANG',
+        plan_capex: 'CAPEX FILTER 2026',
+        area: 'Area 2',
+        nop: 'NOP TANGERANG',
+        sow_eqp: 'EQP FILTER',
+        quantity: 1,
+        sow_pekerjaan: 'Instalasi Filter',
+        po_tsel: '',
+        mitra: '',
+        project_type: 'FILTER',
+        status: 'unassigned',
+        stage: 'imported',
+        ineom_registered: false,
+        batch_ref: 'Detail_Site-ID',
+        imported_by: 'u_adm',
+        imported_at: '2026-03-23T09:00:00Z',
+        latitude: -6.182635,
+        longitude: 106.458132,
+        tower_provider: 'TOWER BERSAMA'
+    },
+    // --- ASSIGNED SITES (from ReEngineering Progress) ---
+    {
+        id: 'sm-clg020',
+        unique_key: 'CLG020',
+        site_id: 'CLG020',
+        ne_id: 'CLG020MT1',
+        site_name: 'E_CLG020_Cilegon4',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#2',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0011058250',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '4200052176',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#2',
+        imported_by: 'system',
+        imported_at: '2026-04-20T00:00:00Z',
+        latitude: -6.0123,
+        longitude: 106.0456,
+        tower_provider: 'DMT',
+        work_order_id: 'atp-wo-clg020'
+    },
+    {
+        id: 'sm-clg036',
+        unique_key: 'CLG036',
+        site_id: 'CLG036',
+        ne_id: 'CLG036MT1',
+        site_name: 'E_CLG036_Banjarnegara-IND',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#4',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0013075459',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '9372/TC.03/EN-01/XI/2025',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#4',
+        imported_by: 'system',
+        imported_at: '2026-04-21T00:00:00Z',
+        latitude: -6.0234,
+        longitude: 106.0567,
+        tower_provider: 'DMT',
+        work_order_id: 'atp-wo-clg036'
+    },
+    {
+        id: 'sm-clg071',
+        unique_key: 'CLG071',
+        site_id: 'CLG071',
+        ne_id: 'CLG071MT1',
+        site_name: 'E_CLG071_Karangasemcilegon-PTI',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#4',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0013075435',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '9372/TC.03/EN-01/XI/2025',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#4',
+        imported_by: 'system',
+        imported_at: '2026-04-22T00:00:00Z',
+        latitude: -6.0345,
+        longitude: 106.0678,
+        tower_provider: 'PTI',
+        work_order_id: 'atp-wo-clg071',
+        notes: 'Tidak bisa create permit karena sistemnya error. Sudah lapor ke helpdesk INEOM sejak 24 Feb'
+    },
+    {
+        id: 'sm-clg115',
+        unique_key: 'CLG115',
+        site_id: 'CLG115',
+        ne_id: 'CLG115MT1',
+        site_name: 'E_CLG115_Bendungancilegon-TBG',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#2',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0011058231',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '4200052176',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#2',
+        imported_by: 'system',
+        imported_at: '2026-04-23T00:00:00Z',
+        latitude: -6.0456,
+        longitude: 106.0789,
+        tower_provider: 'TBG',
+        work_order_id: 'atp-wo-clg115'
+    },
+    {
+        id: 'sm-clg117',
+        unique_key: 'CLG117',
+        site_id: 'CLG117',
+        ne_id: 'CLG117MT1',
+        site_name: 'E_CLG117M41_Kampungciporong-DMT',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#6',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0022633078',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '5992/TC.03/EN-01/IV/2026',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#6',
+        imported_by: 'system',
+        imported_at: '2026-04-24T00:00:00Z',
+        latitude: -6.0567,
+        longitude: 106.0890,
+        tower_provider: 'DMT',
+        work_order_id: 'atp-wo-clg117'
     }
 ];
 
@@ -1636,9 +1948,42 @@ export interface ActivityLog {
     action: string;
     target: string;
     timestamp: string;
+    wa_formatted_text?: string;
 }
 
 export const activityFeed: ActivityLog[] = [
+    { 
+      id: 'act-new-1', 
+      userId: 'u_ops', 
+      action: 'released Permit', 
+      target: 'JKS509 S1', 
+      timestamp: '5 menit lalu',
+      wa_formatted_text: `*Permit Rilis*\nSTATUS PERMIT : 5. Permit Released\nPROJECT TYPE  : FILTERING\nSITE ID-Sector: JKS509-1\nSITE NAME     : MSJDBBSSALAM\nJUMLAH FILTER : 2\nLONG-LAT      : 106.538491, -6.216991`
+    },
+    { 
+      id: 'act-new-2', 
+      userId: 'u_field', 
+      action: 'marked Site RFS', 
+      target: 'JKS509', 
+      timestamp: '1 jam lalu',
+      wa_formatted_text: `Site RFS: JKS509 ATP000000288836`
+    },
+    { 
+      id: 'act-new-3', 
+      userId: 'u_adm', 
+      action: 'signed BAST', 
+      target: 'JKS509', 
+      timestamp: '2 jam lalu',
+      wa_formatted_text: `BAST Selesai: JKS509 ATP000000288836`
+    },
+    { 
+      id: 'act-new-4', 
+      userId: 'u_dir', 
+      action: 'approved Termin 3', 
+      target: 'JKS509', 
+      timestamp: '3 jam lalu',
+      wa_formatted_text: `T3 Disetujui: JKS509 Rp 15jt`
+    },
     { id: 'act-1', userId: 'u_lead', action: 'submitted Termin 1 pengajuan', target: 'Site 1B', timestamp: '2 jam lalu' },
     { id: 'act-2', userId: 'u_mgr', action: 'approved Termin 1', target: 'Site 1A', timestamp: '5 jam lalu' },
     { id: 'act-3', userId: 'u_fin', action: 'processed payment Termin 1', target: 'Site 1A', timestamp: '6 jam lalu' },
@@ -1704,5 +2049,205 @@ export const siteTechnicalDetails: SiteTechnicalDetail[] = [
     { id: 'tech-004', site_id: 'BKS001', ne_id: 'BKS001MR1', layer: 'MR', sector: 1, freq_band: 'L2100', longitude: 107.015, latitude: -6.215, ant_type: 'Huawei AAU5613', height: 30, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_2100_1', enodeb_id: 50402, cell_id: 4, local_cell_id: 1, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
     { id: 'tech-005', site_id: 'BKS001', ne_id: 'BKS001MR2', layer: 'MR', sector: 2, freq_band: 'L2100', longitude: 107.015, latitude: -6.215, ant_type: 'Huawei AAU5613', height: 30, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_2100_2', enodeb_id: 50402, cell_id: 5, local_cell_id: 2, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
     { id: 'tech-006', site_id: 'BKS001', ne_id: 'BKS001MR3', layer: 'MR', sector: 3, freq_band: 'L2100', longitude: 107.015, latitude: -6.215, ant_type: 'Huawei AAU5613', height: 30, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_2100_3', enodeb_id: 50402, cell_id: 6, local_cell_id: 3, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
+    { id: 'tech-tnx240', site_id: 'TNX240', ne_id: 'TNX240MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 106.64217, latitude: -6.30501, cluster: 'KAB TANGERANG', region: 'R03 Jakarta Banten', tp_name: 'INTI BANGUN SEJAHTERA', source_file: 'Detail_Site-ID.xlsx' },
+    { id: 'tech-jsx887', site_id: 'JSX887', ne_id: 'JSX887MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 106.8016, latitude: -6.2255, cluster: 'JAKSEL', region: 'R03 Jakarta', tp_name: 'MITRATEL', source_file: 'Detail_Site-ID.xlsx' },
+    { id: 'tech-tgr463', site_id: 'TGR463', ne_id: 'TGR463MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 106.538491, latitude: -6.216991, cluster: 'TANGERANG', region: 'R03 Jakarta Banten', tp_name: 'TOWER BERSAMA', source_file: 'Detail_Site-ID.xlsx' },
+    { id: 'tech-tgr317', site_id: 'TGR317', ne_id: 'TGR317MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 106.458132, latitude: -6.182635, cluster: 'TANGERANG', region: 'R03 Jakarta Banten', tp_name: 'TOWER BERSAMA', source_file: 'Detail_Site-ID.xlsx' },
+    { id: 'tech-clg020', site_id: 'CLG020', ne_id: 'CLG020MT1', layer: 'ML', sector: 2, freq_band: 'L1800', longitude: 106.0456, latitude: -6.0123, cluster: 'CILEGON', region: 'R03 Jakarta & Banten', tp_name: 'DMT', source_file: 'ReEngineering Progress.xlsx' },
+    { id: 'tech-clg036', site_id: 'CLG036', ne_id: 'CLG036MT1', layer: 'ML', sector: 2, freq_band: 'L1800', longitude: 106.0567, latitude: -6.0234, cluster: 'CILEGON', region: 'R03 Jakarta & Banten', tp_name: 'DMT', source_file: 'ReEngineering Progress.xlsx' },
+    { id: 'tech-clg071', site_id: 'CLG071', ne_id: 'CLG071MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 106.0678, latitude: -6.0345, cluster: 'CILEGON', region: 'R03 Jakarta & Banten', tp_name: 'PTI', source_file: 'ReEngineering Progress.xlsx' },
+    { id: 'tech-clg115', site_id: 'CLG115', ne_id: 'CLG115MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 106.0789, latitude: -6.0456, cluster: 'CILEGON', region: 'R03 Jakarta & Banten', tp_name: 'TBG', source_file: 'ReEngineering Progress.xlsx' },
+    { id: 'tech-clg117', site_id: 'CLG117', ne_id: 'CLG117MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 106.0890, latitude: -6.0567, cluster: 'CILEGON', region: 'R03 Jakarta & Banten', tp_name: 'DMT', source_file: 'ReEngineering Progress.xlsx' },
 ];
 
+export interface AtpWorkOrder {
+  id: string;
+  site_id: string;
+  atp_number: string;
+  sow_id: string;
+  po_number: string;
+  sector: number;
+  site_sector_key: string;
+  project_type: ProjectType;
+  stage: SiteStage;
+  team_id?: string;
+  field_leader_id?: string;
+  initiated_by: string;
+  initiated_at: string;
+  status: 'active' | 'completed' | 'cancelled';
+  
+  // PERMIT
+  permit_status?: string;
+  permit_create_date?: string;
+  tpas_tp_caf?: string;
+  impl_status?: string;
+  permit_start?: string;
+  permit_expiry?: string;
+  tower_provider?: string;
+  jenis_kunci?: string;
+  pic?: string;
+
+  // IMPLEMENTASI
+  ci_date?: string;
+  co_date?: string;
+  rfi_done?: boolean;
+  rfs_done?: boolean;
+}
+
+export interface WorkOrderLog {
+  id: string;
+  work_order_id: string;
+  action: string;
+  user_id: string; // -> people.id
+  timestamp: string;
+}
+
+export const workOrderLogs: WorkOrderLog[] = [
+  { id: 'wol-1', work_order_id: 'atp-wo-1', action: 'Work order initiated', user_id: 'u_adm', timestamp: '2026-03-01T09:00:00Z' },
+  { id: 'wol-2', work_order_id: 'atp-wo-1', action: 'Permit status updated to in_progress', user_id: 'u_ops', timestamp: '2026-03-02T10:15:00Z' },
+  { id: 'wol-3', work_order_id: 'atp-wo-1', action: 'CI date set to 2026-03-10', user_id: 'u3', timestamp: '2026-03-10T08:30:00Z' }
+];
+
+export const atpWorkOrders: AtpWorkOrder[] = [
+  {
+    id: 'atp-wo-1',
+    site_id: 'JKS509',
+    atp_number: 'ATP000000282836',
+    sow_id: 'R0022633070',
+    po_number: '5992/TC.03/EN-01/IV/2026',
+    sector: 1,
+    site_sector_key: 'JKS509-S1',
+    project_type: 'FILTER',
+    stage: 'implementasi',
+    team_id: 't1',
+    field_leader_id: 'u3',
+    initiated_by: 'u_adm',
+    initiated_at: '2026-03-01T09:00:00Z',
+    status: 'active',
+    // Mock data for the new tabs
+    permit_status: 'in_progress',
+    permit_create_date: '2026-03-02',
+    tower_provider: 'Tower Bersama',
+    pic: 'Bpk. Agus (TBG)',
+    ci_date: '2026-03-10T08:30:00Z',
+    rfi_done: false,
+    rfs_done: false
+  },
+  {
+    id: 'atp-wo-clg020',
+    site_id: 'CLG020',
+    atp_number: 'ATP000000282692',
+    sow_id: 'R0011058250',
+    po_number: '4200052176',
+    sector: 2,
+    site_sector_key: 'CLG020-S2',
+    project_type: 'FILTER',
+    stage: 'rfs_done',
+    team_id: 't2', // Denny Suhendra
+    field_leader_id: 'u3',
+    initiated_by: 'system',
+    initiated_at: '2026-04-20T09:00:00Z',
+    status: 'active',
+    permit_status: 'completed',
+    rfs_done: true
+  },
+  {
+    id: 'atp-wo-clg036',
+    site_id: 'CLG036',
+    atp_number: 'ATP000000278733',
+    sow_id: 'R0013075459',
+    po_number: '9372/TC.03/EN-01/XI/2025',
+    sector: 2,
+    site_sector_key: 'CLG036-S2',
+    project_type: 'FILTER',
+    stage: 'rfs_done',
+    team_id: 't2',
+    field_leader_id: 'u3',
+    initiated_by: 'system',
+    initiated_at: '2026-04-21T09:00:00Z',
+    status: 'active',
+    permit_status: 'completed',
+    rfs_done: true
+  },
+  {
+    id: 'atp-wo-clg071',
+    site_id: 'CLG071',
+    atp_number: 'ATP000000278556',
+    sow_id: 'R0013075435',
+    po_number: '9372/TC.03/EN-01/XI/2025',
+    sector: 1,
+    site_sector_key: 'CLG071-S1',
+    project_type: 'FILTER',
+    stage: 'rfs_done',
+    team_id: 't2',
+    field_leader_id: 'u3',
+    initiated_by: 'system',
+    initiated_at: '2026-04-22T09:00:00Z',
+    status: 'active',
+    permit_status: 'completed',
+    rfs_done: true
+  },
+  {
+    id: 'atp-wo-clg115',
+    site_id: 'CLG115',
+    atp_number: 'ATP000000282668',
+    sow_id: 'R0011058231',
+    po_number: '4200052176',
+    sector: 1,
+    site_sector_key: 'CLG115-S1',
+    project_type: 'FILTER',
+    stage: 'rfs_done',
+    team_id: 't2',
+    field_leader_id: 'u3',
+    initiated_by: 'system',
+    initiated_at: '2026-04-23T09:00:00Z',
+    status: 'active',
+    permit_status: 'completed',
+    rfs_done: true
+  },
+  {
+    id: 'atp-wo-clg117',
+    site_id: 'CLG117',
+    atp_number: 'ATP000000288425',
+    sow_id: 'R0022633078',
+    po_number: '5992/TC.03/EN-01/IV/2026',
+    sector: 1,
+    site_sector_key: 'CLG117-S1',
+    project_type: 'FILTER',
+    stage: 'rfs_done',
+    team_id: 't2',
+    field_leader_id: 'u3',
+    initiated_by: 'system',
+    initiated_at: '2026-04-24T09:00:00Z',
+    status: 'active',
+    permit_status: 'completed',
+    rfs_done: true
+  }
+];
+
+// Data Migration: Backfill atpWorkOrders for existing sites
+(() => {
+  siteMasterRecords.forEach(site => {
+    if (site.stage !== 'imported') {
+      const hasWorkOrder = atpWorkOrders.some(wo => wo.site_id === site.site_id);
+      if (!hasWorkOrder) {
+        atpWorkOrders.push({
+          id: `atp-migrated-${site.site_id.toLowerCase()}`,
+          site_id: site.site_id,
+          atp_number: '', // Unknown, left blank
+          sow_id: site.sow_eqp || '',
+          po_number: site.po_tsel || '',
+          sector: 1, // Default sector
+          site_sector_key: `${site.site_id}-S1`,
+          project_type: site.project_type as ProjectType,
+          stage: site.stage,
+          status: site.stage === 'completed' ? 'completed' : 'active',
+          initiated_by: 'system_migration',
+          initiated_at: new Date().toISOString(),
+          team_id: (site as any).team_assigned || '',
+          field_leader_id: ''
+        });
+      }
+    }
+  });
+})();

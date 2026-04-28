@@ -185,8 +185,8 @@ export const TableRow = ({
     </tr>
 );
 
-export const TableCell = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-    <td className={clsx("px-4 py-3.5 text-sm text-gray-700", className)}>
+export const TableCell = ({ children, className, colSpan, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
+    <td className={clsx("px-4 py-3.5 text-sm text-gray-700", className)} colSpan={colSpan} {...props}>
         {children}
     </td>
 );

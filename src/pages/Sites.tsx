@@ -1,35 +1,21 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    Search, Filter as FilterIcon, ArrowRight, AlertCircle, RefreshCw, FileSpreadsheet,
-    Check, Edit3,
+    Search, Filter as FilterIcon, RefreshCw, FileSpreadsheet,
     Plus, Download, History, Layers
 } from 'lucide-react';
 import clsx from 'clsx';
-import { siteMasterRecords, type ProjectType, getTerminSummary, people } from '../data/mockData';
+import { siteMasterRecords, type ProjectType, getTerminSummary, people, atpWorkOrders, atpTasks, siteTechnicalDetails, type AtpWorkOrder } from '../data/mockData';
 import ImportSiteModal from '../components/modals/ImportSiteModal';
 import MultiSheetExcelModal from '../components/modals/MultiSheetExcelModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
+import AssignProjectModal from '../components/modals/AssignProjectModal';
 import { useAuth } from '../context/AuthContext';
+import { useCellSave } from '../hooks/useCellSave';
+import { InlineStageEdit } from '../components/common/InlineEditCells';
+import { ChevronDown, ChevronRight, PlusCircle, ExternalLink } from 'lucide-react';
 
 // ─── Constants & Helpers ────────────────────────────────────────────────────────
-const STAGE_COLORS: Record<string, string> = {
-    'imported': 'bg-gray-100 text-gray-700 border-gray-200',
-    'assigned': 'bg-gray-100 text-gray-700 border-gray-200',
-    'permit_process': 'bg-amber-100 text-amber-700 border-amber-200',
-    'permit_ready': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    'akses_process': 'bg-blue-100 text-blue-700 border-blue-200',
-    'akses_ready': 'bg-blue-100 text-blue-700 border-blue-200',
-    'implementasi': 'bg-violet-100 text-violet-700 border-violet-200',
-    'rfi_done': 'bg-violet-100 text-violet-700 border-violet-200',
-    'rfs_done': 'bg-violet-100 text-violet-700 border-violet-200',
-    'dokumen_done': 'bg-orange-100 text-orange-700 border-orange-200',
-    'bast': 'bg-orange-100 text-orange-700 border-orange-200',
-    'invoice': 'bg-orange-100 text-orange-700 border-orange-200',
-    'completed': 'bg-emerald-500 text-white border-emerald-600',
-    'issue_hold': 'bg-red-100 text-red-700 border-red-200',
-};
-
 const PROJECT_TYPES: { id: ProjectType; label: string; color: string }[] = [
     { id: 'BLACKSITE', label: 'Blacksite', color: 'bg-red-50 text-red-600 border-red-200' },
     { id: 'COMBAT', label: 'Combat', color: 'bg-orange-50 text-orange-600 border-orange-200' },
@@ -47,64 +33,14 @@ const formatImportDate = (isoString?: string): string => {
 const truncate = (str: string, maxLen = 25): string =>
     str && str.length > maxLen ? str.slice(0, maxLen) + '…' : str;
 
-// ─── Termin 4-dot indicator ──────────────────────────────────────────────────
-const TerminDots = ({ summaryData }: { summaryData: any }) => {
-    if (!summaryData) return <span className="text-slate-300 font-mono text-xs">— — — —</span>;
-    const summary = summaryData.summary;
-    const dotKeys = ['t1', 't2a', 't2b', 't2c', 't3', 't4'];
-    
-    return (
-        <div className="flex items-center gap-1">
-            {dotKeys.map((k) => {
-                const status = summary[k]?.status || 'locked';
-                let colorClass = 'bg-slate-200'; // open
-                if (status === 'locked') colorClass = 'bg-slate-100 border border-slate-200';
-                if (status === 'paid' || status === 'approved') colorClass = 'bg-[#10B981]';
-                if (status === 'submitted') {
-                    if (summaryData.pending_termin_key?.toLowerCase() === k) {
-                        colorClass = 'bg-[#EF4444] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]';
-                    } else {
-                        colorClass = 'bg-[#F59E0B]';
-                    }
-                }
-                
-                return (
-                    <div key={k} className="flex items-center">
-                        <span
-                            title={`${k.toUpperCase()}: ${status}`}
-                            className={clsx('w-2.5 h-2.5 rounded-full inline-block', colorClass)}
-                        />
-                        {/* Spacing adjustments: T2a,b,c are grouped */}
-                        {(k === 't1' || k === 't2c' || k === 't3') && (
-                            <div className="w-1.5 h-[1px] bg-slate-200 mx-1" />
-                        )}
-                        {(k === 't2a' || k === 't2b') && (
-                            <div className="w-0.5 h-[1px] bg-slate-200 mx-0.5" />
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
+
 
 import { useTableColumns } from '../hooks/useTableColumns';
 import TableColumnToggle from '../components/common/TableColumnToggle';
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
-const ImportedFromBadge = ({ value }: { value?: string }) => {
-    if (!value) return <span className="text-slate-300">—</span>;
-    const display = truncate(value, 25);
-    return (
-        <span
-            title={value}
-            className="inline-flex items-center px-2 py-0.5 rounded border border-slate-200 bg-slate-100 text-slate-500 font-mono text-[11px] leading-tight cursor-default"
-        >
-            {display}
-        </span>
-    );
-};
+
 
 // ─── Action Signal Card ───────────────────────────────────────────────────────
 type DotColor = 'red' | 'amber' | 'purple' | 'blue';
@@ -234,6 +170,14 @@ const Sites = () => {
 
     // Column visibility
     const { visibilityMap, handleVisibilityChange, resetToDefault, col, currentCols } = useTableColumns(currentUser.id);
+    const { saveField } = useCellSave();
+
+    // Section collapse state
+    const [isAssignedExpanded, setIsAssignedExpanded] = useState(true);
+    const [isUnassignedExpanded, setIsUnassignedExpanded] = useState(true);
+    
+    // Assign Modal state
+    const [assignModalSite, setAssignModalSite] = useState<string | null>(null);
 
     // derived dropdown data
     const availableStages = useMemo(() => Array.from(new Set(siteMasterRecords.map(s => s.stage))), []);
@@ -280,14 +224,7 @@ const Sites = () => {
         setQuickFilter(prev => prev === key ? null : key);
     };
 
-    const getDaysInStage = (site: any) => {
-        if (site.stage === 'imported' || !site.stage_updated_at) return { text: '—', isStuck: false, daysDiff: 0 };
-        const d = new Date(site.stage_updated_at);
-        const text = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace('.', ':');
-        const daysDiff = Math.floor((Date.now() - d.getTime()) / 86400000);
-        const isStuck = daysDiff > 14 || site.stage_notes?.toLowerCase().includes('issue') || site.stage === 'issue_hold';
-        return { text, isStuck, daysDiff };
-    };
+
 
     // Quick-filter label map (for table header)
     const QUICK_FILTER_LABELS: Record<string, string> = {
@@ -369,6 +306,43 @@ const Sites = () => {
             return dateA - dateB;
         });
     }, [filteredSites]);
+
+    // Split into Assigned and Unassigned
+    const { assignedSites, unassignedSites } = useMemo(() => {
+        const assigned: any[] = [];
+        const unassigned: any[] = [];
+        
+        sortedSites.forEach(s => {
+            const hasWo = atpWorkOrders.some(wo => wo.site_id === s.site_id);
+            if (hasWo) assigned.push(s);
+            else unassigned.push(s);
+        });
+        
+        return { assignedSites: assigned, unassignedSites: unassigned };
+    }, [sortedSites, atpWorkOrders.length]);
+
+    const handleAssignProject = (siteId: string, projectType: ProjectType) => {
+        // 1. Create minimal work order
+        const newWo: AtpWorkOrder = {
+            id: `atp-new-${siteId.toLowerCase()}-${Date.now()}`,
+            site_id: siteId,
+            atp_number: '',
+            sow_id: '',
+            po_number: '',
+            sector: 1,
+            site_sector_key: `${siteId}-S1`,
+            project_type: projectType,
+            stage: 'imported',
+            initiated_by: currentUser.id,
+            initiated_at: new Date().toISOString(),
+            status: 'active' as const
+        };
+        atpWorkOrders.push(newWo);
+        
+        // 2. Navigate to site detail with pekerjaan hash
+        navigate(`/sites/${siteId}#pekerjaan/${newWo.id}`);
+        setAssignModalSite(null);
+    };
 
     // Import History grouping
     const importHistory = useMemo(() => {
@@ -591,30 +565,210 @@ const Sites = () => {
                                     <tr>
                                         {col('site_id') && <th className="px-4 py-3 font-semibold text-slate-600">SITE_ID</th>}
                                         {col('site_name') && <th className="px-4 py-3 font-semibold text-slate-600">Site Name</th>}
-                                        {col('type') && <th className="px-4 py-3 font-semibold text-slate-600">Type</th>}
-                                        {col('sector') && <th className="px-4 py-3 font-semibold text-slate-600">Sector</th>}
-                                        {col('cluster') && <th className="px-4 py-3 font-semibold text-slate-600">Cluster</th>}
+                                        {col('atp_number') && <th className="px-4 py-3 font-semibold text-slate-600">ATP Number</th>}
+                                        {col('sector') && <th className="px-4 py-3 font-semibold text-slate-600">Sektor</th>}
+                                        {col('region') && <th className="px-4 py-3 font-semibold text-slate-600">Region</th>}
+                                        {col('tp_name') && <th className="px-4 py-3 font-semibold text-slate-600">TP</th>}
+                                        {col('permit_status') && <th className="px-4 py-3 font-semibold text-slate-600">Permit Status</th>}
+                                        {col('impl_status') && <th className="px-4 py-3 font-semibold text-slate-600">Impl Status</th>}
+                                        {col('atp_status') && <th className="px-4 py-3 font-semibold text-slate-600">ATP Status</th>}
                                         {col('team') && <th className="px-4 py-3 font-semibold text-slate-600">Team</th>}
                                         {col('stage') && <th className="px-4 py-3 font-semibold text-slate-600">Stage</th>}
                                         {col('days') && <th className="px-4 py-3 font-semibold text-slate-600">Last Updated</th>}
-                                        {col('termin') && <th className="px-4 py-3 font-semibold text-slate-600">Termin</th>}
-                                        
-                                        {col('po_tsel') && <th className="px-4 py-3 font-semibold text-slate-600">PO Tsel</th>}
-                                        {col('region') && <th className="px-4 py-3 font-semibold text-slate-600">Region</th>}
-                                        {col('tp_name') && <th className="px-4 py-3 font-semibold text-slate-600">TP Name</th>}
-                                        {col('priority') && <th className="px-4 py-3 font-semibold text-slate-600">Priority</th>}
-                                        {col('batch') && <th className="px-4 py-3 font-semibold text-slate-600">Batch</th>}
-                                        {col('atp_status') && <th className="px-4 py-3 font-semibold text-slate-600">ATP Status</th>}
-                                        {col('lat_long') && <th className="px-4 py-3 font-semibold text-slate-600">Lat/Long</th>}
-                                        {col('ioms') && <th className="px-4 py-3 font-semibold text-slate-600 text-center">IOMS</th>}
-                                        {col('sow_id') && <th className="px-4 py-3 font-semibold text-slate-600">SOW ID</th>}
-                                        {col('field_leader') && <th className="px-4 py-3 font-semibold text-slate-600">Field Leader</th>}
-                                        {col('permit_expiry') && <th className="px-4 py-3 font-semibold text-slate-600">Permit Expiry</th>}
+                                        {col('termin') && <th className="px-4 py-3 font-semibold text-slate-600 text-center">Termin</th>}
                                         {col('actions') && <th className="px-4 py-3 font-semibold text-slate-600 text-right">Actions</th>}
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {sortedSites.length === 0 ? (
+                                <tbody>
+                                    {/* --- SECTION 1: ASSIGNED --- */}
+                                    <tr 
+                                        className="bg-slate-100/80 border-y border-slate-200 cursor-pointer hover:bg-slate-200/80 transition-colors"
+                                        onClick={() => setIsAssignedExpanded(!isAssignedExpanded)}
+                                    >
+                                        <td colSpan={15} className="px-4 py-2.5">
+                                            <div className="flex items-center gap-2">
+                                                {isAssignedExpanded ? <ChevronDown className="w-4 h-4 text-slate-600" /> : <ChevronRight className="w-4 h-4 text-slate-600" />}
+                                                <span className="text-xs font-black text-slate-700 uppercase tracking-widest">PEKERJAAN AKTIF</span>
+                                                <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200">{assignedSites.length} sites</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {isAssignedExpanded && assignedSites.map(site => {
+                                        const activeWo = atpWorkOrders.find(wo => wo.site_id === site.site_id && wo.status === 'active') || atpWorkOrders.find(wo => wo.site_id === site.site_id);
+                                        const typeObj = PROJECT_TYPES.find(t => t.id === site.project_type);
+                                        
+                                        // Excel-like color coding for Permit Status
+                                        let permitColor = "text-slate-600";
+                                        if (activeWo?.permit_status?.includes('Released')) permitColor = "text-emerald-600 font-bold";
+                                        else if (activeWo?.permit_status?.includes('Submission') || activeWo?.permit_status?.includes('Planning')) permitColor = "text-amber-600 font-bold";
+                                        else if (activeWo?.permit_status?.includes('Cancelled')) permitColor = "text-red-600 font-bold";
+
+                                        return (
+                                            <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0">
+                                                {col('site_id') && <td className="px-4 py-3 font-mono font-bold text-slate-700">{site.site_id}</td>}
+                                                {col('site_name') && <td className="px-4 py-3"><div className="font-semibold text-slate-800 max-w-[180px] truncate" title={site.site_name}>{site.site_name}</div></td>}
+                                                {col('atp_number') && (
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-1.5">
+                                                            {(() => {
+                                                                const wos = atpWorkOrders.filter(w => w.site_id === site.site_id).sort((a,b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime());
+                                                                if (wos.length === 0) return <span className="text-slate-300">—</span>;
+                                                                const primaryWo = wos[0];
+                                                                return (
+                                                                    <>
+                                                                        <button 
+                                                                            onClick={() => navigate(`/sites/${site.site_id}`)}
+                                                                            className="inline-flex items-center gap-1.5 text-blue-600 font-black hover:underline text-xs"
+                                                                        >
+                                                                            {primaryWo.atp_number || 'SET ATP'} <ExternalLink className="w-3 h-3" />
+                                                                        </button>
+                                                                        {wos.length > 1 && (
+                                                                            <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200">
+                                                                                +{wos.length - 1}
+                                                                            </span>
+                                                                        )}
+                                                                    </>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {col('sector') && <td className="px-4 py-3 text-slate-700 font-medium">S{site.sector || '1'}</td>}
+                                                {col('region') && <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-[100px]">{site.region || '—'}</td>}
+                                                {col('tp_name') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</td>}
+                                                {col('permit_status') && (
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={clsx(
+                                                                "w-1.5 h-1.5 rounded-full shrink-0",
+                                                                (activeWo?.permit_status?.includes('5') || activeWo?.permit_status?.includes('7')) ? "bg-emerald-500" :
+                                                                (activeWo?.permit_status?.includes('1') || activeWo?.permit_status?.includes('3')) ? "bg-amber-500" :
+                                                                activeWo?.permit_status?.includes('9') ? "bg-red-500" : "bg-slate-300"
+                                                            )} />
+                                                            <span className={clsx("text-[11px] font-bold", permitColor)}>
+                                                                {activeWo?.permit_status || '1. Planning'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {col('impl_status') && (
+                                                    <td className="px-4 py-3">
+                                                        {(() => {
+                                                            const status = activeWo?.impl_status || (site.stage === 'rfs_done' ? 'RFS' : site.stage === 'implementasi' ? 'Awaiting' : '—');
+                                                            const color = status === 'RFS' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+                                                                          (status === 'Awaiting' || status === 'On Going') ? 'text-amber-600 bg-amber-50 border-amber-100' :
+                                                                          status === 'Cancelled' ? 'text-red-600 bg-red-50 border-red-100' : 'text-slate-500 bg-slate-50';
+                                                            return <span className={clsx("px-2 py-0.5 rounded text-[10px] font-bold border", color)}>{status}</span>;
+                                                        })()}
+                                                    </td>
+                                                )}
+                                                {col('atp_status') && (
+                                                    <td className="px-4 py-3">
+                                                        {(() => {
+                                                            const task = atpTasks.find(t => t.site_id === site.site_id);
+                                                            const status = task ? task.tagging_status.toUpperCase() : (site.raw_data?.['STATUS ATP'] || '—');
+                                                            
+                                                            const s = status.toUpperCase();
+                                                            const color = s.includes('DONE') ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+                                                                          s.includes('PDID') ? 'text-amber-600 bg-amber-50 border-amber-100' :
+                                                                          s.includes('HOLD') ? 'text-red-600 bg-red-50 border-red-100' :
+                                                                          'text-slate-500 bg-slate-50 border-slate-100';
+                                                            
+                                                            return <span className={clsx("px-2 py-0.5 rounded text-[9px] font-black border tracking-tight uppercase", color)}>{s}</span>;
+                                                        })()}
+                                                    </td>
+                                                )}
+                                                {col('team') && (
+                                                    <td className="px-4 py-3 text-xs font-bold text-slate-700">
+                                                        {(() => {
+                                                            const flId = activeWo?.field_leader_id || site.field_leader_id;
+                                                            const fl = people.find(p => p.id === flId);
+                                                            return fl ? fl.name : (site as any).team_assigned || '—';
+                                                        })()}
+                                                    </td>
+                                                )}
+                                                {col('stage') && (
+                                                    <td className="px-4 py-3">
+                                                        <InlineStageEdit 
+                                                            value={site.stage as string} 
+                                                            siteId={site.site_id}
+                                                            onSave={(val) => saveField(site.site_id, 'site', 'stage', val)} 
+                                                        />
+                                                    </td>
+                                                )}
+                                                {col('days') && (
+                                                    <td className="px-4 py-3 text-xs font-medium text-slate-600 tabular-nums">
+                                                        {site.stage_updated_at ? new Date(site.stage_updated_at).toLocaleDateString('id-ID', {day: '2-digit', month: 'short'}) : '—'}
+                                                    </td>
+                                                )}
+                                                {col('actions') && (
+                                                    <td className="px-4 py-3 text-right">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <button onClick={() => navigate(`/sites/${site.site_id}`)} className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-all">
+                                                                Detail →
+                                                            </button>
+                                                            <button onClick={() => navigate(`/sites/${site.site_id}#pekerjaan`)} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all flex items-center gap-1">
+                                                                <PlusCircle className="w-3 h-3" /> ATP
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })}
+
+                                    {/* --- SECTION 2: UNASSIGNED --- */}
+                                    <tr 
+                                        className="bg-slate-50 border-y border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors mt-4"
+                                        onClick={() => setIsUnassignedExpanded(!isUnassignedExpanded)}
+                                    >
+                                        <td colSpan={15} className="px-4 py-2.5">
+                                            <div className="flex items-center gap-2">
+                                                {isUnassignedExpanded ? <ChevronDown className="w-4 h-4 text-slate-600" /> : <ChevronRight className="w-4 h-4 text-slate-600" />}
+                                                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">BELUM DITUGASKAN</span>
+                                                <span className="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold border border-slate-300">{unassignedSites.length} sites</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {isUnassignedExpanded && unassignedSites.map(site => {
+                                        const technicals = siteTechnicalDetails.filter(t => t.site_id === site.site_id);
+                                        const layerCount = new Set(technicals.map(t => t.layer).filter(Boolean)).size;
+                                        const sectorCount = new Set(technicals.map(t => t.sector).filter(Boolean)).size;
+
+                                        return (
+                                            <tr key={site.site_id} className="bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors group border-b border-slate-100 last:border-0 border-l-4 border-l-slate-200">
+                                                {col('site_id') && <td className="px-4 py-3 font-mono font-bold text-slate-500">{site.site_id}</td>}
+                                                {col('site_name') && <td className="px-4 py-3"><div className="font-semibold text-slate-600 max-w-[180px] truncate" title={site.site_name}>{site.site_name}</div></td>}
+                                                <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-[100px]">{site.region || '—'}</td>
+                                                <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</td>
+                                                <td className="px-4 py-3 text-slate-500 text-xs">{site.provinsi || '—'}</td>
+                                                <td className="px-4 py-3 text-slate-500 text-xs">{site.cluster || '—'}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
+                                                        {layerCount} layers
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
+                                                        {sectorCount || 1} sectors
+                                                    </span>
+                                                </td>
+                                                <td colSpan={4}></td>
+                                                {col('actions') && (
+                                                    <td className="px-4 py-3 text-right">
+                                                        <button 
+                                                            onClick={() => setAssignModalSite(site.site_id)}
+                                                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 ml-auto"
+                                                        >
+                                                            <Plus className="w-3.5 h-3.5" /> Tugaskan ke Proyek →
+                                                        </button>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })}
+
+                                    {(assignedSites.length === 0 && unassignedSites.length === 0) && (
                                         <tr>
                                             <td colSpan={15} className="px-4 py-12 text-center text-slate-500 bg-slate-50/50">
                                                 <div className="flex flex-col items-center">
@@ -623,96 +777,20 @@ const Sites = () => {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ) : (
-                                        sortedSites.map(site => {
-                                            const typeObj = PROJECT_TYPES.find(t => t.id === site.project_type);
-                                            const { text: daysText, isStuck } = getDaysInStage(site);
-                                            const termSummary = getTerminSummary(site.site_id);
-                                            const hasDirectorPending = termSummary.has_pending_approval;
-                                            const rowBg = (hasDirectorPending && currentUser.role === 'director') 
-                                                ? 'bg-[#FEF3C7] hover:bg-[#FDE68A] border-l-4 border-l-[#F59E0B]' 
-                                                : 'hover:bg-slate-50/50';
-
-                                            return (
-                                                <tr key={site.site_id} className={clsx("transition-colors group", rowBg)}>
-                                                    {col('site_id') && <td className="px-4 py-3 font-mono font-bold text-slate-700">{site.site_id}</td>}
-                                                    {col('site_name') && <td className="px-4 py-3"><div className="font-semibold text-slate-800 max-w-[180px] truncate" title={site.site_name}>{site.site_name}</div></td>}
-                                                    {col('type') && <td className="px-4 py-3">{typeObj && <span className={clsx('px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border', typeObj.color)}>{typeObj.label}</span>}</td>}
-                                                    {col('sector') && <td className="px-4 py-3">{site.sector ? <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-sm">S{site.sector}</span> : <span className="text-slate-300">—</span>}</td>}
-                                                    {col('cluster') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[120px]">{site.cluster || '—'}</td>}
-                                                    {col('team') && (
-                                                        <td className="px-4 py-3 text-xs">
-                                                            {(site as any).team_assigned ? (
-                                                                <span className="font-medium text-slate-700">{(site as any).team_assigned}</span>
-                                                            ) : (
-                                                                <span className="text-amber-500 font-medium italic select-none">Belum ditugaskan</span>
-                                                            )}
-                                                        </td>
-                                                    )}
-                                                    {col('stage') && (
-                                                        <td className="px-4 py-3">
-                                                            <span className={clsx('inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border', STAGE_COLORS[site.stage as string] || STAGE_COLORS['imported'])}>
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 mr-1.5" />
-                                                                {site.stage.replace(/_/g, ' ')}
-                                                            </span>
-                                                        </td>
-                                                    )}
-                                                    {col('days') && (
-                                                        <td className="px-4 py-3">
-                                                            <span className={clsx('inline-flex items-center gap-1.5 font-mono text-xs font-semibold px-2 py-1 rounded-md', isStuck ? 'bg-amber-100 text-amber-700 shadow-sm border border-amber-200' : 'text-slate-500')}>
-                                                                {isStuck && <AlertCircle className="w-3 h-3" />}
-                                                                {daysText}
-                                                            </span>
-                                                        </td>
-                                                    )}
-                                                    {col('termin') && (
-                                                        <td className="px-4 py-3">
-                                                            <TerminDots summaryData={termSummary} />
-                                                            {hasDirectorPending && currentUser.role === 'director' && (
-                                                                <div className="text-[10px] text-[#EF4444] mt-1 font-bold animate-pulse">
-                                                                    ⚠ {termSummary.pending_termin_key?.toUpperCase()} Menunggu
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                    )}
-                                                    
-                                                    {col('po_tsel') && <td className="px-4 py-3 text-slate-600 text-xs font-mono">{site.po_tsel || '—'}</td>}
-                                                    {col('region') && <td className="px-4 py-3 text-slate-500 text-xs max-w-[110px] truncate">{site.region || '—'}</td>}
-                                                    {col('tp_name') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</td>}
-                                                    {col('priority') && <td className="px-4 py-3 text-slate-600 text-xs">{site.raw_data?.['PRIO CAPEX FINAL'] || site.raw_data?.['PRIO'] || '—'}</td>}
-                                                    {col('batch') && <td className="px-4 py-3"><ImportedFromBadge value={site.batch_ref || site.import_source} /></td>}
-                                                    {col('atp_status') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[120px]">{site.raw_data?.['STATUS ATP'] || '—'}</td>}
-                                                    {col('lat_long') && <td className="px-4 py-3 text-slate-500 text-[10px] font-mono">{(site.latitude && site.longitude) ? `${site.latitude.toFixed(4)}, ${site.longitude.toFixed(4)}` : '—'}</td>}
-                                                    {col('ioms') && <td className="px-4 py-3 text-center">{site.ineom_registered ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-slate-300">—</span>}</td>}
-                                                    {col('sow_id') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.sow_eqp || '—'}</td>}
-                                                    {col('field_leader') && <td className="px-4 py-3 text-slate-600 text-xs">{(() => { const fl = people.find(p => p.id === site.field_leader_id); return fl ? fl.name : '—'; })()}</td>}
-                                                    {col('permit_expiry') && <td className="px-4 py-3 text-slate-600 text-xs tabular-nums">{site.raw_data?.permit_expiry_date ? new Date(site.raw_data.permit_expiry_date).toLocaleDateString('id-ID') : '—'}</td>}
-                                                    {col('actions') && (
-                                                        <td className="px-4 py-3 text-right">
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                {hasDirectorPending && currentUser.role === 'director' ? (
-                                                                    <button onClick={() => navigate(`/sites/${site.site_id}?tab=costs&expand=${termSummary.pending_termin_key?.toLowerCase()}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#EF4444] hover:bg-red-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-red-500/20">
-                                                                        Review {termSummary.pending_termin_key?.toUpperCase()} <ArrowRight className="w-3 h-3" />
-                                                                    </button>
-                                                                ) : (
-                                                                    <button onClick={() => navigate(`/sites/${site.site_id}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                                                                        Detail <ArrowRight className="w-3 h-3 text-slate-400" />
-                                                                    </button>
-                                                                )}
-                                                                {!hasDirectorPending && <button onClick={() => alert(`Update Stage for ${site.site_id}`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
-                                                                    <Edit3 className="w-3 h-3" /> Update
-                                                                </button>}
-                                                            </div>
-                                                        </td>
-                                                    )}
-                                                </tr>
-                                            );
-                                        })
                                     )}
                                 </tbody>
                             </table>
                         </div>
                     </div>
+
+                    {/* Assign Modal */}
+                    {assignModalSite && (
+                        <AssignProjectModal 
+                            siteId={assignModalSite}
+                            onClose={() => setAssignModalSite(null)}
+                            onAssign={(type) => handleAssignProject(assignModalSite, type)}
+                        />
+                    )}
                 </div>
             ) : (
                 /* ── Import History (Riwayat Import Tab) ──────────────── */

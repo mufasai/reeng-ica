@@ -235,8 +235,29 @@ const TypeSiteList = () => {
 
   const fin = calculateFinancials();
 
-  // Interactive filters (PIPELINE_LABEL_TO_KEY, filterState, etc.) have been removed. 
-  // All table logic now flows from matchedSites -> stageFilter.
+  // Summary helper
+  const summaryInfo = useMemo(() => {
+    const rfsDone = matchedSites.filter(s => s.stage === 'rfs_done').length;
+    const permitReleased = matchedSites.filter(s => s.stage === 'permit_ready').length;
+    
+    const requestPdid = matchedSites.filter(s => {
+        const task = atpTasks.find(t => t.site_id === s.site_id);
+        return task && task.tagging_status === 'pending';
+    }).length;
+
+    const taggingDone = matchedSites.filter(s => {
+        const task = atpTasks.find(t => t.site_id === s.site_id);
+        return task && task.tagging_status === 'done';
+    }).length;
+
+    return {
+      total: matchedSites.length,
+      rfsDone,
+      permitReleased,
+      requestPdid,
+      taggingDone
+    };
+  }, [matchedSites]);
 
   // 7. Apply Stage Filter to Table Sites
   // Compact strip per-stage counts
@@ -482,17 +503,23 @@ const TypeSiteList = () => {
           })}
           <div className="ml-auto pl-4 flex-shrink-0 border-l border-slate-100 text-[11px] text-slate-400 font-medium whitespace-nowrap">
             {matchedSites.length} sites total
-            {(() => {
-              const top = [...compactStrip].filter(g => g.count > 0).sort((a,b) => b.count - a.count)[0];
-              const pending = terminPengajuanRecords.filter(p =>
-                matchedSites.some(s => (s.site_id || s.id) === p.site_id) && p.status === 'submitted'
-              ).length;
-              const parts = [];
-              if (top) parts.push(`${top.count} ${top.label.toLowerCase()}`);
-              if (pending > 0) parts.push(`${pending} menunggu persetujuan termin`);
-              return parts.length ? ` · ${parts.join(' · ')}` : '';
-            })()}
           </div>
+        </div>
+        
+        {/* SECONDARY EXCEL-STYLE SUMMARY LINE */}
+        <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 text-xs font-medium text-slate-600 flex items-center gap-2">
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center gap-4">
+               <span className="flex items-center gap-1.5"><span className="font-black text-slate-900">{summaryInfo.total}</span> sites</span>
+               <span className="w-1 h-1 rounded-full bg-slate-300" />
+               <span className="flex items-center gap-1.5"><span className="font-black text-emerald-600">{summaryInfo.rfsDone}</span> RFS Done</span>
+               <span className="w-1 h-1 rounded-full bg-slate-300" />
+               <span className="flex items-center gap-1.5"><span className="font-black text-blue-600">{summaryInfo.permitReleased}</span> Permit Released</span>
+               <span className="w-1 h-1 rounded-full bg-slate-300" />
+               <span className="flex items-center gap-1.5"><span className="font-black text-amber-600">{summaryInfo.requestPdid}</span> Request PDID</span>
+               <span className="w-1 h-1 rounded-full bg-slate-300" />
+               <span className="flex items-center gap-1.5"><span className="font-black text-emerald-700">{summaryInfo.taggingDone}</span> Tagging Done</span>
+            </div>
         </div>
       </div>
 

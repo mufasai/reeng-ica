@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { type SiteMaster, teams, workOrders, filterTerms, combatTerms, siteStageLogs, USERS, teamMembersRecords, people } from '../../data/mockData';
+import { useCellSave } from '../../hooks/useCellSave';
+import { InlineSectorEdit, InlineTeamEdit, InlineStageEdit, InlineTextEdit, InlineSelectEdit } from '../common/InlineEditCells';
+import { type SiteMaster, teams, workOrders, filterTerms, combatTerms, siteStageLogs, USERS, teamMembersRecords, people, atpWorkOrders } from '../../data/mockData';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { 
     TableContainer, 
@@ -28,14 +30,24 @@ interface ProjectSitesTableProps {
 
 const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) => {
   const { currentUser, can } = useAuth();
+  const { saveField } = useCellSave();
   const navigate = useNavigate();
 
   // Local State
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(5);
+  const [itemsPerPage] = useState(10);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
-  const [openStageMenuId, setOpenStageMenuId] = useState<string | null>(null);
+
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (key: string) => {
+      let direction: 'asc' | 'desc' = 'asc';
+      if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+          direction = 'desc';
+      }
+      setSortConfig({ key, direction });
+  };
 
   const canBulkAction = ['operational', 'admin'].includes(currentUser.role);
   const [selectedSiteIds, setSelectedSiteIds] = useState<Set<string>>(new Set());
@@ -120,11 +132,43 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
 
   // Search Filter
   const filteredSites = useMemo(() => {
-      return visibleSites.filter(site => 
-        site.site_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        site.site_id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-  }, [visibleSites, searchTerm]);
+      let result = visibleSites.filter(site => {
+        const lowerSearch = searchTerm.toLowerCase();
+        const siteMatch = site.site_name.toLowerCase().includes(lowerSearch) ||
+                         site.site_id.toLowerCase().includes(lowerSearch);
+        
+        // Search ATP numbers
+        const wos = atpWorkOrders.filter(w => w.site_id === site.site_id);
+        const atpMatch = wos.some(w => w.atp_number?.toLowerCase().includes(lowerSearch));
+        
+        return siteMatch || atpMatch;
+      });
+
+      // Sorting logic
+      if (sortConfig) {
+          result = [...result].sort((a, b) => {
+              let aValue: any = (a as any)[sortConfig.key];
+              let bValue: any = (b as any)[sortConfig.key];
+
+              // Handle derived fields
+              if (sortConfig.key === 'atp_number') {
+                  const aWo = atpWorkOrders.filter(w => w.site_id === a.site_id).sort((x,y) => new Date(y.initiated_at).getTime() - new Date(x.initiated_at).getTime())[0];
+                  const bWo = atpWorkOrders.filter(w => w.site_id === b.site_id).sort((x,y) => new Date(y.initiated_at).getTime() - new Date(x.initiated_at).getTime())[0];
+                  aValue = aWo?.atp_number || '';
+                  bValue = bWo?.atp_number || '';
+              } else if (sortConfig.key === 'days') {
+                  aValue = a.stage_updated_at ? new Date(a.stage_updated_at).getTime() : 0;
+                  bValue = b.stage_updated_at ? new Date(b.stage_updated_at).getTime() : 0;
+              }
+
+              if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+              if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+              return 0;
+          });
+      }
+
+      return result;
+  }, [visibleSites, searchTerm, sortConfig]);
 
   // Pagination
   const totalPages = Math.ceil(filteredSites.length / itemsPerPage);
@@ -230,7 +274,6 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
             searchValue={searchTerm}
             onSearchChange={(val) => { setSearchTerm(val); setCurrentPage(1); }}
             searchPlaceholder="Cari site..."
-            // No status filter for sites in mock data currently, but could add later
             onExport={(type) => console.log('Exporting sites', type)}
             extraActions={<TableColumnToggle visibilityMap={visibilityMap} onChange={handleVisibilityChange} onReset={resetToDefault} currentCols={currentCols} />}
        />
@@ -247,22 +290,27 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                        />
                    </TableHead>
                )}
-               {col('site_id') && <TableHead className="w-16">SITE_ID</TableHead>}
-               {col('site_name') && <TableHead sortable>Site Name</TableHead>}
-               {col('type') && <TableHead>Type</TableHead>}
-               {col('sector') && <TableHead>Sector</TableHead>}
-               {col('cluster') && <TableHead>Cluster</TableHead>}
+               {col('site_id') && <TableHead className="w-16" sortable onSort={() => handleSort('site_id')} sortDirection={sortConfig?.key === 'site_id' ? sortConfig.direction : undefined}>SITE_ID</TableHead>}
+               {col('site_name') && <TableHead sortable onSort={() => handleSort('site_name')} sortDirection={sortConfig?.key === 'site_name' ? sortConfig.direction : undefined}>Site Name</TableHead>}
+               {col('atp_number') && <TableHead sortable onSort={() => handleSort('atp_number')} sortDirection={sortConfig?.key === 'atp_number' ? sortConfig.direction : undefined}>ATP Number</TableHead>}
+               {col('sector') && <TableHead sortable onSort={() => handleSort('sector')} sortDirection={sortConfig?.key === 'sector' ? sortConfig.direction : undefined}>Sektor</TableHead>}
+               {col('region') && <TableHead sortable onSort={() => handleSort('region')} sortDirection={sortConfig?.key === 'region' ? sortConfig.direction : undefined}>Region</TableHead>}
+               {col('tp_name') && <TableHead sortable onSort={() => handleSort('tp_name')} sortDirection={sortConfig?.key === 'tp_name' ? sortConfig.direction : undefined}>TP</TableHead>}
+               {col('permit_status') && <TableHead>Permit Status</TableHead>}
+               {col('impl_status') && <TableHead>Impl Status</TableHead>}
+               {col('atp_status') && <TableHead>ATP Status</TableHead>}
                {col('team') && <TableHead>Team</TableHead>}
-               {col('stage') && <TableHead>Stage</TableHead>}
-               {col('days') && <TableHead>Last Updated</TableHead>}
+               {col('stage') && <TableHead sortable onSort={() => handleSort('stage')} sortDirection={sortConfig?.key === 'stage' ? sortConfig.direction : undefined}>Stage</TableHead>}
+               {col('days') && <TableHead sortable onSort={() => handleSort('days')} sortDirection={sortConfig?.key === 'days' ? sortConfig.direction : undefined}>Last Updated</TableHead>}
                {col('termin') && <TableHead className="w-[80px]">Termin</TableHead>}
                
+               {/* Optional Cols */}
+               {col('type') && <TableHead>Type</TableHead>}
+               {col('cluster') && <TableHead>Cluster</TableHead>}
                {col('po_tsel') && <TableHead>PO Tsel</TableHead>}
-               {col('region') && <TableHead>Region</TableHead>}
-               {col('tp_name') && <TableHead>TP Name</TableHead>}
+               {col('po_number') && <TableHead>PO Number</TableHead>}
                {col('priority') && <TableHead>Priority</TableHead>}
                {col('batch') && <TableHead>Batch</TableHead>}
-               {col('atp_status') && <TableHead>ATP Status</TableHead>}
                {col('lat_long') && <TableHead>Lat/Long</TableHead>}
                {col('ioms') && <TableHead>IOMS</TableHead>}
                {col('sow_id') && <TableHead>SOW ID</TableHead>}
@@ -288,7 +336,6 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                        const wo = site.work_order_id ? workOrders.find(w => w.id === site.work_order_id) : null;
                        const team = wo && wo.assignedTeamId ? teams.find(t => t.id === wo.assignedTeamId) : null;
                        const regionAbbr = site.region.split(' ')[0] || site.region;
-                       const stageProps = getStageProps(site.stage);
                        
                        const updateInfo = getLatestUpdate(site);
                        const isStale = updateInfo.daysInStage > 14;
@@ -313,6 +360,8 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                        }
                        
                        const isSurveyNok = site.stage === 'survey_nok';
+
+                       const activeWo = atpWorkOrders.find(w => w.site_id === site.site_id && w.status === 'active') || atpWorkOrders.find(w => w.site_id === site.site_id);
 
                        return (
                         <React.Fragment key={site.id}>
@@ -340,55 +389,126 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                        </Link>
                                    </TableCell>
                                )}
-                               {col('type') && <TableCell><span className="text-xs uppercase tracking-wider font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{site.project_type}</span></TableCell>}
-                               {col('sector') && <TableCell className="text-[var(--text-primary)]">{site.sector || '—'}</TableCell>}
-                               {col('cluster') && <TableCell className="text-[var(--text-primary)]">{site.cluster || '—'}</TableCell>}
+                               {col('atp_number') && (
+                                   <TableCell>
+                                       <div className="flex items-center gap-1.5">
+                                           {(() => {
+                                               const wos = atpWorkOrders.filter(w => w.site_id === site.site_id).sort((a,b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime());
+                                               if (wos.length === 0) return <span className="text-slate-300">—</span>;
+                                               const primaryWo = wos[0];
+                                               return (
+                                                   <>
+                                                       <InlineTextEdit 
+                                                           value={primaryWo.atp_number || ''} 
+                                                           onSave={(val) => saveField(primaryWo.id, 'workOrder', 'atp_number', val)}
+                                                           placeholder="Set ATP..."
+                                                           className="font-mono text-xs"
+                                                       />
+                                                       {wos.length > 1 && (
+                                                           <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200" title={`${wos.length} total work orders`}>
+                                                               +{wos.length - 1}
+                                                           </span>
+                                                       )}
+                                                   </>
+                                               );
+                                           })()}
+                                       </div>
+                                   </TableCell>
+                               )}
+                               {col('sector') && <TableCell><InlineSectorEdit value={site.sector || ''} onSave={(val) => saveField(site.site_id, 'site', 'sector', val)} /></TableCell>}
+                               {col('region') && (
+                                   <TableCell>
+                                       <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200" title={site.region}>
+                                           {regionAbbr}
+                                       </span>
+                                   </TableCell>
+                               )}
+                               {col('tp_name') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</TableCell>}
+                               {col('permit_status') && (
+                                   <TableCell>
+                                       {activeWo ? (
+                                           <div className="flex items-center gap-2">
+                                               <div className={clsx(
+                                                   "w-1.5 h-1.5 rounded-full shrink-0",
+                                                   (activeWo.permit_status?.includes('5') || activeWo.permit_status?.includes('7')) ? "bg-emerald-500" :
+                                                   (activeWo.permit_status?.includes('1') || activeWo.permit_status?.includes('3')) ? "bg-amber-500" :
+                                                   activeWo.permit_status?.includes('9') ? "bg-red-500" : "bg-slate-300"
+                                               )} />
+                                               <InlineSelectEdit 
+                                                   value={activeWo.permit_status || ''} 
+                                                   onSave={(val) => saveField(activeWo.id, 'workOrder', 'permit_status', val)}
+                                                   options={[
+                                                       {label: '1.Planning', value: '1.Planning'},
+                                                       {label: '3.Submission', value: '3.Submission'},
+                                                       {label: '5.Permit Released', value: '5.Permit Released'},
+                                                       {label: '7.Final Doc', value: '7.Final Doc'},
+                                                       {label: '9.Cancelled', value: '9.Cancelled'}
+                                                   ]}
+                                                   placeholder="Status"
+                                                   className="text-xs"
+                                               />
+                                           </div>
+                                       ) : <span className="text-slate-300">—</span>}
+                                   </TableCell>
+                               )}
+                               {col('impl_status') && (
+                                   <TableCell>
+                                       {(() => {
+                                           const status = activeWo?.impl_status || (site.stage === 'rfs_done' ? 'RFS' : site.stage === 'implementasi' ? 'Awaiting' : null);
+                                           if (!status) return <span className="text-slate-300">—</span>;
+                                           const color = status === 'RFS' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+                                                         (status === 'Awaiting' || status === 'On Going') ? 'text-amber-600 bg-amber-50 border-amber-100' :
+                                                         status === 'Cancelled' ? 'text-red-600 bg-red-50 border-red-100' : 'text-slate-500 bg-slate-50';
+                                           return (
+                                               <span className={clsx("px-2 py-0.5 rounded text-[10px] font-bold border", color)}>
+                                                   {status}
+                                               </span>
+                                           );
+                                       })()}
+                                   </TableCell>
+                               )}
+                               {col('atp_status') && (
+                                    <TableCell>
+                                        {(() => {
+                                            const task = atpTasks.find(t => t.site_id === site.site_id);
+                                            const status = task ? task.tagging_status.toUpperCase() : (site.raw_data?.['STATUS ATP'] || null);
+                                            if (!status) return <span className="text-slate-300">—</span>;
+                                            
+                                            const s = status.toUpperCase();
+                                            const color = s.includes('DONE') ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+                                                          s.includes('PDID') ? 'text-amber-600 bg-amber-50 border-amber-100' :
+                                                          s.includes('HOLD') ? 'text-red-600 bg-red-50 border-red-100' :
+                                                          'text-slate-500 bg-slate-50 border-slate-100';
+                                            
+                                            return (
+                                                <span className={clsx("px-2 py-0.5 rounded text-[9px] font-black border tracking-tight", color)}>
+                                                    {s}
+                                                </span>
+                                            );
+                                        })()}
+                                    </TableCell>
+                                )}
                                {col('team') && (
                                    <TableCell>
-                                       {team ? (
-                                           <span className="text-sm text-slate-700 font-medium">{team.name}</span>
-                                       ) : (
-                                           <span className="text-amber-600 text-sm font-medium flex items-center gap-1">Belum ditugaskan</span>
-                                       )}
+                                       <InlineTeamEdit 
+                                            value={(site as any).team_assigned || team?.name || ''} 
+                                            onSave={(val) => saveField(site.site_id, 'site', 'team_assigned', val)}
+                                            options={teams.map(t => ({ label: t.name, value: t.name }))}
+                                            className="text-xs"
+                                       />
                                    </TableCell>
                                )}
                                {col('stage') && (
-                                   <TableCell className="relative">
-                                       <button 
-                                           onClick={(e) => { e.stopPropagation(); setOpenStageMenuId(prev => prev === site.id ? null : site.id); }}
-                                           className={clsx("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border whitespace-nowrap group hover:ring-2 ring-offset-1 transition-all", stageProps.color, openStageMenuId === site.id ? 'ring-2' : '')}
-                                       >
-                                           <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
-                                           {stageProps.label}
-                                           <ChevronDown className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
-                                       </button>
-
-                                       {openStageMenuId === site.id && (
-                                           <>
-                                                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpenStageMenuId(null); }} />
-                                                <div className="absolute top-full left-4 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-200 z-50 py-1"
-                                                     onClick={e => e.stopPropagation()}>
-                                                    <div className="px-3 py-1.5 text-xs text-slate-500 border-b border-slate-100 mb-1 flex items-center gap-2">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                                        {stageProps.label} (current)
-                                                    </div>
-                                                    <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-between">
-                                                        → Akses Process
-                                                    </button>
-                                                    <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 font-medium">
-                                                        Update Stage →
-                                                    </button>
-                                                    <div className="border-t border-slate-100 my-1"></div>
-                                                    <button className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
-                                                        Laporkan Issue
-                                                    </button>
-                                                </div>
-                                           </>
-                                       )}
+                                   <TableCell>
+                                        <InlineStageEdit 
+                                            value={site.stage as string} 
+                                            siteId={site.site_id}
+                                            onSave={(val) => saveField(site.site_id, 'site', 'stage', val)} 
+                                        />
                                    </TableCell>
                                )}
                                {col('days') && (
-                                   <TableCell className="text-xs font-medium text-slate-600">
+                                   <TableCell className="text-xs font-medium text-slate-600 tabular-nums">
                                         {updateInfo.text}
                                    </TableCell>
                                )}
@@ -398,22 +518,20 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                    </TableCell>
                                )}
                                
-                               {col('po_tsel') && <TableCell className="text-slate-600 text-xs font-mono">{site.po_tsel || '—'}</TableCell>}
-                               {col('region') && (
-                                   <TableCell>
-                                       <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200" title={site.region}>
-                                           {regionAbbr}
-                                       </span>
-                                   </TableCell>
-                               )}
-                               {col('tp_name') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</TableCell>}
+                               {col('type') && <TableCell><span className="text-xs uppercase tracking-wider font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{site.project_type}</span></TableCell>}
+                               {col('cluster') && <TableCell className="text-[var(--text-primary)] text-xs">{site.cluster || '—'}</TableCell>}
+                               {col('po_tsel') && <TableCell className="text-slate-600 text-[10px] font-mono">{site.po_tsel || '—'}</TableCell>}
+                               {col('po_number') && <TableCell className="text-slate-600 text-[10px] font-mono">{activeWo?.po_number || '—'}</TableCell>}
                                {col('priority') && <TableCell className="text-slate-600 text-xs">{site.raw_data?.['PRIO CAPEX FINAL'] || site.raw_data?.['PRIO'] || '—'}</TableCell>}
-                               {col('batch') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.batch_ref || site.import_source || '—'}</TableCell>}
-                               {col('atp_status') && <TableCell className="text-slate-600 text-xs truncate max-w-[120px]">{site.raw_data?.['STATUS ATP'] || '—'}</TableCell>}
-                               {col('lat_long') && <TableCell className="text-slate-500 text-[10px] font-mono">{(site.latitude && site.longitude) ? `${site.latitude.toFixed(4)}, ${site.longitude.toFixed(4)}` : '—'}</TableCell>}
+                               {col('batch') && <TableCell className="text-slate-600 text-[10px] truncate max-w-[80px]">{site.batch_ref || site.import_source || '—'}</TableCell>}
+                               {col('lat_long') && <TableCell className="text-slate-500 text-[9px] font-mono">{(site.latitude && site.longitude) ? `${site.latitude.toFixed(4)}, ${site.longitude.toFixed(4)}` : '—'}</TableCell>}
                                {col('ioms') && <TableCell className="text-center">{site.ineom_registered ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <span className="text-slate-300">—</span>}</TableCell>}
-                               {col('sow_id') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.sow_eqp || '—'}</TableCell>}
-                               {col('field_leader') && <TableCell className="text-slate-600 text-xs">{(() => { const fl = people.find(p => p.id === site.field_leader_id); return fl ? fl.name : '—'; })()}</TableCell>}
+                               {col('sow_id') && <TableCell className="text-slate-600 text-[10px] truncate max-w-[80px] font-mono">{activeWo?.sow_id || '—'}</TableCell>}
+                               {col('field_leader') && <TableCell className="text-slate-600 text-xs">{(() => { 
+                                   const flId = activeWo?.field_leader_id || site.field_leader_id;
+                                   const fl = people.find(p => p.id === flId); 
+                                   return fl ? fl.name : '—'; 
+                               })()}</TableCell>}
                                {col('permit_expiry') && <TableCell className="text-slate-600 text-xs tabular-nums">{site.raw_data?.permit_expiry_date ? new Date(site.raw_data.permit_expiry_date).toLocaleDateString('id-ID') : '—'}</TableCell>}
 
                                {col('actions') && (

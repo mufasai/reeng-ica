@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
     Building2, Wallet, CheckCircle2,
-    CreditCard, Activity, Clock, MapPin
+    CreditCard, Activity, Clock, MapPin, Copy, Check
 } from 'lucide-react';
 import clsx from 'clsx';
 import MapWidget from '../components/MapWidget';
@@ -14,6 +14,7 @@ import {
     filterTerms, combatTerms, siteMasterRecords, type ProjectType,
     teamMembersRecords, workOrders, getTerminSummary
 } from '../data/mockData';
+import EngineerHome from './EngineerHome';
 
 // Helper to format currency
 const formatRupiah = (amount: number) => {
@@ -26,6 +27,12 @@ const Dashboard = () => {
     const { currentUser } = useAuth();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
+    const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
+
+    // Route field engineers to their simplified view
+    if (currentUser?.role === 'field') {
+        return <EngineerHome />;
+    }
 
     const initialTab = searchParams.get('tab') === 'map' ? 'map' : 'overview';
     const [activeTab, setActiveTab] = useState<'overview' | 'map'>(initialTab as any);
@@ -527,13 +534,36 @@ const Dashboard = () => {
                                                     <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0 z-10">
                                                         {initial}
                                                     </div>
-                                                    <div className={clsx("flex-1 pb-3", idx < 4 ? "border-b border-slate-100 w-[80%]" : "")}>
-                                                        <div className="text-[13px] leading-snug">
-                                                            <span className="font-semibold text-[#111827]">{userName}</span>{' '}
-                                                            <span className="text-[#374151]">{log.action}</span>{' '}
-                                                            <span className="font-medium text-[#374151]">{log.target}</span>
+                                                    <div className={clsx("flex-1 pb-3 flex items-start justify-between gap-4", idx < 4 ? "border-b border-slate-100" : "")}>
+                                                        <div>
+                                                            <div className="text-[13px] leading-snug">
+                                                                <span className="font-semibold text-[#111827]">{userName}</span>{' '}
+                                                                <span className="text-[#374151]">{log.action}</span>{' '}
+                                                                <span className="font-medium text-[#374151]">{log.target}</span>
+                                                            </div>
+                                                            <div className="text-[11px] text-[#6B7280] mt-1">{log.timestamp}</div>
                                                         </div>
-                                                        <div className="text-[11px] text-[#6B7280] mt-1">{log.timestamp}</div>
+                                                        {log.wa_formatted_text && (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(log.wa_formatted_text!);
+                                                                    setCopiedLogId(log.id);
+                                                                    setTimeout(() => setCopiedLogId(null), 2000);
+                                                                }}
+                                                                className={clsx(
+                                                                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 mt-0.5 border",
+                                                                    copiedLogId === log.id 
+                                                                        ? "bg-emerald-50 text-emerald-600 border-emerald-200" 
+                                                                        : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-sm"
+                                                                )}
+                                                            >
+                                                                {copiedLogId === log.id ? (
+                                                                    <><Check className="w-3.5 h-3.5" /> Disalin</>
+                                                                ) : (
+                                                                    <><Copy className="w-3.5 h-3.5" /> Salin Notif</>
+                                                                )}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </li>
                                             );

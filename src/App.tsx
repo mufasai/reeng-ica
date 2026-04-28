@@ -13,19 +13,23 @@ import TerminCreate from './pages/TerminCreate';
 import TerminDetail from './pages/TerminDetail';
 import TerminReview from './pages/TerminReview';
 import TerminPayment from './pages/TerminPayment';
+import EngineerUpload from './pages/EngineerUpload';
 import Sites from './pages/Sites';
 import UserManagement from './pages/UserManagement';
 import MaterialMaster from './pages/MaterialMaster';
+import { TabProvider } from './context/TabContext';
 
 function App() {
   return (
     <BrowserRouter>
+      <TabProvider>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="sites" element={<Sites />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrderDetail />} />
+          <Route path="engineer/upload/:id" element={<EngineerUpload />} />
           <Route path="projects" element={<Navigate to="/" replace />} />
           <Route path="projects/type/:type/sites" element={<TypeSiteList />} />
           <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
@@ -52,6 +56,7 @@ function App() {
           <Route path="termin-payment" element={<TerminPayment />} />
         </Route>
       </Routes>
+      </TabProvider>
     </BrowserRouter>
   );
 }

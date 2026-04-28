@@ -2,6 +2,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import AppTabBar from './AppTabBar';
 import { useSidebar } from '../../context/SidebarContext';
 import clsx from 'clsx';
 
@@ -18,6 +19,7 @@ const Layout = () => {
         )}
       >
         <Header />
+        <AppTabBar />
         <main className="flex-1 p-8 overflow-auto">
           <Outlet />
         </main>

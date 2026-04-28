@@ -1,15 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Menu, Mail, Search, MapPin } from 'lucide-react';
+import { Bell, Menu, Mail, Search, MapPin, Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { siteMasterRecords, sites } from '../../data/mockData';
+import { siteMasterRecords, atpWorkOrders, activityFeed } from '../../data/mockData';
+import { useTabContext } from '../../context/TabContext';
 import clsx from 'clsx';
 
 const Header = () => {
   const navigate = useNavigate();
+  const { openTab } = useTabContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const notifContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcut (Cmd+K / Ctrl+K)
@@ -29,6 +35,9 @@ const Header = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setIsFocused(false);
+      }
+      if (notifContainerRef.current && !notifContainerRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -74,29 +83,27 @@ const Header = () => {
       const smRecord = siteMasterRecords.find(sm => sm.id === siteMasterId);
       if (!smRecord) return;
 
-      // Check if execution site exists for this master record
-      const executionSite = sites.find(s => s.id === smRecord.site_id);
-      
-      if (executionSite) {
-          navigate(`/sites/${executionSite.id}`);
-      } else {
-          navigate(`/sites/${smRecord.id}`);
-      }
+      openTab({
+        id: `site-${smRecord.site_id}`,
+        label: `${smRecord.site_id} · ${smRecord.site_name.substring(0, 12)}`,
+        icon: '🏗',
+        path: `/sites/${smRecord.site_id}`,
+        closeable: true,
+      });
       
       setIsFocused(false);
       setSearchQuery('');
   };
 
-  const getBadgeColor = (type?: string) => {
-      switch (type) {
-          case 'BLACKSITE': return 'bg-red-50 text-red-600 border-red-200';
-          case 'COMBAT': return 'bg-orange-50 text-orange-600 border-orange-200';
-          case 'FILTER': return 'bg-emerald-50 text-emerald-600 border-emerald-200';
-          case 'L2H': return 'bg-blue-50 text-blue-600 border-blue-200';
-          case 'RESCOPING': return 'bg-cyan-50 text-cyan-600 border-cyan-200';
-          default: return 'bg-slate-50 text-slate-600 border-slate-200';
-      }
+
+  const handleCopyNotification = (e: React.MouseEvent, text: string, id: string) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
   };
+
+  const waNotifications = activityFeed.filter(log => !!log.wa_formatted_text);
 
   return (
     <header className="h-16 bg-[var(--glass-bg)] border-b border-[var(--glass-border)] backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between">
@@ -139,13 +146,15 @@ const Header = () => {
                     <div className="max-h-[380px] overflow-y-auto">
                         {searchResults.length > 0 ? (
                             <ul className="py-1">
-                                {searchResults.map((site) => (
+                                {searchResults.map((site) => {
+                                    const activeCount = atpWorkOrders.filter(wo => wo.site_id === site.site_id && wo.status === 'active').length;
+                                    return (
                                     <li key={site.id}>
                                         <button 
                                             onClick={() => handleResultClick(site.id)}
                                             className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-start justify-between group border-b border-slate-50 last:border-0"
                                         >
-                                            <div className="min-w-0 pr-4">
+                                            <div className="min-w-0 pr-4 w-full">
                                                 <div className="flex items-center gap-2 flex-wrap mb-1 transition-colors">
                                                     <span className="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors">
                                                         <Search className="w-3 h-3 inline-block mr-1.5 text-slate-400 group-hover:text-blue-500" />
@@ -153,17 +162,9 @@ const Header = () => {
                                                     </span>
                                                     <span className="text-sm font-medium text-slate-600 truncate">{site.site_name}</span>
                                                     
-                                                    {site.project_type && (
-                                                        <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border whitespace-nowrap", getBadgeColor(site.project_type))}>
-                                                            {site.project_type}
-                                                        </span>
-                                                    )}
-                                                    
-                                                    {site.stage && (
-                                                        <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase whitespace-nowrap">
-                                                            {site.stage.replace('_', ' ')}
-                                                        </span>
-                                                    )}
+                                                    <span className="ml-auto text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                                        {activeCount} pekerjaan aktif
+                                                    </span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate mt-1">
                                                      <MapPin className="w-3 h-3" />
@@ -172,7 +173,8 @@ const Header = () => {
                                             </div>
                                         </button>
                                     </li>
-                                ))}
+                                    );
+                                })}
                             </ul>
                         ) : (
                             <div className="p-6 text-center text-sm text-slate-500">
@@ -188,11 +190,69 @@ const Header = () => {
       <div className="flex items-center gap-4">
         
          <div className="flex items-center gap-1">
-             <button className="relative p-2 text-[var(--text-muted)] hover:text-[var(--blue-400)] transition-colors">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-[var(--blue-500)] rounded-full border-2 border-[var(--glass-bg)]"></span>
-            </button>
-            <button className="relative p-2 text-[var(--text-muted)] hover:text-[var(--blue-400)] transition-colors">
+             <div className="relative" ref={notifContainerRef}>
+                 <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className={clsx(
+                        "relative p-2 transition-colors rounded-full",
+                        showNotifications ? "bg-blue-50 text-blue-600" : "text-[var(--text-muted)] hover:bg-slate-100 hover:text-[var(--blue-400)]"
+                    )}
+                 >
+                    <Bell className="w-5 h-5" />
+                    {waNotifications.length > 0 && (
+                        <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                            {waNotifications.length}
+                        </span>
+                    )}
+                 </button>
+
+                 {/* Notifications Dropdown */}
+                 {showNotifications && (
+                     <div className="absolute top-full right-0 mt-3 w-80 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
+                         <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                             <h4 className="font-bold text-slate-800 text-sm">Notifikasi</h4>
+                             <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">{waNotifications.length} Baru</span>
+                         </div>
+                         <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
+                             {waNotifications.map(notif => (
+                                 <div key={notif.id} className="p-4 hover:bg-slate-50 transition-colors">
+                                     <div className="flex gap-3">
+                                         <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                                             <Bell className="w-4 h-4" />
+                                         </div>
+                                         <div className="flex-1 min-w-0">
+                                             <p className="text-sm font-semibold text-slate-800 leading-tight mb-1">{notif.action} • {notif.target}</p>
+                                             <p className="text-xs text-slate-500 mb-3">{notif.timestamp}</p>
+                                             
+                                             <button 
+                                                 onClick={(e) => handleCopyNotification(e, notif.wa_formatted_text!, notif.id)}
+                                                 className={clsx(
+                                                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all w-fit",
+                                                     copiedId === notif.id 
+                                                         ? "bg-emerald-50 text-emerald-600" 
+                                                         : "bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600 shadow-sm"
+                                                 )}
+                                             >
+                                                 {copiedId === notif.id ? (
+                                                     <><Check className="w-3.5 h-3.5" /> Disalin</>
+                                                 ) : (
+                                                     <><Copy className="w-3.5 h-3.5" /> Salin WA Notif</>
+                                                 )}
+                                             </button>
+                                         </div>
+                                     </div>
+                                 </div>
+                             ))}
+                             {waNotifications.length === 0 && (
+                                 <div className="p-6 text-center text-slate-500 text-sm">
+                                     Tidak ada notifikasi baru.
+                                 </div>
+                             )}
+                         </div>
+                     </div>
+                 )}
+             </div>
+            <button className="relative p-2 text-[var(--text-muted)] hover:bg-slate-100 rounded-full hover:text-[var(--blue-400)] transition-colors">
                 <Mail className="w-5 h-5" />
                 <span className="absolute top-2 right-2 w-2 h-2 bg-[var(--coral-500)] rounded-full border-2 border-[var(--glass-bg)]"></span>
             </button>

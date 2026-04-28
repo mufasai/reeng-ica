@@ -1,0 +1,58 @@
+src/components/modals/AddMaterialModal.tsx(203,11): error TS6133: 'formatCurrency' is declared but its value is never read.
+src/components/modals/AddSiteModal.tsx(25,44): error TS2339: Property 'projectId' does not exist on type 'Team'.
+src/components/modals/MaterialMasterModals.tsx(2,59): error TS6133: 'Upload' is declared but its value is never read.
+src/components/modals/MaterialMasterModals.tsx(2,101): error TS6133: 'ArchiveX' is declared but its value is never read.
+src/components/sections/ActionBanner.tsx(27,13): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/components/sections/ActionBanner.tsx(36,13): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"management"' have no overlap.
+src/components/sections/ActionBanner.tsx(55,13): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/components/sections/DirectorPaymentSection.tsx(172,33): error TS6133: 'idx' is declared but its value is never read.
+src/components/sections/TerminDetailPanel.tsx(100,65): error TS2367: This comparison appears to be unintentional because the types '"engineer" | "team_leader"' and 'UserRole' have no overlap.
+src/components/sections/TerminDetailPanel.tsx(207,101): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"engineer"' have no overlap.
+src/components/sections/TerminDetailPanel.tsx(207,149): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/components/sections/TerminFilesSection.tsx(18,37): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/components/sections/TerminFilesSection.tsx(18,76): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"engineer"' have no overlap.
+src/components/tables/ProjectFilesTable.tsx(41,7): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"engineer"' have no overlap.
+src/components/tables/ProjectSitesTable.tsx(138,9): error TS6133: 'getStageProps' is declared but its value is never read.
+src/components/tables/ProjectSitesTable.tsx(425,85): error TS2552: Cannot find name 'stageProps'. Did you mean 'getStageProps'?
+src/context/AuthContext.tsx(115,41): error TS18048: 't.members' is possibly 'undefined'.
+src/context/AuthContext.tsx(115,63): error TS2551: Property 'personId' does not exist on type 'TeamMember'. Did you mean 'person_id'?
+src/context/AuthContext.tsx(116,45): error TS2339: Property 'projectId' does not exist on type 'Team'.
+src/pages/EngineerHome.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/pages/EngineerUpload.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/pages/People.tsx(4,80): error TS6133: 'UserRole' is declared but its value is never read.
+src/pages/People.tsx(7,15): error TS6133: 'Printer' is declared but its value is never read.
+src/pages/People.tsx(8,8): error TS6133: 'Camera' is declared but its value is never read.
+src/pages/People.tsx(8,16): error TS6133: 'Smartphone' is declared but its value is never read.
+src/pages/People.tsx(8,28): error TS6133: 'FileText' is declared but its value is never read.
+src/pages/People.tsx(264,49): error TS18048: 't.members' is possibly 'undefined'.
+src/pages/People.tsx(267,22): error TS18048: 'targetTeam.members' is possibly 'undefined'.
+src/pages/People.tsx(277,49): error TS18048: 't.members' is possibly 'undefined'.
+src/pages/ProjectDetail.tsx(28,61): error TS2339: Property 'projectId' does not exist on type 'Team'.
+src/pages/ProjectDetail.tsx(37,64): error TS18048: 't.members' is possibly 'undefined'.
+src/pages/ProjectDetail.tsx(186,22): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/pages/ProjectList.tsx(40,9): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"engineer"' have no overlap.
+src/pages/ProjectList.tsx(42,9): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"management"' have no overlap.
+src/pages/ProjectList.tsx(47,41): error TS18048: 't.members' is possibly 'undefined'.
+src/pages/ProjectList.tsx(47,63): error TS2551: Property 'personId' does not exist on type 'TeamMember'. Did you mean 'person_id'?
+src/pages/ProjectList.tsx(48,45): error TS2339: Property 'projectId' does not exist on type 'Team'.
+src/pages/ProjectList.tsx(70,7): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"engineer"' have no overlap.
+src/pages/ProjectList.tsx(77,48): error TS2339: Property 'projectId' does not exist on type 'Team'.
+src/pages/SpkList.tsx(42,10): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/pages/SpkList.tsx(42,48): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"engineer"' have no overlap.
+src/pages/SpkList.tsx(44,46): error TS18048: 't.members' is possibly 'undefined'.
+src/pages/SpkList.tsx(44,68): error TS2551: Property 'personId' does not exist on type 'TeamMember'. Did you mean 'person_id'?
+src/pages/WorkOrderDetail.tsx(41,24): error TS18048: 'assignedTeam.members' is possibly 'undefined'.
+src/pages/WorkOrderDetail.tsx(41,58): error TS2339: Property 'role' does not exist on type 'TeamMember'.
+src/pages/WorkOrderDetail.tsx(42,64): error TS2551: Property 'personId' does not exist on type 'TeamMember'. Did you mean 'person_id'?
+src/pages/WorkOrderDetail.tsx(45,26): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/pages/WorkOrderDetail.tsx(194,69): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"management"' have no overlap.
+src/pages/WorkOrders.tsx(27,18): error TS2322: Type '"management"' is not assignable to type 'UserRole'.
+src/pages/WorkOrders.tsx(27,32): error TS2322: Type '"backoffice_admin"' is not assignable to type 'UserRole'.
+src/pages/WorkOrders.tsx(27,52): error TS2322: Type '"team_leader"' is not assignable to type 'UserRole'.
+src/pages/WorkOrders.tsx(47,10): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.
+src/pages/WorkOrders.tsx(47,48): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"engineer"' have no overlap.
+src/pages/WorkOrders.tsx(49,46): error TS18048: 't.members' is possibly 'undefined'.
+src/pages/WorkOrders.tsx(49,68): error TS2551: Property 'personId' does not exist on type 'TeamMember'. Did you mean 'person_id'?
+src/pages/WorkOrders.tsx(268,67): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"management"' have no overlap.
+src/pages/WorkOrders.tsx(278,67): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"management"' have no overlap.
+src/pages/WorkOrders.tsx(310,72): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"team_leader"' have no overlap.

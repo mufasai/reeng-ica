@@ -1,0 +1,20 @@
+export type ProjectType = 'FILTER' | 'COMBAT' | 'BLACKSITE' | 'L2H' | 'RESCOPING';
+export type SiteStage = 
+  | 'imported' 
+  | 'assigned' 
+  | 'survey' 
+  | 'survey_nok' 
+  | 'permit_process' 
+  | 'permit_ready' 
+  | 'akses_process' 
+  | 'akses_ready' 
+  | 'erfin_process'
+  | 'erfin_ready'
+  | 'implementasi' 
+  | 'rfi_done' 
+  | 'rfs_done' 
+  | 'atp' 
+  | 'dokumen_done' 
+  | 'bast' 
+  | 'invoice' 
+  | 'completed';
