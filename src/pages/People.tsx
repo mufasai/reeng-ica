@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { people as initialPeople, teams, teamMembersRecords, type Person, type UserRole } from '../data/mockData';
+import { people as initialPeople, teams, teamMembersRecords, type Person } from '../data/mockData';
 import { 
     Search, Plus,  Edit2, Trash2, 
-    Download, Printer, FileSpreadsheet,
-    X, Camera, Smartphone, FileText, User, Briefcase
+    Download, FileSpreadsheet,
+    X, User, Briefcase
 } from 'lucide-react';
 import { Tooltip } from '../components/common/Tooltip';
 import clsx from 'clsx';
@@ -261,9 +261,12 @@ const People = ({ isSubView = false }: PeopleProps) => {
                  });
                  
                  // Cleanly sync inline 'members' properties on the mocked Teams object
-                 teams.forEach(t => t.members = t.members.filter(m => m.person_id !== person.id));
+                 teams.forEach(t => {
+                     if (t.members) t.members = t.members.filter(m => m.person_id !== person.id);
+                 });
                  const targetTeam = teams.find(t => t.id === assignedTeamId);
                  if (targetTeam) {
+                     if (!targetTeam.members) targetTeam.members = [];
                      targetTeam.members.push({
                          id: newId,
                          team_id: assignedTeamId,
@@ -274,7 +277,9 @@ const People = ({ isSubView = false }: PeopleProps) => {
                  }
              } else {
                  // Removed from any team
-                 teams.forEach(t => t.members = t.members.filter(m => m.person_id !== person.id));
+                 teams.forEach(t => {
+                     if (t.members) t.members = t.members.filter(m => m.person_id !== person.id);
+                 });
              }
         }
         
@@ -350,7 +355,7 @@ const People = ({ isSubView = false }: PeopleProps) => {
 
             {/* Data Table */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto w-full max-w-full">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-[#f8f9fa] text-slate-500 font-semibold border-b border-slate-200 whitespace-nowrap">
                             <tr>

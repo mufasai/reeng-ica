@@ -220,7 +220,7 @@ const MaterialMasterPage: React.FC = () => {
 
             {/* Table */}
             <div className="bg-white border text-sm border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto w-full max-w-full">
                     <table className="w-full text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
@@ -411,7 +411,7 @@ const MaterialMasterPage: React.FC = () => {
 
                     {/* Ledger Table */}
                     <div className="bg-white border text-sm border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto w-full max-w-full">
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>

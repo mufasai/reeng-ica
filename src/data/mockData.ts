@@ -1168,6 +1168,8 @@ export interface SiteMaster {
     import_source?: string;
     notes?: string;
     raw_data?: Record<string, any>;
+    provinsi?: string;
+    team_assigned?: string;
 
     impl_cico_done?: boolean;
     impl_rfi_done?: boolean;
@@ -1642,9 +1644,9 @@ export const siteMasterRecords: SiteMaster[] = [
         ineom_registered: true,
         batch_ref: 'Batch#2',
         imported_by: 'system',
-        imported_at: '2026-04-20T00:00:00Z',
-        latitude: -6.0123,
-        longitude: 106.0456,
+        imported_at: '2026-03-09T00:00:00Z',
+        latitude: -6.024053,
+        longitude: 106.068951,
         tower_provider: 'DMT',
         work_order_id: 'atp-wo-clg020'
     },
@@ -1670,11 +1672,123 @@ export const siteMasterRecords: SiteMaster[] = [
         ineom_registered: true,
         batch_ref: 'Batch#4',
         imported_by: 'system',
-        imported_at: '2026-04-21T00:00:00Z',
-        latitude: -6.0234,
-        longitude: 106.0567,
+        imported_at: '2026-03-09T00:00:00Z',
+        latitude: -6.042431,
+        longitude: 105.984701,
         tower_provider: 'DMT',
         work_order_id: 'atp-wo-clg036'
+    },
+    {
+        id: 'sm-clg071',
+        unique_key: 'CLG071',
+        site_id: 'CLG071',
+        ne_id: 'CLG071MT1',
+        site_name: 'E_CLG071_Karangasemcilegon-PTI',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#4',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0013075435',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '9372/TC.03/EN-01/XI/2025',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#4',
+        imported_by: 'system',
+        imported_at: '2026-04-17T00:00:00Z',
+        latitude: -6.037469,
+        longitude: 106.056404,
+        tower_provider: 'PTI',
+        work_order_id: 'atp-wo-clg071'
+    },
+    {
+        id: 'sm-clg115',
+        unique_key: 'CLG115',
+        site_id: 'CLG115',
+        ne_id: 'CLG115MT1',
+        site_name: 'E_CLG115_Bendungancilegon-TBG',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#2',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0011058231',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '4200052176',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#2',
+        imported_by: 'system',
+        imported_at: '2026-03-09T00:00:00Z',
+        latitude: -6.034021,
+        longitude: 106.050611,
+        tower_provider: 'TBG',
+        work_order_id: 'atp-wo-clg115'
+    },
+    {
+        id: 'sm-clg117',
+        unique_key: 'CLG117',
+        site_id: 'CLG117',
+        ne_id: 'CLG117MT1',
+        site_name: 'E_CLG117M41_Kampungciporong-DMT',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#6',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'R0022633078',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '5992/TC.03/EN-01/IV/2026',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'spk_active',
+        stage: 'rfs_done',
+        ineom_registered: true,
+        batch_ref: 'Batch#6',
+        imported_by: 'system',
+        imported_at: '2026-04-17T00:00:00Z',
+        latitude: -5.94011,
+        longitude: 106.06038,
+        tower_provider: 'DMT',
+        work_order_id: 'atp-wo-clg117'
+    },
+    {
+        id: 'sm-clg117-2',
+        unique_key: 'CLG117-2',
+        site_id: 'CLG117',
+        ne_id: 'CLG117MT1',
+        site_name: 'E_CLG117M41_Kampungciporong-DMT',
+        region: 'R03 Jakarta & Banten',
+        cluster: 'CILEGON',
+        plan_capex: 'Batch#5',
+        area: 'Area 2',
+        nop: 'NOP CILEGON',
+        sow_eqp: 'Batch#5',
+        quantity: 1,
+        sow_pekerjaan: 'Filtering',
+        po_tsel: '',
+        mitra: 'Smartelco',
+        project_type: 'FILTER',
+        status: 'unassigned',
+        stage: 'imported',
+        ineom_registered: false,
+        batch_ref: 'Batch#5',
+        imported_by: 'system',
+        imported_at: '2026-03-09T00:00:00Z',
+        latitude: -5.94011,
+        longitude: 106.06038,
+        tower_provider: 'DMT',
+        stage_notes: '9. Cancelled - SITE-ID N/A IOMS'
     },
     {
         id: 'sm-clg071',
@@ -2092,6 +2206,17 @@ export interface AtpWorkOrder {
   co_date?: string;
   rfi_done?: boolean;
   rfs_done?: boolean;
+  issue_status?: string;
+  note_problem?: string;
+  impl_cico_done?: boolean;
+  impl_dokumen_done?: boolean;
+  impl_foto_evidence?: string;
+  ppid?: string;
+  tiket_number?: string;
+  prio_capex_final?: string;
+  new_status_implementation?: string;
+  prio?: string;
+  file_date?: string;
 }
 
 export interface WorkOrderLog {
@@ -2164,9 +2289,11 @@ export const atpWorkOrders: AtpWorkOrder[] = [
     team_id: 't2',
     field_leader_id: 'u3',
     initiated_by: 'system',
-    initiated_at: '2026-04-21T09:00:00Z',
+    initiated_at: '2026-03-09T09:00:00Z',
     status: 'active',
-    permit_status: 'completed',
+    permit_status: '5. Permit Released',
+    issue_status: 'UPLOAD TAGGING DONE',
+    note_problem: 'Complate',
     rfs_done: true
   },
   {
@@ -2182,9 +2309,11 @@ export const atpWorkOrders: AtpWorkOrder[] = [
     team_id: 't2',
     field_leader_id: 'u3',
     initiated_by: 'system',
-    initiated_at: '2026-04-22T09:00:00Z',
+    initiated_at: '2026-04-17T09:00:00Z',
     status: 'active',
-    permit_status: 'completed',
+    permit_status: '5. Permit Released',
+    issue_status: 'UPLOAD TAGGING DONE',
+    note_problem: 'Foto Tagging N/a and Capture Cell Status, Cell Bandwidth, Board Status N/A',
     rfs_done: true
   },
   {
@@ -2200,9 +2329,11 @@ export const atpWorkOrders: AtpWorkOrder[] = [
     team_id: 't2',
     field_leader_id: 'u3',
     initiated_by: 'system',
-    initiated_at: '2026-04-23T09:00:00Z',
+    initiated_at: '2026-03-09T09:00:00Z',
     status: 'active',
-    permit_status: 'completed',
+    permit_status: '5. Permit Released',
+    issue_status: 'REQUEST PDID',
+    note_problem: 'Complate',
     rfs_done: true
   },
   {

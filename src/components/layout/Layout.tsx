@@ -20,7 +20,7 @@ const Layout = () => {
       >
         <Header />
         <AppTabBar />
-        <main className="flex-1 p-8 overflow-auto">
+        <main className="flex-1 p-8 overflow-y-auto overflow-x-hidden min-w-0">
           <Outlet />
         </main>
       </div>

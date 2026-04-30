@@ -47,6 +47,13 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
       initiated_at: new Date().toISOString()
     };
 
+    // One active ATP logic
+    atpWorkOrders.forEach(wo => {
+        if (wo.site_id === siteId && wo.status === 'active') {
+            wo.status = 'historical' as any;
+        }
+    });
+
     // Update mock data
     atpWorkOrders.push(newWork);
     

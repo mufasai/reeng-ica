@@ -58,7 +58,17 @@ export const InlineSectorEdit = ({ value, onSave }: InlineEditProps) => {
     );
 };
 
-export const InlineTextEdit = ({ value, onSave, placeholder = "Edit..." }: { value: string, onSave: (val: string) => Promise<boolean>, placeholder?: string }) => {
+export const InlineTextEdit = ({ 
+    value, 
+    onSave, 
+    placeholder = "Edit...", 
+    className = "text-xs font-mono text-slate-700"
+}: { 
+    value: string, 
+    onSave: (val: string) => Promise<boolean>, 
+    placeholder?: string,
+    className?: string
+}) => {
     const [isEditing, setIsEditing] = useState(false);
     const [val, setVal] = useState(value || '');
     const [saving, setSaving] = useState(false);
@@ -81,7 +91,7 @@ export const InlineTextEdit = ({ value, onSave, placeholder = "Edit..." }: { val
 
     if (isEditing) {
         return (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 w-full">
                 <input 
                     type="text" 
                     value={val} 
@@ -89,7 +99,7 @@ export const InlineTextEdit = ({ value, onSave, placeholder = "Edit..." }: { val
                     onBlur={handleSave}
                     onKeyDown={e => e.key === 'Enter' && handleSave()}
                     autoFocus
-                    className="w-full px-2 py-1 text-xs border border-blue-400 rounded outline-none shadow-sm"
+                    className={clsx("w-full px-2 py-1 border border-blue-400 rounded outline-none shadow-sm", className)}
                     placeholder={placeholder}
                 />
             </div>
@@ -99,11 +109,11 @@ export const InlineTextEdit = ({ value, onSave, placeholder = "Edit..." }: { val
     return (
         <div 
             onClick={() => setIsEditing(true)}
-            className="group relative inline-flex items-center gap-1 text-xs transition-colors cursor-pointer w-full hover:bg-slate-50 min-h-[24px] px-1 -mx-1 rounded"
+            className="group relative inline-flex items-center gap-1 transition-colors cursor-pointer w-full hover:bg-slate-50 min-h-[24px] px-1 -mx-1 rounded"
         >
             {saving && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
             {showSuccess && <Check className="w-3 h-3 text-emerald-500" />}
-            {!saving && !showSuccess && (value ? <span className="font-mono text-slate-700">{value}</span> : <span className="text-slate-300 italic">{placeholder}</span>)}
+            {!saving && !showSuccess && (value ? <span className={className}>{value}</span> : <span className="text-slate-300 italic text-xs">{placeholder}</span>)}
             <Edit3 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity absolute right-1" />
         </div>
     );

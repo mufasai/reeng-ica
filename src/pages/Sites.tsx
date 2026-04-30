@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Search, Filter as FilterIcon, RefreshCw, FileSpreadsheet,
-    Plus, Download, History, Layers
+    Download, History, Layers
 } from 'lucide-react';
 import clsx from 'clsx';
 import { siteMasterRecords, type ProjectType, getTerminSummary, people, atpWorkOrders, atpTasks, siteTechnicalDetails, type AtpWorkOrder } from '../data/mockData';
@@ -11,11 +11,26 @@ import MultiSheetExcelModal from '../components/modals/MultiSheetExcelModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
 import AssignProjectModal from '../components/modals/AssignProjectModal';
 import { useAuth } from '../context/AuthContext';
-import { useCellSave } from '../hooks/useCellSave';
-import { InlineStageEdit } from '../components/common/InlineEditCells';
-import { ChevronDown, ChevronRight, PlusCircle, ExternalLink } from 'lucide-react';
+import { useTabContext } from '../context/TabContext';
+import { PlusCircle, ExternalLink, Plus } from 'lucide-react';
 
 // ─── Constants & Helpers ────────────────────────────────────────────────────────
+const ACTIVE_WORK_COLS = [
+    'NO', 'PROJECT TYPE', 'SITE_ID', 'SITE MOVING STATUS', 'FINAL SITE ID', 'SITE-SECTOR (FINAL)', 'SECTOR', 
+    'FILTER PER SECTOR', 'REGION', 'NE_ID', 'SITE_NAME', 'TP NAME', 'IOMS REGISTERED', 'PERMIT STATUS', 
+    'ISSUE PROBLEM', 'NOTE PROBLEM', 'SEND PERMIT FORMAT', 'IMPLEMENTASI STATUS', 'Tanggal RFS', 'TEAM', 
+    'TEAM ONSITE STATUS', 'ISSUE IMPLEMENTASI', 'NOTE IMPLEMENTASI', 'STATUS ATP', 'NOTE FOTO EVIDENCE', 
+    'PPID', 'ATP NUMBER', 'SOW ID', 'PO ID', 'TIKET NUMBER', 'PRIO CAPEX FINAL', 'NEW STATUS IMPLEMENTATION', 'PRIO', 
+    'LATITUDE', 'LONGITUDE', 'FILE DATE'
+];
+
+const ALL_SITES_COLS = [
+    'SITE ID', 'NE ID', 'LAYER', 'SEC', 'Antenna type', 'Height', 'FREQ BAND', 'LONG', 'LAT', 'ANT TYPE', 
+    'TP ID', 'TP', 'Site Type', 'LTE NE Name', 'Cell Name', 'eNodeB ID', 'Cell ID', 'Local Cell ID', 
+    'TAL', 'TAC', 'AREA', 'BSC', 'SITENAME', 'SITE', 'PROVINSI', 'ADDRESS', 'KECAMATAN', 'KABUPATEN', 
+    'DESA', 'Cluster_New', 'Branch_New', 'REGIONS NEW'
+];
+
 const PROJECT_TYPES: { id: ProjectType; label: string; color: string }[] = [
     { id: 'BLACKSITE', label: 'Blacksite', color: 'bg-red-50 text-red-600 border-red-200' },
     { id: 'COMBAT', label: 'Combat', color: 'bg-orange-50 text-orange-600 border-orange-200' },
@@ -121,13 +136,16 @@ type DashFilterState = {
 
 const Sites = () => {
     const navigate = useNavigate();
+    const { openTab } = useTabContext();
     const { currentUser } = useAuth();
     const hasImportAccess = ['director', 'operational', 'admin'].includes(currentUser.role);
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Tab Toggle ('data' | 'history')
     const initialTab = searchParams.get('tab') === 'history' ? 'history' : 'data';
-    const [activeTab, setActiveTab] = useState<'data' | 'history'>(initialTab as 'data' | 'history');
+    const [activeTab, setActiveTab] = useState<'active' | 'all' | 'history'>(
+        initialTab === 'history' ? 'history' : 'active'
+    );
 
     useEffect(() => {
         // Preserve any dash filter params already in the URL; only update the tab key
@@ -169,12 +187,11 @@ const Sites = () => {
     });
 
     // Column visibility
-    const { visibilityMap, handleVisibilityChange, resetToDefault, col, currentCols } = useTableColumns(currentUser.id);
-    const { saveField } = useCellSave();
+    const { visibilityMap, handleVisibilityChange, resetToDefault, currentCols } = useTableColumns(currentUser.id);
 
     // Section collapse state
-    const [isAssignedExpanded, setIsAssignedExpanded] = useState(true);
-    const [isUnassignedExpanded, setIsUnassignedExpanded] = useState(true);
+    // const [isAssignedExpanded, setIsAssignedExpanded] = useState(true);
+    // const [isUnassignedExpanded, setIsUnassignedExpanded] = useState(true);
     
     // Assign Modal state
     const [assignModalSite, setAssignModalSite] = useState<string | null>(null);
@@ -308,17 +325,9 @@ const Sites = () => {
     }, [filteredSites]);
 
     // Split into Assigned and Unassigned
-    const { assignedSites, unassignedSites } = useMemo(() => {
-        const assigned: any[] = [];
-        const unassigned: any[] = [];
-        
-        sortedSites.forEach(s => {
-            const hasWo = atpWorkOrders.some(wo => wo.site_id === s.site_id);
-            if (hasWo) assigned.push(s);
-            else unassigned.push(s);
-        });
-        
-        return { assignedSites: assigned, unassignedSites: unassigned };
+    const { assignedSites } = useMemo(() => {
+        const assigned = sortedSites.filter(s => atpWorkOrders.some(wo => wo.site_id === s.site_id));
+        return { assignedSites: assigned };
     }, [sortedSites, atpWorkOrders.length]);
 
     const handleAssignProject = (siteId: string, projectType: ProjectType) => {
@@ -390,93 +399,110 @@ const Sites = () => {
             </div>
 
             {/* ── 2. Action-Signal KPI Cards ─────────────────────────────── */}
-            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                {/* Total Sites — blue, resets all filters */}
-                <div
-                    onClick={() => handlePillClick('total')}
-                    className={clsx(
-                        'flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 cursor-pointer shrink-0',
-                        'border shadow-[0_2px_8px_rgba(0,0,0,0.07)] transition-all duration-200',
-                        'hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(0,0,0,0.10)]',
-                        quickFilter === null ? 'ring-2 ring-blue-500/40 bg-blue-50/30 border-blue-300' : 'border-slate-200'
-                    )}
-                    style={{ minWidth: 168 }}
-                >
-                    <div className={clsx(
-                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
-                        'bg-blue-600 shadow-[0_4px_12px_rgba(37,99,235,0.35)]'
-                    )}>
-                        <Layers className="w-4 h-4 text-white" strokeWidth={2.2} />
+            {activeTab === 'active' && (
+                <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    {/* Total Sites — blue, resets all filters */}
+                    <div
+                        onClick={() => handlePillClick('total')}
+                        className={clsx(
+                            'flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 cursor-pointer shrink-0',
+                            'border shadow-[0_2px_8px_rgba(0,0,0,0.07)] transition-all duration-200',
+                            'hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(0,0,0,0.10)]',
+                            quickFilter === null ? 'ring-2 ring-blue-500/40 bg-blue-50/30 border-blue-300' : 'border-slate-200'
+                        )}
+                        style={{ minWidth: 168 }}
+                    >
+                        <div className={clsx(
+                            'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
+                            'bg-blue-600 shadow-[0_4px_12px_rgba(37,99,235,0.35)]'
+                        )}>
+                            <Layers className="w-4 h-4 text-white" strokeWidth={2.2} />
+                        </div>
+                        <div className="flex flex-col gap-0 min-w-0">
+                            <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#111827]">{assignedSites.length}</span>
+                            <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Total Pekerjaan</span>
+                            <span className="text-[11px] font-bold text-slate-400">Sedang berjalan</span>
+                        </div>
                     </div>
-                    <div className="flex flex-col gap-0 min-w-0">
-                        <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#111827]">{stats.total}</span>
-                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Total Sites</span>
-                        <span className="text-[11px] font-bold text-slate-400">Semua site</span>
-                    </div>
+
+                    {/* Belum Ditugaskan — red */}
+                    <ActionCard
+                        label="Belum Ditugaskan"
+                        count={stats.belumDitugaskan}
+                        subText="Perlu tim segera"
+                        dotColor="red"
+                        filterKey="belum_ditugaskan"
+                        activeFilter={quickFilter}
+                        onClick={() => handlePillClick('belum_ditugaskan')}
+                    />
+
+                    {/* Stuck >14 Hari — amber */}
+                    <ActionCard
+                        label="Stuck >14 Hari"
+                        count={stats.stuckCount}
+                        subText="Butuh tindakan"
+                        dotColor="amber"
+                        filterKey="stuck"
+                        activeFilter={quickFilter}
+                        onClick={() => handlePillClick('stuck')}
+                    />
+
+                    {/* Permit Expiring — amber */}
+                    <ActionCard
+                        label="Permit Expiring"
+                        count={stats.permitExpiring}
+                        subText="Dalam 14 hari"
+                        dotColor="amber"
+                        filterKey="permit_expiring"
+                        activeFilter={quickFilter}
+                        onClick={() => handlePillClick('permit_expiring')}
+                    />
+
+                    {/* Termin Menunggu — purple, hidden for field role */}
+                    <ActionCard
+                        label="Termin Menunggu"
+                        count={stats.terminMenunggu}
+                        subText="Menunggu approval"
+                        dotColor="purple"
+                        filterKey="termin_menunggu"
+                        activeFilter={quickFilter}
+                        onClick={() => handlePillClick('termin_menunggu')}
+                        visible={!['field'].includes(currentUser.role)}
+                    />
                 </div>
-
-                {/* Belum Ditugaskan — red */}
-                <ActionCard
-                    label="Belum Ditugaskan"
-                    count={stats.belumDitugaskan}
-                    subText="Perlu tim segera"
-                    dotColor="red"
-                    filterKey="belum_ditugaskan"
-                    activeFilter={quickFilter}
-                    onClick={() => handlePillClick('belum_ditugaskan')}
-                />
-
-                {/* Stuck >14 Hari — amber */}
-                <ActionCard
-                    label="Stuck >14 Hari"
-                    count={stats.stuckCount}
-                    subText="Butuh tindakan"
-                    dotColor="amber"
-                    filterKey="stuck"
-                    activeFilter={quickFilter}
-                    onClick={() => handlePillClick('stuck')}
-                />
-
-                {/* Permit Expiring — amber */}
-                <ActionCard
-                    label="Permit Expiring"
-                    count={stats.permitExpiring}
-                    subText="Dalam 14 hari"
-                    dotColor="amber"
-                    filterKey="permit_expiring"
-                    activeFilter={quickFilter}
-                    onClick={() => handlePillClick('permit_expiring')}
-                />
-
-                {/* Termin Menunggu — purple, hidden for field role */}
-                <ActionCard
-                    label="Termin Menunggu"
-                    count={stats.terminMenunggu}
-                    subText="Menunggu approval"
-                    dotColor="purple"
-                    filterKey="termin_menunggu"
-                    activeFilter={quickFilter}
-                    onClick={() => handlePillClick('termin_menunggu')}
-                    visible={!['field'].includes(currentUser.role)}
-                />
-            </div>
+            )}
 
             {/* ── 3. Tabs ─────────────────────────────────────────── */}
             <div className="border-b border-slate-200">
-                <div className="flex gap-6">
+                <div className="flex gap-8">
                     <button
-                        onClick={() => setActiveTab('data')}
+                        onClick={() => setActiveTab('active')}
                         className={clsx(
                             "pb-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2",
-                            activeTab === 'data' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                            activeTab === 'active' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
                         )}
                     >
-                        📋 Sites Data
+                        ⚡ Pekerjaan Aktif
+                        <span className={clsx(
+                            "ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border",
+                            activeTab === 'active' ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-500 border-slate-200"
+                        )}>
+                            {assignedSites.length}
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('all')}
+                        className={clsx(
+                            "pb-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2",
+                            activeTab === 'all' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                        )}
+                    >
+                        🌐 Semua Site
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
                         className={clsx(
-                            "pb-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2",
+                            "pb-3 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ml-auto",
                             activeTab === 'history' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
                         )}
                     >
@@ -486,7 +512,7 @@ const Sites = () => {
             </div>
 
             {/* ── 4. Main Content Area ───────────────────────────────────── */}
-            {activeTab === 'data' ? (
+            {activeTab !== 'history' ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     {/* Breadcrumb: shown when coming from Dashboard */}
                     {dashFilter && (
@@ -520,7 +546,7 @@ const Sites = () => {
                                 <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none shrink-0"><option value="All">All Teams</option>{availableTeams.map(t => <option key={t} value={t}>{t}</option>)}</select>
                                 <select value={filterPo} onChange={e => setFilterPo(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none shrink-0"><option value="All">All POs</option>{availablePOs.map(po => <option key={po} value={po}>{po}</option>)}</select>
                                 <select value={filterBatch} onChange={e => setFilterBatch(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none shrink-0 min-w-[150px]"><option value="All">All Batches</option>{availableBatches.map(b => <option key={b} value={b}>{truncate(b, 20)}</option>)}</select>
-                                <TableColumnToggle visibilityMap={visibilityMap} onChange={handleVisibilityChange} onReset={resetToDefault} currentCols={currentCols} />
+                                {activeTab === 'active' && <TableColumnToggle visibilityMap={visibilityMap} onChange={handleVisibilityChange} onReset={resetToDefault} currentCols={currentCols} />}
                                 <button onClick={resetFilters} className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-700 shrink-0 transition-colors" title="Reset all filters"><RefreshCw className="w-4 h-4" /></button>
                             </div>
                         </div>
@@ -531,7 +557,10 @@ const Sites = () => {
                         <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-2">
                             <span className="text-sm text-slate-600 font-medium">
                                 Menampilkan{' '}
-                                <span className="font-bold text-slate-800">{sortedSites.length}</span>{' '}sites
+                                <span className="font-bold text-slate-800">
+                                    {activeTab === 'active' ? assignedSites.length : sortedSites.length}
+                                </span>{' '}sites
+                                {activeTab === 'active' && <span className="text-blue-600 font-bold ml-1">(Aktif)</span>}
                                 {dashFilter
                                     ? <span className="text-slate-700 font-semibold"> — dari Dashboard: {dashFilter.label}</span>
                                     : quickFilter
@@ -559,216 +588,194 @@ const Sites = () => {
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto w-full max-w-full">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead className="bg-white border-b border-slate-200">
-                                    <tr>
-                                        {col('site_id') && <th className="px-4 py-3 font-semibold text-slate-600">SITE_ID</th>}
-                                        {col('site_name') && <th className="px-4 py-3 font-semibold text-slate-600">Site Name</th>}
-                                        {col('atp_number') && <th className="px-4 py-3 font-semibold text-slate-600">ATP Number</th>}
-                                        {col('sector') && <th className="px-4 py-3 font-semibold text-slate-600">Sektor</th>}
-                                        {col('region') && <th className="px-4 py-3 font-semibold text-slate-600">Region</th>}
-                                        {col('tp_name') && <th className="px-4 py-3 font-semibold text-slate-600">TP</th>}
-                                        {col('permit_status') && <th className="px-4 py-3 font-semibold text-slate-600">Permit Status</th>}
-                                        {col('impl_status') && <th className="px-4 py-3 font-semibold text-slate-600">Impl Status</th>}
-                                        {col('atp_status') && <th className="px-4 py-3 font-semibold text-slate-600">ATP Status</th>}
-                                        {col('team') && <th className="px-4 py-3 font-semibold text-slate-600">Team</th>}
-                                        {col('stage') && <th className="px-4 py-3 font-semibold text-slate-600">Stage</th>}
-                                        {col('days') && <th className="px-4 py-3 font-semibold text-slate-600">Last Updated</th>}
-                                        {col('termin') && <th className="px-4 py-3 font-semibold text-slate-600 text-center">Termin</th>}
-                                        {col('actions') && <th className="px-4 py-3 font-semibold text-slate-600 text-right">Actions</th>}
+                                    <tr className="bg-slate-50/50">
+                                        {activeTab === 'active' ? (
+                                            ACTIVE_WORK_COLS.map(c => (
+                                                <th key={c} className="px-4 py-3 font-semibold text-slate-600 text-[11px] uppercase tracking-wider">{c}</th>
+                                            ))
+                                        ) : (
+                                            ALL_SITES_COLS.map(c => (
+                                                <th key={c} className="px-4 py-3 font-semibold text-slate-600 text-[11px] uppercase tracking-wider">{c}</th>
+                                            ))
+                                        )}
+                                        <th className="px-4 py-3 font-semibold text-slate-600 text-[11px] uppercase tracking-wider text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {/* --- SECTION 1: ASSIGNED --- */}
-                                    <tr 
-                                        className="bg-slate-100/80 border-y border-slate-200 cursor-pointer hover:bg-slate-200/80 transition-colors"
-                                        onClick={() => setIsAssignedExpanded(!isAssignedExpanded)}
-                                    >
-                                        <td colSpan={15} className="px-4 py-2.5">
-                                            <div className="flex items-center gap-2">
-                                                {isAssignedExpanded ? <ChevronDown className="w-4 h-4 text-slate-600" /> : <ChevronRight className="w-4 h-4 text-slate-600" />}
-                                                <span className="text-xs font-black text-slate-700 uppercase tracking-widest">PEKERJAAN AKTIF</span>
-                                                <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200">{assignedSites.length} sites</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {isAssignedExpanded && assignedSites.map(site => {
+                                    {/* --- MODE 1: ACTIVE TAB --- */}
+                                    {activeTab === 'active' && assignedSites.map((site, idx) => {
                                         const activeWo = atpWorkOrders.find(wo => wo.site_id === site.site_id && wo.status === 'active') || atpWorkOrders.find(wo => wo.site_id === site.site_id);
-                                        const typeObj = PROJECT_TYPES.find(t => t.id === site.project_type);
+                                        const task = atpTasks.find(t => t.site_id === site.site_id);
                                         
-                                        // Excel-like color coding for Permit Status
-                                        let permitColor = "text-slate-600";
-                                        if (activeWo?.permit_status?.includes('Released')) permitColor = "text-emerald-600 font-bold";
-                                        else if (activeWo?.permit_status?.includes('Submission') || activeWo?.permit_status?.includes('Planning')) permitColor = "text-amber-600 font-bold";
-                                        else if (activeWo?.permit_status?.includes('Cancelled')) permitColor = "text-red-600 font-bold";
-
                                         return (
-                                            <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0">
-                                                {col('site_id') && <td className="px-4 py-3 font-mono font-bold text-slate-700">{site.site_id}</td>}
-                                                {col('site_name') && <td className="px-4 py-3"><div className="font-semibold text-slate-800 max-w-[180px] truncate" title={site.site_name}>{site.site_name}</div></td>}
-                                                {col('atp_number') && (
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-1.5">
-                                                            {(() => {
-                                                                const wos = atpWorkOrders.filter(w => w.site_id === site.site_id).sort((a,b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime());
-                                                                if (wos.length === 0) return <span className="text-slate-300">—</span>;
-                                                                const primaryWo = wos[0];
-                                                                return (
-                                                                    <>
-                                                                        <button 
-                                                                            onClick={() => navigate(`/sites/${site.site_id}`)}
-                                                                            className="inline-flex items-center gap-1.5 text-blue-600 font-black hover:underline text-xs"
-                                                                        >
-                                                                            {primaryWo.atp_number || 'SET ATP'} <ExternalLink className="w-3 h-3" />
-                                                                        </button>
-                                                                        {wos.length > 1 && (
-                                                                            <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200">
-                                                                                +{wos.length - 1}
-                                                                            </span>
-                                                                        )}
-                                                                    </>
-                                                                );
-                                                            })()}
-                                                        </div>
-                                                    </td>
-                                                )}
-                                                {col('sector') && <td className="px-4 py-3 text-slate-700 font-medium">S{site.sector || '1'}</td>}
-                                                {col('region') && <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-[100px]">{site.region || '—'}</td>}
-                                                {col('tp_name') && <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</td>}
-                                                {col('permit_status') && (
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={clsx(
-                                                                "w-1.5 h-1.5 rounded-full shrink-0",
-                                                                (activeWo?.permit_status?.includes('5') || activeWo?.permit_status?.includes('7')) ? "bg-emerald-500" :
-                                                                (activeWo?.permit_status?.includes('1') || activeWo?.permit_status?.includes('3')) ? "bg-amber-500" :
-                                                                activeWo?.permit_status?.includes('9') ? "bg-red-500" : "bg-slate-300"
-                                                            )} />
-                                                            <span className={clsx("text-[11px] font-bold", permitColor)}>
-                                                                {activeWo?.permit_status || '1. Planning'}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                )}
-                                                {col('impl_status') && (
-                                                    <td className="px-4 py-3">
-                                                        {(() => {
-                                                            const status = activeWo?.impl_status || (site.stage === 'rfs_done' ? 'RFS' : site.stage === 'implementasi' ? 'Awaiting' : '—');
-                                                            const color = status === 'RFS' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
-                                                                          (status === 'Awaiting' || status === 'On Going') ? 'text-amber-600 bg-amber-50 border-amber-100' :
-                                                                          status === 'Cancelled' ? 'text-red-600 bg-red-50 border-red-100' : 'text-slate-500 bg-slate-50';
-                                                            return <span className={clsx("px-2 py-0.5 rounded text-[10px] font-bold border", color)}>{status}</span>;
-                                                        })()}
-                                                    </td>
-                                                )}
-                                                {col('atp_status') && (
-                                                    <td className="px-4 py-3">
-                                                        {(() => {
-                                                            const task = atpTasks.find(t => t.site_id === site.site_id);
-                                                            const status = task ? task.tagging_status.toUpperCase() : (site.raw_data?.['STATUS ATP'] || '—');
-                                                            
-                                                            const s = status.toUpperCase();
-                                                            const color = s.includes('DONE') ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
-                                                                          s.includes('PDID') ? 'text-amber-600 bg-amber-50 border-amber-100' :
-                                                                          s.includes('HOLD') ? 'text-red-600 bg-red-50 border-red-100' :
-                                                                          'text-slate-500 bg-slate-50 border-slate-100';
-                                                            
-                                                            return <span className={clsx("px-2 py-0.5 rounded text-[9px] font-black border tracking-tight uppercase", color)}>{s}</span>;
-                                                        })()}
-                                                    </td>
-                                                )}
-                                                {col('team') && (
-                                                    <td className="px-4 py-3 text-xs font-bold text-slate-700">
-                                                        {(() => {
-                                                            const flId = activeWo?.field_leader_id || site.field_leader_id;
-                                                            const fl = people.find(p => p.id === flId);
-                                                            return fl ? fl.name : (site as any).team_assigned || '—';
-                                                        })()}
-                                                    </td>
-                                                )}
-                                                {col('stage') && (
-                                                    <td className="px-4 py-3">
-                                                        <InlineStageEdit 
-                                                            value={site.stage as string} 
-                                                            siteId={site.site_id}
-                                                            onSave={(val) => saveField(site.site_id, 'site', 'stage', val)} 
-                                                        />
-                                                    </td>
-                                                )}
-                                                {col('days') && (
-                                                    <td className="px-4 py-3 text-xs font-medium text-slate-600 tabular-nums">
-                                                        {site.stage_updated_at ? new Date(site.stage_updated_at).toLocaleDateString('id-ID', {day: '2-digit', month: 'short'}) : '—'}
-                                                    </td>
-                                                )}
-                                                {col('actions') && (
-                                                    <td className="px-4 py-3 text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <button onClick={() => navigate(`/sites/${site.site_id}`)} className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-all">
-                                                                Detail →
-                                                            </button>
-                                                            <button onClick={() => navigate(`/sites/${site.site_id}#pekerjaan`)} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all flex items-center gap-1">
-                                                                <PlusCircle className="w-3 h-3" /> ATP
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                )}
+                                            <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-xs">
+                                                <td className="px-4 py-3 text-slate-400">{idx + 1}</td>
+                                                <td className="px-4 py-3 font-bold text-slate-700">{site.project_type}</td>
+                                                <td className="px-4 py-3 font-mono font-bold text-blue-600">{site.site_id}</td>
+                                                <td className="px-4 py-3 text-slate-500">{site.raw_data?.['SITE MOVING STATUS'] || 'Fix'}</td>
+                                                <td className="px-4 py-3 text-slate-700 font-medium">{site.site_id}</td>
+                                                <td className="px-4 py-3 text-slate-700 font-medium">{site.site_id}-{site.sector || '1'}</td>
+                                                <td className="px-4 py-3 text-slate-600 font-medium">{site.sector || '1'}</td>
+                                                <td className="px-4 py-3 text-slate-400">1</td>
+                                                <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{site.region}</td>
+                                                <td className="px-4 py-3 text-slate-500 font-mono">{site.ne_id}</td>
+                                                <td className="px-4 py-3 text-slate-700 font-semibold">{site.site_name}</td>
+                                                <td className="px-4 py-3 text-slate-600">{site.tower_provider}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className={clsx(
+                                                        "px-2 py-0.5 rounded text-[10px] font-bold border",
+                                                        site.ineom_registered ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-100"
+                                                    )}>
+                                                        {site.ineom_registered ? 'Registered' : 'Not Registered'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className={clsx(
+                                                            "w-1.5 h-1.5 rounded-full shrink-0",
+                                                            (activeWo?.permit_status?.includes('5') || activeWo?.permit_status?.includes('7')) ? "bg-emerald-500" :
+                                                            (activeWo?.permit_status?.includes('1') || activeWo?.permit_status?.includes('3')) ? "bg-amber-500" :
+                                                            activeWo?.permit_status?.includes('9') ? "bg-red-500" : "bg-slate-300"
+                                                        )} />
+                                                        <span className="font-bold text-slate-700 whitespace-nowrap">{activeWo?.permit_status || '1. Planning'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500">{(activeWo as any)?.issue_status || '1. NO ISSUE'}</td>
+                                                <td className="px-4 py-3 text-slate-400 italic">—</td>
+                                                <td className="px-4 py-3 text-slate-400">#NAME?</td>
+                                                <td className="px-4 py-3">
+                                                    {(() => {
+                                                        const status = activeWo?.impl_status || (site.stage === 'rfs_done' ? 'RFS' : 'Awaiting');
+                                                        return (
+                                                            <span className={clsx(
+                                                                "px-2 py-0.5 rounded text-[10px] font-bold border",
+                                                                status === 'RFS' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-amber-600 bg-amber-50 border-amber-100'
+                                                            )}>{status}</span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500">—</td>
+                                                <td className="px-4 py-3 font-bold text-slate-700">
+                                                    {(() => {
+                                                        const fl = people.find(p => p.id === activeWo?.field_leader_id);
+                                                        return fl ? fl.name : (site as any).team_assigned || '—';
+                                                    })()}
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-400">—</td>
+                                                <td className="px-4 py-3 text-slate-400">—</td>
+                                                <td className="px-4 py-3 text-slate-400">—</td>
+                                                <td className="px-4 py-3">
+                                                    {(() => {
+                                                        const status = task ? task.tagging_status.toUpperCase() : '—';
+                                                        return <span className="px-2 py-0.5 rounded text-[9px] font-black border tracking-tight bg-slate-50 border-slate-100 text-slate-500">{status}</span>;
+                                                    })()}
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-400">—</td>
+                                                <td className="px-4 py-3 text-slate-400">NEED PDID</td>
+                                                <td className="px-4 py-3 font-mono text-slate-500">{activeWo?.sow_id || '—'}</td>
+                                                <td className="px-4 py-3 font-mono text-slate-500">{activeWo?.po_number || '—'}</td>
+                                                <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                                                     {activeWo?.atp_number ? (
+                                                         <button 
+                                                             onClick={() => {
+                                                                 openTab({
+                                                                     id: `atp-${activeWo.id}`,
+                                                                     label: `ATP${activeWo.atp_number ? activeWo.atp_number.slice(-6) : ''}`,
+                                                                     path: `/atp/${activeWo.id}`,
+                                                                     icon: '📋',
+                                                                     closeable: true
+                                                                 });
+                                                             }}
+                                                             className="text-blue-600 hover:underline font-mono text-xs font-bold"
+                                                         >
+                                                             {activeWo.atp_number}
+                                                         </button>
+                                                     ) : (
+                                                         <span className="text-slate-400 italic text-xs">Belum ada ATP</span>
+                                                     )}
+                                                 </td>
+                                                <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{site.batch_ref || 'Batch#1'}</td>
+                                                <td className="px-4 py-3 text-slate-400 italic text-[10px]">02. FFT Scan Done, Continue</td>
+                                                <td className="px-4 py-3 font-bold text-slate-600">P2</td>
+                                                <td className="px-4 py-3 font-mono text-slate-400">{site.latitude || '—'}</td>
+                                                <td className="px-4 py-3 font-mono text-slate-400">{site.longitude || '—'}</td>
+                                                <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{new Date().toISOString().split('T')[0]}</td>
+                                                
+                                                <td className="px-4 py-3 text-right">
+                                                    <button onClick={() => navigate(`/sites/${site.site_id}`)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+                                                        <ExternalLink className="w-4 h-4" />
+                                                    </button>
+                                                </td>
                                             </tr>
                                         );
                                     })}
 
-                                    {/* --- SECTION 2: UNASSIGNED --- */}
-                                    <tr 
-                                        className="bg-slate-50 border-y border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors mt-4"
-                                        onClick={() => setIsUnassignedExpanded(!isUnassignedExpanded)}
-                                    >
-                                        <td colSpan={15} className="px-4 py-2.5">
-                                            <div className="flex items-center gap-2">
-                                                {isUnassignedExpanded ? <ChevronDown className="w-4 h-4 text-slate-600" /> : <ChevronRight className="w-4 h-4 text-slate-600" />}
-                                                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">BELUM DITUGASKAN</span>
-                                                <span className="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold border border-slate-300">{unassignedSites.length} sites</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {isUnassignedExpanded && unassignedSites.map(site => {
-                                        const technicals = siteTechnicalDetails.filter(t => t.site_id === site.site_id);
-                                        const layerCount = new Set(technicals.map(t => t.layer).filter(Boolean)).size;
-                                        const sectorCount = new Set(technicals.map(t => t.sector).filter(Boolean)).size;
-
+                                    {/* --- MODE 2: ALL SITES TAB --- */}
+                                    {activeTab === 'all' && sortedSites.map(site => {
+                                        const tech = siteTechnicalDetails.find(t => t.site_id === site.site_id) || site.raw_data;
+                                        
                                         return (
-                                            <tr key={site.site_id} className="bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors group border-b border-slate-100 last:border-0 border-l-4 border-l-slate-200">
-                                                {col('site_id') && <td className="px-4 py-3 font-mono font-bold text-slate-500">{site.site_id}</td>}
-                                                {col('site_name') && <td className="px-4 py-3"><div className="font-semibold text-slate-600 max-w-[180px] truncate" title={site.site_name}>{site.site_name}</div></td>}
-                                                <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-[100px]">{site.region || '—'}</td>
-                                                <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</td>
-                                                <td className="px-4 py-3 text-slate-500 text-xs">{site.provinsi || '—'}</td>
-                                                <td className="px-4 py-3 text-slate-500 text-xs">{site.cluster || '—'}</td>
+                                            <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-[11px]">
                                                 <td className="px-4 py-3">
-                                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
-                                                        {layerCount} layers
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
-                                                        {sectorCount || 1} sectors
-                                                    </span>
-                                                </td>
-                                                <td colSpan={4}></td>
-                                                {col('actions') && (
-                                                    <td className="px-4 py-3 text-right">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-mono font-bold text-slate-700">{site.site_id}</span>
                                                         <button 
                                                             onClick={() => setAssignModalSite(site.site_id)}
-                                                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 ml-auto"
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex items-center justify-center"
+                                                            title="Register project type for new work"
                                                         >
-                                                            <Plus className="w-3.5 h-3.5" /> Tugaskan ke Proyek →
+                                                            <PlusCircle className="w-3.5 h-3.5" />
                                                         </button>
-                                                    </td>
-                                                )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 font-mono text-slate-500">{site.ne_id}</td>
+                                                <td className="px-4 py-3 text-slate-600">{(tech as any)?.['LAYER'] || (tech as any)?.layer || 'ML'}</td>
+                                                <td className="px-4 py-3 text-slate-600">{site.sector || (tech as any)?.sector || '1'}</td>
+                                                <td className="px-4 py-3 text-slate-500 max-w-[150px] truncate">{(tech as any)?.['Antenna type'] || 'ADU4521R3v06'}</td>
+                                                <td className="px-4 py-3 text-slate-500">32</td>
+                                                <td className="px-4 py-3 text-slate-500">L1800</td>
+                                                <td className="px-4 py-3 font-mono text-slate-400">{site.longitude}</td>
+                                                <td className="px-4 py-3 font-mono text-slate-400">{site.latitude}</td>
+                                                <td className="px-4 py-3 text-slate-400 italic truncate max-w-[150px]">ADU4521R3v06 ( 4 Port/1710/2660)</td>
+                                                <td className="px-4 py-3 text-slate-500 font-bold">{site.tower_provider === 'MITRATEL' ? 'MT' : 'IBS'}</td>
+                                                <td className="px-4 py-3 text-slate-600 font-medium">{site.tower_provider}</td>
+                                                <td className="px-4 py-3 text-slate-500">MACRO-HGA</td>
+                                                <td className="px-4 py-3 text-slate-500 font-mono">E_{site.site_id}_LTE</td>
+                                                <td className="px-4 py-3 text-slate-500 truncate max-w-[150px]">{site.site_name}</td>
+                                                <td className="px-4 py-3 text-slate-400 font-mono">475{site.site_id.slice(-3)}</td>
+                                                <td className="px-4 py-3 text-slate-400">21</td>
+                                                <td className="px-4 py-3 text-slate-400">21</td>
+                                                <td className="px-4 py-3 text-slate-400 font-mono">1231</td>
+                                                <td className="px-4 py-3 text-slate-400 font-mono">1231</td>
+                                                <td className="px-4 py-3 font-bold text-slate-500 uppercase tracking-tight">INNER</td>
+                                                <td className="px-4 py-3 text-slate-400 font-mono text-[10px]">MBSC_NewTTCBSD3</td>
+                                                <td className="px-4 py-3 text-slate-500 italic truncate max-w-[150px]">{site.site_name}_NBA</td>
+                                                <td className="px-4 py-3 text-slate-700 font-bold">{site.site_name}</td>
+                                                <td className="px-4 py-3 font-bold text-slate-600">{site.provinsi || 'BANTEN'}</td>
+                                                <td className="px-4 py-3 text-slate-400 truncate max-w-[200px]" title={site.notes}>Jalan BSD Raya Utama, BSD City...</td>
+                                                <td className="px-4 py-3 text-slate-500">PAGEDANGAN</td>
+                                                <td className="px-4 py-3 text-slate-500">{site.cluster || 'TANGERANG'}</td>
+                                                <td className="px-4 py-3 text-slate-500">PAGEDANGAN</td>
+                                                <td className="px-4 py-3 font-bold text-slate-700">{site.cluster || 'KAB TANGERANG'}</td>
+                                                <td className="px-4 py-3 text-slate-600 font-semibold">SERANG</td>
+                                                <td className="px-4 py-3 font-black text-slate-800">{site.region || 'R03.Jakarta Banten'}</td>
+
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button onClick={() => navigate(`/sites/${site.site_id}`)} className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-[10px] font-bold shadow-sm transition-all">
+                                                            Detail
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         );
                                     })}
-
-                                    {(assignedSites.length === 0 && unassignedSites.length === 0) && (
+                                    {/* Empty state logic */}
+                                    {((activeTab === 'active' && assignedSites.length === 0) || 
+                                      (activeTab === 'all' && sortedSites.length === 0)) && (
                                         <tr>
                                             <td colSpan={15} className="px-4 py-12 text-center text-slate-500 bg-slate-50/50">
                                                 <div className="flex flex-col items-center">
@@ -807,7 +814,7 @@ const Sites = () => {
                     {importHistory.length === 0 ? (
                         <p className="text-sm text-slate-400 text-center py-8">Belum ada riwayat import.</p>
                     ) : (
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto w-full max-w-full">
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-slate-100">

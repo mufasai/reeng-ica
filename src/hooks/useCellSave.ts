@@ -33,6 +33,15 @@ export const useCellSave = () => {
                     if (record) {
                         (record as any)[fieldName] = newValue;
                         success = true;
+
+                        // One active ATP logic: only one WO per site can be 'active'
+                        if (fieldName === 'status' && newValue === 'active') {
+                            atpWorkOrders.forEach(wo => {
+                                if (wo.site_id === record.site_id && wo.id !== recordId && wo.status === 'active') {
+                                    wo.status = 'historical' as any;
+                                }
+                            });
+                        }
                     }
                 }
                 

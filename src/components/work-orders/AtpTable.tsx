@@ -11,7 +11,8 @@ const STAGES: SiteStage[] = [
   'akses_process', 'akses_ready', 'implementasi', 'rfi_done',
   'rfs_done', 'dokumen_done', 'bast', 'invoice', 'completed',
 ];
-const STATUSES = ['active', 'completed', 'cancelled'];
+const STATUSES = ['active', 'completed', 'cancelled', 'historical'];
+const PROJECT_TYPES = ['FILTER', 'COMBAT', 'RESCOPING', 'BLACKSITE', 'L2H'];
 
 // ─── Stage color map ─────────────────────────────────────────────────────────
 const stageColor = (v: string) => {
@@ -36,6 +37,7 @@ const stageColor = (v: string) => {
 const statusColor = (s: string) => {
   if (s === 'active') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
   if (s === 'completed') return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (s === 'historical') return 'bg-slate-50 text-slate-500 border-slate-200';
   return 'bg-slate-100 text-slate-600 border-slate-200';
 };
 
@@ -58,9 +60,10 @@ interface InlineTextCellProps {
   autoFocus?: boolean;
   monospace?: boolean;
   placeholderClassName?: string;
+  onLinkClick?: (e: React.MouseEvent) => void;
 }
 
-const InlineTextCell = ({ value, placeholder, onSave, autoFocus = false, monospace = false, placeholderClassName }: InlineTextCellProps) => {
+const InlineTextCell = ({ value, placeholder, onSave, autoFocus = false, monospace = false, placeholderClassName, onLinkClick }: InlineTextCellProps) => {
   const [editing, setEditing] = useState(autoFocus);
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
@@ -115,12 +118,15 @@ const InlineTextCell = ({ value, placeholder, onSave, autoFocus = false, monospa
   }
 
   return (
-    <button
-      onClick={() => setEditing(true)}
+    <div
       className={clsx(
-        'group flex items-center gap-1 text-left w-full px-1 py-0.5 rounded hover:bg-blue-50 transition-colors',
+        'group flex items-center gap-1 text-left w-full px-1 py-0.5 rounded hover:bg-blue-50 transition-colors cursor-pointer',
         monospace && 'font-mono'
       )}
+      onClick={() => {
+        // If there's no link action, click anywhere edits. If there is a link action and no value, click anywhere edits.
+        if (!onLinkClick || !value) setEditing(true);
+      }}
     >
       {saving ? (
         <Loader2 className="w-3 h-3 animate-spin text-blue-400 shrink-0" />
@@ -129,16 +135,32 @@ const InlineTextCell = ({ value, placeholder, onSave, autoFocus = false, monospa
       ) : status === 'error' ? (
         <X className="w-3 h-3 text-red-500 shrink-0" />
       ) : null}
-      <span className={clsx(
-        'text-xs truncate max-w-[130px]',
-        value ? 'text-slate-700' : (placeholderClassName || 'text-slate-400 italic')
-      )}>
-        {value || placeholder || '—'}
-      </span>
-      {status === 'idle' && !saving && (
-        <Edit3 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity ml-auto shrink-0" />
+      
+      {onLinkClick && value ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onLinkClick(e); }}
+          className="text-xs truncate max-w-[130px] font-bold text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          {value}
+        </button>
+      ) : (
+        <span className={clsx(
+          'text-xs truncate max-w-[130px]',
+          value ? 'text-slate-700' : (placeholderClassName || 'text-slate-400 italic')
+        )}>
+          {value || placeholder || '—'}
+        </span>
       )}
-    </button>
+
+      {status === 'idle' && !saving && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+          className="ml-auto shrink-0 p-1"
+        >
+            <Edit3 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-500" />
+        </button>
+      )}
+    </div>
   );
 };
 
@@ -297,7 +319,7 @@ const AtpTable = ({ siteId, onOpenWoTab, onAddNew, newRowId, canEdit }: AtpTable
       )}
 
       {/* Scrollable table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto w-full max-w-full">
         <table className="w-full text-left text-xs whitespace-nowrap">
           <thead className="bg-white border-b border-slate-100">
             <tr>
@@ -339,6 +361,7 @@ const AtpTable = ({ siteId, onOpenWoTab, onAddNew, newRowId, canEdit }: AtpTable
                           autoFocus={isNew}
                           monospace
                           placeholderClassName="text-blue-600 font-bold italic"
+                          onLinkClick={() => onOpenWoTab(wo.id)}
                         />
                       ) : (
                         <span className="font-mono text-slate-700">{wo.atp_number || <span className="text-slate-400 italic">—</span>}</span>
@@ -450,11 +473,24 @@ const AtpTable = ({ siteId, onOpenWoTab, onAddNew, newRowId, canEdit }: AtpTable
                     )}
                   </td>
 
-                  {/* Type — read-only badge */}
+                  {/* Type */}
                   <td className="px-3 py-2">
-                    <span className={clsx('px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border', typeBadge(wo.project_type))}>
-                      {wo.project_type}
-                    </span>
+                    {canEdit ? (
+                      <InlineSelectCell
+                        value={wo.project_type}
+                        options={PROJECT_TYPES.map(t => ({ label: t, value: t }))}
+                        onSave={makeSave(wo.id, 'project_type')}
+                        renderValue={v => (
+                          <span className={clsx('px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border', typeBadge(v))}>
+                            {v}
+                          </span>
+                        )}
+                      />
+                    ) : (
+                      <span className={clsx('px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border', typeBadge(wo.project_type))}>
+                        {wo.project_type}
+                      </span>
+                    )}
                   </td>
 
                   {/* Stage */}

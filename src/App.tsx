@@ -18,6 +18,7 @@ import Sites from './pages/Sites';
 import UserManagement from './pages/UserManagement';
 import MaterialMaster from './pages/MaterialMaster';
 import { TabProvider } from './context/TabContext';
+import AtpWorkPage from './pages/AtpWorkPage';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="sites" element={<Sites />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrderDetail />} />
+          <Route path="atp/:id" element={<AtpWorkPage />} />
           <Route path="engineer/upload/:id" element={<EngineerUpload />} />
           <Route path="projects" element={<Navigate to="/" replace />} />
           <Route path="projects/type/:type/sites" element={<TypeSiteList />} />

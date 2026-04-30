@@ -398,7 +398,7 @@ const Dashboard = () => {
                         {/* CHART 1: Pipeline Distribution */}
                         <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
                             <h3 className="font-bold text-[14px] text-[#111827] mb-4">Distribusi Status Site</h3>
-                            <div className="h-[250px] w-full">
+                            <div className="h-[250px] w-full min-h-[250px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -440,7 +440,7 @@ const Dashboard = () => {
                         {/* CHART 2: Project Type Breakdown */}
                         <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
                             <h3 className="font-bold text-[14px] text-[#111827] mb-4">Progress per Tipe Pekerjaan</h3>
-                            <div className="h-[250px] w-full">
+                            <div className="h-[250px] w-full min-h-[250px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
                                         data={projectTypes.map(t => {

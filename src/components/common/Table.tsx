@@ -9,7 +9,7 @@ import clsx from 'clsx';
 
 // --- TABLE CONTAINER ---
 export const TableContainer = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-    <div className={clsx("bg-white border border-slate-200 rounded-lg shadow-sm", className)}>
+    <div className={clsx("bg-white border border-slate-200 rounded-lg shadow-sm max-w-full overflow-hidden", className)}>
         {children}
     </div>
 );
@@ -110,7 +110,7 @@ export const FilterBar = ({
 
 // --- TABLE COMPONENTS ---
 export const DataTable = ({ children }: { children: React.ReactNode }) => (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto w-full max-w-full">
         <table className="w-full text-left border-collapse">
             {children}
         </table>

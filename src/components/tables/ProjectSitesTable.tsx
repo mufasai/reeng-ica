@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCellSave } from '../../hooks/useCellSave';
-import { InlineSectorEdit, InlineTeamEdit, InlineStageEdit, InlineTextEdit, InlineSelectEdit } from '../common/InlineEditCells';
-import { type SiteMaster, teams, workOrders, filterTerms, combatTerms, siteStageLogs, USERS, teamMembersRecords, people, atpWorkOrders } from '../../data/mockData';
+import { InlineSectorEdit, InlineTeamEdit, InlineStageEdit, InlineSelectEdit } from '../common/InlineEditCells';
+import { type SiteMaster, teams, workOrders, filterTerms, combatTerms, siteStageLogs, USERS, teamMembersRecords, people, atpWorkOrders, atpTasks } from '../../data/mockData';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { 
     TableContainer, 
@@ -21,6 +21,7 @@ import {
 import clsx from 'clsx';
 import { useTableColumns } from '../../hooks/useTableColumns';
 import TableColumnToggle from '../common/TableColumnToggle';
+import { useTabContext } from '../../context/TabContext';
 
 interface ProjectSitesTableProps {
   sites: SiteMaster[];
@@ -32,6 +33,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
   const { currentUser, can } = useAuth();
   const { saveField } = useCellSave();
   const navigate = useNavigate();
+  const { openTab } = useTabContext();
 
   // Local State
   const [searchTerm, setSearchTerm] = useState('');
@@ -379,7 +381,13 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                        />
                                    </TableCell>
                                )}
-                               {col('site_id') && <TableCell className="font-mono font-bold text-slate-800">{site.site_id}</TableCell>}
+                               {col('site_id') && (
+                                   <TableCell className="font-mono font-bold text-slate-800">
+                                       <Link to={`/sites/${site.site_id}`} className="hover:underline hover:text-blue-600 transition-colors">
+                                           {site.site_id}
+                                       </Link>
+                                   </TableCell>
+                               )}
                                {col('site_name') && (
                                    <TableCell>
                                        <Link to={`/sites/${site.site_id}`} className="font-medium text-[var(--blue-400)] hover:underline">
@@ -391,28 +399,44 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                )}
                                {col('atp_number') && (
                                    <TableCell>
-                                       <div className="flex items-center gap-1.5">
-                                           {(() => {
-                                               const wos = atpWorkOrders.filter(w => w.site_id === site.site_id).sort((a,b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime());
-                                               if (wos.length === 0) return <span className="text-slate-300">—</span>;
-                                               const primaryWo = wos[0];
-                                               return (
-                                                   <>
-                                                       <InlineTextEdit 
-                                                           value={primaryWo.atp_number || ''} 
-                                                           onSave={(val) => saveField(primaryWo.id, 'workOrder', 'atp_number', val)}
-                                                           placeholder="Set ATP..."
-                                                           className="font-mono text-xs"
-                                                       />
-                                                       {wos.length > 1 && (
-                                                           <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold border border-slate-200" title={`${wos.length} total work orders`}>
-                                                               +{wos.length - 1}
-                                                           </span>
-                                                       )}
-                                                   </>
-                                               );
-                                           })()}
-                                       </div>
+                                       {(() => {
+                                           const wos = atpWorkOrders.filter(w => w.site_id === site.site_id).sort((a,b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime());
+                                           if (wos.length === 0) return <span className="text-slate-300 text-xs">—</span>;
+                                           return (
+                                               <div className="flex flex-col gap-1">
+                                                   {wos.map((wo, i) => (
+                                                       <div key={wo.id} className="flex items-center gap-1.5 min-w-0">
+                                                           <span className={clsx(
+                                                               'w-1.5 h-1.5 rounded-full shrink-0',
+                                                               wo.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                                                           )} />
+                                                           {wo.atp_number ? (
+                                                               <button
+                                                                   onClick={() => {
+                                                                       openTab({
+                                                                           id: `atp-${wo.id}`,
+                                                                           label: `ATP${wo.atp_number ? wo.atp_number.slice(-6) : ''}`,
+                                                                           path: `/atp/${wo.id}`,
+                                                                           icon: '📋',
+                                                                           closeable: true
+                                                                       });
+                                                                   }}
+                                                                   className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors truncate max-w-[140px] text-left"
+                                                                   title={`Buka detail ${wo.atp_number}`}
+                                                               >
+                                                                   {wo.atp_number}
+                                                               </button>
+                                                           ) : (
+                                                               <span className="text-slate-400 italic text-xs">Belum ada ATP</span>
+                                                           )}
+                                                           {i === 0 && wo.status === 'active' && (
+                                                               <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1 py-0.5 rounded uppercase tracking-tight shrink-0">aktif</span>
+                                                           )}
+                                                       </div>
+                                                   ))}
+                                               </div>
+                                           );
+                                       })()}
                                    </TableCell>
                                )}
                                {col('sector') && <TableCell><InlineSectorEdit value={site.sector || ''} onSave={(val) => saveField(site.site_id, 'site', 'sector', val)} /></TableCell>}
@@ -445,7 +469,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                                        {label: '9.Cancelled', value: '9.Cancelled'}
                                                    ]}
                                                    placeholder="Status"
-                                                   className="text-xs"
+                                                   
                                                />
                                            </div>
                                        ) : <span className="text-slate-300">—</span>}
@@ -470,8 +494,9 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                {col('atp_status') && (
                                     <TableCell>
                                         {(() => {
-                                            const task = atpTasks.find(t => t.site_id === site.site_id);
-                                            const status = task ? task.tagging_status.toUpperCase() : (site.raw_data?.['STATUS ATP'] || null);
+                                            const wo = atpWorkOrders.find(w => w.site_id === site.site_id);
+                                            const task = atpTasks.find((t: any) => t.site_id === site.site_id);
+                                            const status = wo?.issue_status || (task ? task.tagging_status.toUpperCase() : (site.raw_data?.['STATUS ATP'] || null));
                                             if (!status) return <span className="text-slate-300">—</span>;
                                             
                                             const s = status.toUpperCase();
@@ -494,7 +519,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                             value={(site as any).team_assigned || team?.name || ''} 
                                             onSave={(val) => saveField(site.site_id, 'site', 'team_assigned', val)}
                                             options={teams.map(t => ({ label: t.name, value: t.name }))}
-                                            className="text-xs"
+                                            
                                        />
                                    </TableCell>
                                )}
@@ -548,9 +573,29 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                {col('actions') && (
                                    <TableCell className="text-right">
                                    <div className="flex justify-end items-center gap-2">
-                                       {/* Standard Actions */}
-                                       <ActionButton type="view" onClick={() => navigate(`/sites/${site.site_id}`)} />
-                                       
+                                       {activeWo ? (
+                                           <button
+                                               onClick={() => {
+                                                   openTab({
+                                                       id: `atp-${activeWo.id}`,
+                                                       label: `ATP${activeWo.atp_number ? activeWo.atp_number.slice(-6) : activeWo.id.slice(-6)}`,
+                                                       path: `/atp/${activeWo.id}`,
+                                                       icon: '📋',
+                                                       closeable: true
+                                                   });
+                                               }}
+                                               className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 hover:border-blue-300 transition-colors whitespace-nowrap"
+                                           >
+                                               Buka →
+                                           </button>
+                                       ) : (
+                                           <button
+                                               onClick={() => navigate(`/sites/${site.site_id}`)}
+                                               className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 hover:border-emerald-300 transition-colors whitespace-nowrap"
+                                           >
+                                               + Tugaskan
+                                           </button>
+                                       )}
                                        {can('edit_project') && (
                                            <>
                                                <ActionButton type="edit" onClick={() => onEdit(site)} />
@@ -566,7 +611,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                    <td colSpan={100} className="p-0 border-b border-slate-200">
                                        <div className="flex w-full overflow-hidden animate-in slide-in-from-top-2 duration-200">
                                            {/* Colored left border indicating stage */}
-                                           <div className={clsx("w-[3px] shrink-0", stageProps.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-500'))} />
+                                           <div className={clsx("w-[3px] shrink-0", getStageProps(site.stage).color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-500'))} />
                                            
                                            <div className="flex-1 p-4 px-6">
                                                <div className="grid grid-cols-4 gap-6 text-sm">
@@ -655,6 +700,12 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                                                team ? (USERS.find(u => u.id === teamMembersRecords.find(tm => tm.team_id === team.id && tm.role === 'Team Leader')?.person_id)?.name || '—') : '—'
                                                            }</span>
                                                            
+                                                           <span className="text-slate-500 mt-2 pt-2 border-t border-slate-200">ATP No:</span> 
+                                                           <span className="text-slate-700 mt-2 pt-2 border-t border-slate-200 font-mono">{activeWo?.atp_number || '—'}</span>
+
+                                                           <span className="text-slate-500">Note ATP:</span> 
+                                                           <span className="text-slate-700 italic">{activeWo?.note_problem || '—'}</span>
+
                                                            <span className="text-slate-500 mt-2 pt-2 border-t border-slate-200">PO:</span> 
                                                            <span className="text-slate-700 mt-2 pt-2 border-t border-slate-200 font-mono">{site.po_tsel || '—'}</span>
                                                            

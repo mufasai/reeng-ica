@@ -23,7 +23,9 @@ import {
   type SiteMaster,
   siteMasterRecords,
   workOrders,
-  teamMembersRecords
+  teamMembersRecords,
+  atpWorkOrders,
+  STAGE_ORDER
 } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
 import ProjectSitesTable from '../components/tables/ProjectSitesTable';
@@ -238,16 +240,20 @@ const TypeSiteList = () => {
   // Summary helper
   const summaryInfo = useMemo(() => {
     const rfsDone = matchedSites.filter(s => s.stage === 'rfs_done').length;
-    const permitReleased = matchedSites.filter(s => s.stage === 'permit_ready').length;
+    const permitReleased = matchedSites.filter(s => {
+        const stageIdx = STAGE_ORDER.indexOf(s.stage || 'imported');
+        const targetIdx = STAGE_ORDER.indexOf('permit_ready');
+        return stageIdx >= targetIdx;
+    }).length;
     
     const requestPdid = matchedSites.filter(s => {
-        const task = atpTasks.find(t => t.site_id === s.site_id);
-        return task && task.tagging_status === 'pending';
+        const wo = atpWorkOrders.find((w: any) => w.site_id === s.site_id);
+        return wo?.issue_status === 'REQUEST PDID';
     }).length;
 
     const taggingDone = matchedSites.filter(s => {
-        const task = atpTasks.find(t => t.site_id === s.site_id);
-        return task && task.tagging_status === 'done';
+        const wo = atpWorkOrders.find((w: any) => w.site_id === s.site_id);
+        return wo?.issue_status === 'UPLOAD TAGGING DONE';
     }).length;
 
     return {
