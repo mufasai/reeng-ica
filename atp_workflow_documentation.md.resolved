@@ -1,0 +1,315 @@
+# ATP Site Management — Workflow Documentation
+
+> **System:** Reengineering Budget Tracking Tool  
+> **Updated:** April 2026  
+> **Audience:** Field Engineers, Operations, Admin Backoffice
+
+---
+
+## Overview
+
+The system manages telecom site re-engineering work orders (ATP) across a multi-stage operational lifecycle. Navigation is powered by a **Chrome-style persistent tab system** — multiple work orders can stay open simultaneously without losing context.
+
+---
+
+## 1. Navigation Architecture
+
+The application supports two paths to reach the ATP work environment:
+
+```mermaid
+graph TD
+    A([User Logs In]) --> B{Where to go?}
+
+    B -->|Fast Track| C["/projects/type/filter/sites\nor /sites?tab=active"]
+    B -->|Browse| D["/sites — Site Registry"]
+
+    C -->|Click ATP Number column| E["🔗 ATP Number Link"]
+    D -->|Search / filter site| F["Click Site Name or Site ID"]
+
+    F --> G["/sites/{siteId} — Site Detail Page"]
+    G -->|Click Pekerjaan tab| H["ATP Work Order Table"]
+    H -->|Click 'Buka →' button| E
+
+    E -->|openTab()| I["🗂️ New App Tab Opens"]
+    I --> J["/atp/{workOrderId} — ATP Work Page"]
+
+    style J fill:#2563eb,color:#fff,stroke:#1d4ed8
+    style E fill:#059669,color:#fff,stroke:#047857
+```
+
+### Key Principle
+> **Two valid entry points. One destination. One active ATP per site.**
+
+---
+
+## 2. ATP Work Page Layout (`/atp/{id}`)
+
+```mermaid
+graph TB
+    subgraph Header["📌 Header — Always Visible"]
+        H1["ATP Number  ·  Sektor Badge  ·  Type  ·  Status"]
+        H2["Meta Row (inline-editable):\nSite ID · PO · SOW · SOW Type · Asset Element · Capex Project · Batch"]
+    end
+
+    subgraph Stepper["🪜 Stage Stepper"]
+        S1["1·Imported"] --> S2["2·Permit"] --> S3["3·Implementasi"] --> S4["4·ATP"] --> S5["5·BAST"] --> S6["6·Invoice"] --> S7["7·Selesai"]
+    end
+
+    subgraph Tabs["📂 Inner Tabs"]
+        T1["📋 Permit"]
+        T2["🔧 Implementasi"]
+        T3["📡 ATP & Dokumen"]
+        T4["💰 Penagihan"]
+        T5["📷 Foto (N)"]
+        T6["📎 File & Lampiran"]
+        T7["📜 Log"]
+    end
+
+    Header --> Stepper --> Tabs
+```
+
+---
+
+## 3. Stage Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> imported : ATP Initiated
+    imported --> permit : Permit Process Starts
+    permit --> implementasi : Permit Released
+    implementasi --> atp : RFS Done / RFI Done
+    atp --> bast : ATP Checklist Complete
+    bast --> invoice : BAST Signed
+    invoice --> completed : Invoice Paid
+    completed --> [*]
+
+    permit --> cancelled : Permit Expired / Cancelled
+    implementasi --> cancelled : Work Cancelled
+```
+
+### Stage Color Guide
+
+| Stage | Color | Meaning |
+|---|---|---|
+| `imported` | Gray | Data entered, not started |
+| `permit_process` | Amber | Permit application in progress |
+| `permit_ready` | Green | Permit released, ready for work |
+| `implementasi` | Blue | Physical work on-site |
+| `rfi_done` | Indigo | Ready for Inspection done |
+| `rfs_done` | Violet | Ready for Service done |
+| `bast` | Pink | BAST handover in progress |
+| `invoice` | Rose | Invoice submitted |
+| `completed` | Emerald | Fully done |
+
+---
+
+## 4. Site Detail Page (`/sites/{siteId}`)
+
+The Site Detail page is a **read-only container** — no work is done here. It is a navigational hub.
+
+```mermaid
+graph TD
+    SD["🏢 Site Detail Page\n/sites/{siteId}"]
+
+    SD --> T1["Tab: Info Site\n(Site metadata, coordinates, technical specs)"]
+    SD --> T2["Tab: Pekerjaan\n(List of all ATPs for this site)"]
+    SD --> T3["Tab: Log\n(Combined activity log, grouped by ATP)"]
+
+    T2 --> ROW["Each Row in ATP Table"]
+    ROW --> FILL["Fill inline: ATP No, SOW, PO, Type, Stage, Status"]
+    ROW --> BUKA["'Buka →' button"]
+    BUKA --> ATP_PAGE["/atp/{id} — ATP Work Page"]
+
+    style ATP_PAGE fill:#2563eb,color:#fff
+```
+
+### ATP Table — Inline Editable Columns
+
+| Column | Input Type | Notes |
+|---|---|---|
+| ATP Number | Text | Click to edit · Click filled number to open work tab |
+| SOW Project | Text | Click to edit |
+| Asset Element | Text (monospace) | Click to edit |
+| Capex Project | Text | Click to edit |
+| PO Number | Text (monospace) | Click to edit |
+| SOW ID | Text (monospace) | Click to edit |
+| SOW Type | Text | Click to edit |
+| Sector | Dropdown S1–S4 | Click to change |
+| Type | Dropdown | FILTER / COMBAT / RESCOPING / BLACKSITE / L2H |
+| Stage | Dropdown | Full stage list |
+| Status | Dropdown | active / completed / cancelled / historical |
+| Actions | Button | "Buka →" opens ATP Work Page as app tab |
+
+---
+
+## 5. One Active ATP Rule
+
+```mermaid
+flowchart TD
+    A["Admin clicks '+ Tambah ATP'\nor changes Status → active"] --> B{Other active ATPs\non this site?}
+    B -- Yes --> C["Previous active ATPs\nautomatically → 'historical'"]
+    B -- No --> D["Proceed normally"]
+    C --> D
+    D --> E["New ATP is the\nsingle active work order"]
+
+    style E fill:#059669,color:#fff
+    style C fill:#d97706,color:#fff
+```
+
+> **Rule:** At any point in time, only **one** work order per site can have `status = active`.  
+> All previous work orders are retained as `historical` for audit trail.
+
+---
+
+## 6. ATP Work Page — Tab Details
+
+### 6.1 Permit Tab
+
+```mermaid
+graph LR
+    subgraph Fields
+        F1["Permit Status\n(dropdown)"]
+        F2["Tower Provider"]
+        F3["Create Date"]
+        F4["Jenis Kunci\n(PADLOCK/SMARTLOCK/QUADLOCK)"]
+        F5["Permit Start / Expiry"]
+        F6["PIC Nama & Telp"]
+        F7["TPAS / TP / CAF Nomor"]
+    end
+
+    subgraph Actions
+        A1["📎 Upload Permit Docs"]
+        A2["Simpan Draft"]
+        A3["Update Stage Permit →\n(advances stage + saves all)"]
+    end
+```
+
+> ⚠️ Permit Expiry turns **amber** if < 14 days left, **red** if expired.
+
+### 6.2 Implementasi Tab
+
+| Field | Input |
+|---|---|
+| Tim | Dropdown (teams filtered by project type) |
+| Field Leader | Dropdown (leaders of selected team) |
+| Tanggal Plan / Aktual | Date pickers |
+| CI / CO Tanggal & Waktu | Date + time |
+| RFI Done / RFS Done | Toggle checkboxes |
+| Impl Status | Dropdown: Awaiting / Scheduled / On Going / RFS / Cancelled |
+| Note Implementasi | Textarea |
+
+### 6.3 ATP & Dokumen Tab
+
+| Field | Input |
+|---|---|
+| PDID | Text |
+| Tiket ATP | Text |
+| Status ATP | Dropdown: REQUEST PDID / UPLOAD TAGGING DONE / TAGGING N/A / HOLD |
+| Note Foto Evidence | Textarea |
+| Azimuth S1 / S2 / S3 | Number inputs |
+
+### 6.4 Penagihan Tab
+
+Financial tracking table:
+- All termin items (T1, T2a, T2b, T2c, T3, T4)
+- Additional items: Biaya Perizinan, Transportasi, Material Tambahan
+- Status per item: `draft → submitted → approved → paid`
+- **[+ Tambah Item Pembayaran]** adds new row
+
+### 6.5 Foto & File Tabs
+
+| Tab | Purpose |
+|---|---|
+| Foto | Photo gallery — engineers upload from phone. Admin can add captions. |
+| File & Lampiran | All non-photo documents, grouped: Permit Docs / Implementasi Docs / ATP Docs / Lainnya |
+
+### 6.6 Log Tab
+
+Chronological activity stream for **this ATP only**:
+- Every field save, stage change, file upload is recorded
+- Format: `[Avatar] Name · action · timestamp`
+
+---
+
+## 7. Auto-Save Behavior
+
+All fields across **Permit**, **Implementasi**, and **ATP** tabs auto-save on blur (when user leaves the field). Selects and checkboxes save immediately on change.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> saving : User leaves field (onBlur)\nor changes dropdown
+    saving --> saved : ✓ Save successful
+    saving --> error : ✗ Network/save failure
+    saved --> idle : After 2 seconds
+    error --> saving : User retries
+```
+
+### Save Status Indicator (top-right of each tab section)
+
+| State | Display |
+|---|---|
+| `idle` | *(nothing shown)* |
+| `saving` | `⏳ Menyimpan...` (gray) |
+| `saved` | `✓ Tersimpan 14:32` (green, fades after 2s) |
+| `error` | `✗ Gagal — Coba lagi` (red, stays until retry) |
+
+> **[Update Stage] buttons** save **all pending fields first** before advancing the stage, ensuring no data loss even if the user hasn't explicitly saved.
+
+---
+
+## 8. Complete End-to-End Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant SiteList as Site List / Project Filter
+    participant SiteDetail as Site Detail Page
+    participant AtpTable as ATP Table (Pekerjaan Tab)
+    participant AtpWorkPage as ATP Work Page
+    participant MockDB as Mock Data Store
+
+    alt Fast Path
+        User->>SiteList: Click ATP Number in column
+        SiteList->>AtpWorkPage: openTab() → /atp/{id}
+    else Browse Path
+        User->>SiteList: Click Site Name / Site ID
+        SiteList->>SiteDetail: Navigate to /sites/{siteId}
+        User->>SiteDetail: Click "Pekerjaan" tab
+        SiteDetail->>AtpTable: Render ATP Work Order Table
+        User->>AtpTable: Fill data inline (ATP No, PO, SOW...)
+        AtpTable->>MockDB: Auto-save field on blur
+        User->>AtpTable: Click "Buka →"
+        AtpTable->>AtpWorkPage: openTab() → /atp/{id}
+    end
+
+    User->>AtpWorkPage: Edit Permit fields
+    AtpWorkPage->>MockDB: Auto-save onBlur
+    User->>AtpWorkPage: Click "Update Stage Permit →"
+    AtpWorkPage->>MockDB: Save all + advance stage
+    AtpWorkPage->>AtpWorkPage: Stepper updates visually
+
+    User->>AtpWorkPage: Upload files / photos
+    User->>AtpWorkPage: Submit Penagihan item
+    User->>AtpWorkPage: View Log tab (this ATP only)
+```
+
+---
+
+## 9. File & Component Map
+
+| File | Role |
+|---|---|
+| `src/pages/AtpWorkPage.tsx` | Main ATP work environment (`/atp/{id}`) |
+| `src/pages/SiteDetail.tsx` | Site container page (`/sites/{siteId}`) |
+| `src/pages/Sites.tsx` | Site registry with ATP links |
+| `src/components/tables/ProjectSitesTable.tsx` | Project-filtered site table with ATP links |
+| `src/components/work-orders/AtpTable.tsx` | Inline-editable ATP list inside SiteDetail |
+| `src/components/modals/InitiationModal.tsx` | New ATP creation modal (enforces 1-active rule) |
+| `src/hooks/useCellSave.ts` | Auto-save hook + 1-active enforcement |
+| `src/context/TabContext.tsx` | App-tab state management |
+| `src/data/mockData.ts` | `atpWorkOrders`, `workOrderLogs`, `siteMasterRecords` |
+
+---
+
+*This document reflects the system state as of April 2026. Last major refactor: ATP Work Page split from SiteDetail for operational clarity.*
