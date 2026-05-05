@@ -21,12 +21,19 @@ const Sidebar = () => {
 
   // Navigation config per confirmed RBAC matrix
     const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
-    director:    ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    operational: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    admin:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    finance:     ['dashboard', 'sites', 'pembayaran'],
-    field:       [],  // field role has no full sidebar — own sites view only
+    director:         ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    operational:      ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    admin:            ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    finance:          ['dashboard', 'sites', 'pembayaran'],
+    field:            [], 
+    management:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    backoffice:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    backoffice_admin: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    team_leader:      [],
+    engineer:         [],
   };
+
+  if (!currentUser) return null;
 
   const allowedSidebarItems = ROLE_SIDEBAR_CONFIG[currentUser.role] || [];
 

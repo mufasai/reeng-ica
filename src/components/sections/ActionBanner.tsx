@@ -12,6 +12,7 @@ interface ActionBannerProps {
 
 export const ActionBanner = ({ activeTermName, activeTermStatus, onClickAction }: ActionBannerProps) => {
     const { currentUser } = useAuth();
+    if (!currentUser) return null;
     const role = currentUser.role;
 
     if (!activeTermName || activeTermStatus === 'paid') return null;

@@ -28,6 +28,7 @@ const TerminDetailPanel = ({
     isSkpReceived, disableSubmitMessage
 }: TerminDetailPanelProps) => {
     const { currentUser, can } = useAuth();
+    if (!currentUser) return null;
     
     // --- Validation Logic ---
     const getFieldStatus = (field: RequirementField) => {

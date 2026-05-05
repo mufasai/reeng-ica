@@ -21,6 +21,7 @@ import {
 
 const WorkOrders = () => {
   const { currentUser } = useAuth();
+  if (!currentUser) return null;
   const navigate = useNavigate();
 
   // Guard route
@@ -46,7 +47,7 @@ const WorkOrders = () => {
      }
      if (currentUser.role === 'team_leader' || currentUser.role === 'engineer') {
          // Show only WOs assigned to their teams
-         const userTeams = teams.filter(t => t.members.some(m => m.personId === currentUser.id));
+         const userTeams = teams.filter(t => t.members?.some(m => m.person_id === currentUser.id));
          const teamIds = userTeams.map(t => t.id);
          return woList.filter(wo => wo.assignedTeamId && teamIds.includes(wo.assignedTeamId));
      }

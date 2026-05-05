@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Camera, Plus, Trash2, AlertTriangle, Loader2, Upload, TableProperties, Play, CopyCheck, ArchiveX } from 'lucide-react';
+import { X, Camera, Plus, Trash2, AlertTriangle, Loader2, TableProperties, Play, CopyCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { materialMasterRecords } from '../../data/mockData';
 
@@ -26,7 +26,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
 
     // MODE: MANUAL / OCR Shared Entries
     const [entries, setEntries] = useState<MasterEntryRow[]>([]);
-    
+
     // OCR Specific
     const ocrInputRef = useRef<HTMLInputElement>(null);
     const [isScanning, setIsScanning] = useState(false);
@@ -38,7 +38,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
     const [excelStep, setExcelStep] = useState<number>(1);
     const excelInputRef = useRef<HTMLInputElement>(null);
     const [excelHeaders, setExcelHeaders] = useState<string[]>([]);
-    
+
     // Default system fields
     const systemFields = [
         { key: 'nama', label: 'Nama Material *', required: true },
@@ -48,9 +48,9 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
         { key: 'satuan', label: 'Satuan', required: false },
         { key: 'harga_satuan', label: 'Harga Satuan', required: false },
     ];
-    
+
     const [mappings, setMappings] = useState<Record<string, string>>({});
-    
+
     // Excel validation results
     const [validatedRows, setValidatedRows] = useState<any[]>([]);
     const [duplicates, setDuplicates] = useState<any[]>([]);
@@ -61,7 +61,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
             setExcelStep(1);
             setShowOcrDropzone(mode === 'ocr');
             setScanConfidence(null);
-            
+
             if (mode === 'manual') {
                 setEntries([createEmptyEntry()]);
             }
@@ -134,7 +134,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
         setIsSaving(true);
         setTimeout(() => {
             setIsSaving(false);
-            
+
             // Simulate 5 valid, 1 duplicate
             setValidatedRows([
                 { tempId: 1, nama: 'Bolt M8x40', kode: 'HW-01', kategori: 'Hardware', satuan: 'pcs', harga_satuan: 1500 },
@@ -143,12 +143,12 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
 
             // Simulation: we found a duplicate with existing material "Semen Portland"
             setDuplicates([
-                { 
-                    tempId: 3, 
+                {
+                    tempId: 3,
                     nama: 'Semen Portland',  // matches existing!
-                    kode: 'MT-001', 
-                    kategori: 'Sipil', 
-                    satuan: 'ZAK', 
+                    kode: 'MT-001',
+                    kategori: 'Sipil',
+                    satuan: 'ZAK',
                     harga_satuan: 68000, // new price
                     existing: materialMasterRecords.find(m => m.kode_material === 'MT-001')
                 }
@@ -181,7 +181,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-                
+
                 {/* Header */}
                 <div className="flex justify-between items-center p-5 border-b border-slate-200 bg-slate-50/50">
                     <div>
@@ -196,14 +196,14 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
-                    
+
                     {/* --- MANUAL & OCR MODE --- */}
                     {(mode === 'manual' || mode === 'ocr') && (
                         <div className="space-y-6">
-                            
+
                             {/* OCR Dropzone */}
                             {mode === 'ocr' && showOcrDropzone && (
-                                <div 
+                                <div
                                     className="bg-white border-2 border-dashed border-slate-300 rounded-xl p-16 flex flex-col items-center justify-center text-center hover:border-blue-400 transition-colors cursor-pointer"
                                     onClick={() => ocrInputRef.current?.click()}
                                     onDrop={(e) => { e.preventDefault(); handleOcrUpload(e); }}
@@ -232,7 +232,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
                                         <div className="flex items-start gap-3 bg-blue-50 text-blue-800 p-4 rounded-lg border border-blue-200">
                                             <CopyCheck className="w-5 h-5 shrink-0 text-blue-500 mt-0.5" />
                                             <div>
-                                                <p className="font-semibold text-sm">Berhasil mengekstrak {entries.length} baris! (Confidence: {(scanConfidence*100).toFixed(0)}%)</p>
+                                                <p className="font-semibold text-sm">Berhasil mengekstrak {entries.length} baris! (Confidence: {(scanConfidence * 100).toFixed(0)}%)</p>
                                                 <p className="text-xs text-blue-600/80 mt-1.5">Tinjau dan koreksi data sebelum disimpan ke Material Master. Anda juga masih bisa menambahkan baris manual.</p>
                                             </div>
                                         </div>
@@ -299,12 +299,12 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
                     {/* --- EXCEL MODE --- */}
                     {mode === 'excel' && (
                         <div className="space-y-6">
-                            
+
                             {/* Stepper */}
                             <div className="flex items-center justify-between mx-auto max-w-2xl mb-8 relative">
                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-[2px] bg-slate-200 -z-10"></div>
                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 h-[2px] bg-blue-600 -z-10 transition-all duration-500" style={{ width: `${((excelStep - 1) / 3) * 100}%` }}></div>
-                                
+
                                 {['Upload', 'Mapping', 'Preview', 'Result'].map((label, idx) => {
                                     const step = idx + 1;
                                     const active = excelStep === step;
@@ -321,7 +321,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
                             </div>
 
                             {excelStep === 1 && (
-                                <div 
+                                <div
                                     className="bg-white max-w-2xl mx-auto border-2 border-dashed border-slate-300 rounded-xl p-16 flex flex-col items-center justify-center text-center hover:border-blue-400 transition-colors cursor-pointer"
                                     onClick={() => excelInputRef.current?.click()}
                                     onDrop={(e) => { e.preventDefault(); handleExcelUpload(e); }}
@@ -349,14 +349,14 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
                                             <div key={sf.key} className="flex flex-col md:flex-row md:items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                                                 <div className="w-48 shrink-0">
                                                     <span className={clsx("text-sm font-semibold", sf.required ? "text-slate-800" : "text-slate-600")}>
-                                                        {sf.label} 
+                                                        {sf.label}
                                                     </span>
                                                 </div>
                                                 <div className="text-slate-400 hidden md:block">→</div>
-                                                <select 
+                                                <select
                                                     className="flex-1 border border-slate-300 rounded px-3 py-2 text-sm outline-none focus:border-blue-500 bg-white"
                                                     value={mappings[sf.key] || ''}
-                                                    onChange={e => setMappings({...mappings, [sf.key]: e.target.value})}
+                                                    onChange={e => setMappings({ ...mappings, [sf.key]: e.target.value })}
                                                 >
                                                     <option value="">- Abaikan (Tidak diisi) -</option>
                                                     <optgroup label="Kolom Excel Anda:">
@@ -429,7 +429,7 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
                                                                 <p><span className="text-slate-400 min-w-24 inline-block">Kode:</span> <span className="text-slate-600">{dup.kode || '—'}</span></p>
                                                                 <p><span className="text-slate-400 min-w-24 inline-block">Harga/Satuan:</span> <span className={clsx(dup.harga_satuan !== dup.existing.harga_satuan ? "text-amber-700 font-bold bg-amber-100 px-1 rounded" : "text-slate-600")}>Rp {dup.harga_satuan}</span> / <span className="text-slate-600">{dup.satuan}</span></p>
                                                             </div>
-                                                            
+
                                                             {/* Actions inline */}
                                                             <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
                                                                 <button className="flex-1 py-1.5 px-3 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-600 hover:bg-slate-50">Lewati (Abaikan)</button>
@@ -472,19 +472,19 @@ const MaterialMasterModals: React.FC<MaterialMasterModalsProps> = ({ mode, isOpe
                 {/* Footer (Only for Manual and OCR, Excel has built-in navigation buttons) */}
                 {(mode === 'manual' || mode === 'ocr') && !showOcrDropzone && (
                     <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end gap-3 rounded-b-xl shrink-0">
-                        <button 
+                        <button
                             onClick={onClose}
                             className="px-5 py-2.5 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
                         >
                             Batal
                         </button>
-                        <button 
+                        <button
                             onClick={handleSaveManualOcr}
                             disabled={validManualCount === 0 || isSaving}
                             className={clsx(
                                 "px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center gap-2 transition-all",
                                 (validManualCount === 0 || isSaving)
-                                    ? "bg-slate-300 text-slate-500 cursor-not-allowed" 
+                                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
                                     : "bg-blue-600 text-white hover:bg-blue-700"
                             )}
                         >

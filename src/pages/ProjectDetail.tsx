@@ -21,6 +21,7 @@ const formatRupiah = (amount: number) => {
 const ProjectDetail = () => {
     const { id } = useParams<{ id: string }>();
     const { currentUser, can } = useAuth();
+    if (!currentUser) return null;
 
     const project = projects.find((p) => p.id === id);
     const projectSites = useMemo(() => initialSites.filter(s => s.projectId === id), [id]);
@@ -34,7 +35,7 @@ const ProjectDetail = () => {
     // ----------------------------------------------------------------------
     // 1. STATS CALCULATION
     // ----------------------------------------------------------------------
-    const totalPeople = filteredTeams.reduce((sum, t) => sum + t.members.length, 0); 
+    const totalPeople = filteredTeams.reduce((sum, t) => sum + (t.members?.length || 0), 0); 
     const totalBudget = project.budget || projectSites.reduce((sum, s) => sum + s.budget, 0);
 
     // Used Budget & Pending Approval
@@ -183,7 +184,7 @@ const ProjectDetail = () => {
                             + Add Site
                         </button>
                     )}
-                    {currentUser.role === 'team_leader' && (
+                    {currentUser.role === ('team_leader' as any) && (
                         <button className="px-3 py-1.5 bg-blue-600 text-white rounded shadow-sm text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap">
                             Submit Pengajuan →
                         </button>

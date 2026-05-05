@@ -23,6 +23,7 @@ interface ProjectFilesTableProps {
 
 const ProjectFilesTable = ({ files, onDelete }: ProjectFilesTableProps) => {
   const { currentUser, can } = useAuth();
+  if (!currentUser) return null;
   
   // Local State
   const [searchTerm, setSearchTerm] = useState('');

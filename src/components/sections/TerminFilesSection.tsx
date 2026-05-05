@@ -15,6 +15,7 @@ interface TerminFilesSectionProps {
 export const TerminFilesSection = ({ documents, onUploadFile, onUploadExcel, isLocked }: TerminFilesSectionProps) => {
     const [activeTab, setActiveTab] = useState<'files' | 'excel'>('files');
     const { currentUser } = useAuth();
+    if (!currentUser) return null;
     const canUpload = !isLocked && (currentUser?.role === 'team_leader' || currentUser?.role === 'engineer');
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

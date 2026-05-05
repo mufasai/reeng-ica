@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { siteMasterRecords, atpWorkOrders, workOrderLogs } from '../data/mockData';
 import {
   ArrowLeft, Building2, MapPin, Briefcase, Clock, Settings, Check, Plus,
-  ChevronDown, ChevronUp, FileCheck, FolderCheck, Banknote, ListChecks
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import clsx from 'clsx';
 import InitiationModal from '../components/modals/InitiationModal';
@@ -74,11 +74,11 @@ const SiteDetail = () => {
     const wo = atpWorkOrders.find(w => w.id === woId);
     if (!wo) return;
     openTab({
-        id: `atp-${wo.id}`,
-        label: `ATP${wo.atp_number ? wo.atp_number.slice(-6) : wo.id.slice(-6)}`,
-        path: `/atp/${wo.id}`,
-        icon: '📋',
-        closeable: true
+      id: `atp-${wo.id}`,
+      label: `ATP${wo.atp_number ? wo.atp_number.slice(-6) : wo.id.slice(-6)}`,
+      path: `/atp/${wo.id}`,
+      icon: '📋',
+      closeable: true
     });
   };
 
@@ -191,8 +191,8 @@ const SiteDetail = () => {
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">IDENTITAS</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 mb-6">
             <InfoField label="Network Element ID" editing={isEditingInfo} value={localSiteData.ne_id || ''} field="ne_id" onChange={handleInfoChange} monospace />
-            <InfoField label="Site Name" editing={false} value={site.site_name || ''} field="site_name" onChange={() => {}} />
-            <InfoField label="Site ID" editing={false} value={site.site_id || ''} field="site_id" onChange={() => {}} monospace />
+            <InfoField label="Site Name" editing={false} value={site.site_name || ''} field="site_name" onChange={() => { }} />
+            <InfoField label="Site ID" editing={false} value={site.site_id || ''} field="site_id" onChange={() => { }} monospace />
           </div>
         </div>
 
@@ -224,9 +224,9 @@ const SiteDetail = () => {
             <InfoField label="Tower Provider (TP)" editing={isEditingInfo} value={site.tower_provider || site.raw_data?.['TP NAME'] || ''} field="tower_provider" onChange={handleInfoChange} />
             <InfoField label="Ant Type" editing={isEditingInfo} value={localSiteData.raw_data?.['ANT_TYPE'] || localSiteData.ant_type || ''} field="ant_type" onChange={handleInfoChange} />
             <InfoField label="Height (m)" editing={isEditingInfo} value={localSiteData.raw_data?.['HEIGHT'] || String(localSiteData.height || '')} field="height" onChange={handleInfoChange} />
-            <InfoField label="SOW Equipment" editing={false} value={site.sow_eqp || ''} field="sow_eqp" onChange={() => {}} />
-            <InfoField label="PO Tsel" editing={false} value={site.po_tsel || ''} field="po_tsel" onChange={() => {}} monospace />
-            <InfoField label="IOMS" editing={false} value={site.ineom_registered ? 'Registered' : 'Not Registered'} field="ineom" onChange={() => {}} />
+            <InfoField label="SOW Equipment" editing={false} value={site.sow_eqp || ''} field="sow_eqp" onChange={() => { }} />
+            <InfoField label="PO Tsel" editing={false} value={site.po_tsel || ''} field="po_tsel" onChange={() => { }} monospace />
+            <InfoField label="IOMS" editing={false} value={site.ineom_registered ? 'Registered' : 'Not Registered'} field="ineom" onChange={() => { }} />
           </div>
         </div>
       </div>
@@ -284,9 +284,9 @@ const SiteDetail = () => {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         {renderTabBar()}
         <div className="p-6 min-h-[400px]">
-          {mainTab === 'info'      && renderInfoSite()}
+          {mainTab === 'info' && renderInfoSite()}
           {mainTab === 'pekerjaan' && renderPekerjaan()}
-          {mainTab === 'log'       && renderLog()}
+          {mainTab === 'log' && renderLog()}
         </div>
       </div>
 

@@ -16,18 +16,18 @@ import { PlusCircle, ExternalLink, Plus } from 'lucide-react';
 
 // ─── Constants & Helpers ────────────────────────────────────────────────────────
 const ACTIVE_WORK_COLS = [
-    'NO', 'PROJECT TYPE', 'SITE_ID', 'SITE MOVING STATUS', 'FINAL SITE ID', 'SITE-SECTOR (FINAL)', 'SECTOR', 
-    'FILTER PER SECTOR', 'REGION', 'NE_ID', 'SITE_NAME', 'TP NAME', 'IOMS REGISTERED', 'PERMIT STATUS', 
-    'ISSUE PROBLEM', 'NOTE PROBLEM', 'SEND PERMIT FORMAT', 'IMPLEMENTASI STATUS', 'Tanggal RFS', 'TEAM', 
-    'TEAM ONSITE STATUS', 'ISSUE IMPLEMENTASI', 'NOTE IMPLEMENTASI', 'STATUS ATP', 'NOTE FOTO EVIDENCE', 
-    'PPID', 'ATP NUMBER', 'SOW ID', 'PO ID', 'TIKET NUMBER', 'PRIO CAPEX FINAL', 'NEW STATUS IMPLEMENTATION', 'PRIO', 
+    'NO', 'PROJECT TYPE', 'SITE_ID', 'SITE MOVING STATUS', 'FINAL SITE ID', 'SITE-SECTOR (FINAL)', 'SECTOR',
+    'FILTER PER SECTOR', 'REGION', 'NE_ID', 'SITE_NAME', 'TP NAME', 'IOMS REGISTERED', 'PERMIT STATUS',
+    'ISSUE PROBLEM', 'NOTE PROBLEM', 'SEND PERMIT FORMAT', 'IMPLEMENTASI STATUS', 'Tanggal RFS', 'TEAM',
+    'TEAM ONSITE STATUS', 'ISSUE IMPLEMENTASI', 'NOTE IMPLEMENTASI', 'STATUS ATP', 'NOTE FOTO EVIDENCE',
+    'PPID', 'ATP NUMBER', 'SOW ID', 'PO ID', 'TIKET NUMBER', 'PRIO CAPEX FINAL', 'NEW STATUS IMPLEMENTATION', 'PRIO',
     'LATITUDE', 'LONGITUDE', 'FILE DATE'
 ];
 
 const ALL_SITES_COLS = [
-    'SITE ID', 'NE ID', 'LAYER', 'SEC', 'Antenna type', 'Height', 'FREQ BAND', 'LONG', 'LAT', 'ANT TYPE', 
-    'TP ID', 'TP', 'Site Type', 'LTE NE Name', 'Cell Name', 'eNodeB ID', 'Cell ID', 'Local Cell ID', 
-    'TAL', 'TAC', 'AREA', 'BSC', 'SITENAME', 'SITE', 'PROVINSI', 'ADDRESS', 'KECAMATAN', 'KABUPATEN', 
+    'SITE ID', 'NE ID', 'LAYER', 'SEC', 'Antenna type', 'Height', 'FREQ BAND', 'LONG', 'LAT', 'ANT TYPE',
+    'TP ID', 'TP', 'Site Type', 'LTE NE Name', 'Cell Name', 'eNodeB ID', 'Cell ID', 'Local Cell ID',
+    'TAL', 'TAC', 'AREA', 'BSC', 'SITENAME', 'SITE', 'PROVINSI', 'ADDRESS', 'KECAMATAN', 'KABUPATEN',
     'DESA', 'Cluster_New', 'Branch_New', 'REGIONS NEW'
 ];
 
@@ -73,22 +73,22 @@ const ActionCard = ({ label, count, subText, dotColor, filterKey, activeFilter, 
     if (!visible) return null;
     const isActive = activeFilter === filterKey;
     const dotMap: Record<DotColor, string> = {
-        red:    'bg-red-500',
-        amber:  'bg-amber-500',
+        red: 'bg-red-500',
+        amber: 'bg-amber-500',
         purple: 'bg-purple-500',
-        blue:   'bg-blue-600',
+        blue: 'bg-blue-600',
     };
     const subTextMap: Record<DotColor, string> = {
-        red:    'text-red-600',
-        amber:  'text-amber-600',
+        red: 'text-red-600',
+        amber: 'text-amber-600',
         purple: 'text-purple-600',
-        blue:   'text-slate-400',
+        blue: 'text-slate-400',
     };
     const alertBorderMap: Record<DotColor, string> = {
-        red:    count > 0 ? 'border-red-300 bg-red-50/40' : 'border-slate-200',
-        amber:  count > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200',
+        red: count > 0 ? 'border-red-300 bg-red-50/40' : 'border-slate-200',
+        amber: count > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200',
         purple: 'border-slate-200',
-        blue:   'border-slate-200',
+        blue: 'border-slate-200',
     };
     return (
         <div
@@ -138,7 +138,7 @@ const Sites = () => {
     const navigate = useNavigate();
     const { openTab } = useTabContext();
     const { currentUser } = useAuth();
-    const hasImportAccess = ['director', 'operational', 'admin'].includes(currentUser.role);
+    const hasImportAccess = currentUser ? ['director', 'operational', 'admin'].includes(currentUser.role) : false;
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Tab Toggle ('data' | 'history')
@@ -187,12 +187,12 @@ const Sites = () => {
     });
 
     // Column visibility
-    const { visibilityMap, handleVisibilityChange, resetToDefault, currentCols } = useTableColumns(currentUser.id);
+    const { visibilityMap, handleVisibilityChange, resetToDefault, currentCols } = useTableColumns(currentUser?.id || '');
 
     // Section collapse state
     // const [isAssignedExpanded, setIsAssignedExpanded] = useState(true);
     // const [isUnassignedExpanded, setIsUnassignedExpanded] = useState(true);
-    
+
     // Assign Modal state
     const [assignModalSite, setAssignModalSite] = useState<string | null>(null);
 
@@ -246,9 +246,9 @@ const Sites = () => {
     // Quick-filter label map (for table header)
     const QUICK_FILTER_LABELS: Record<string, string> = {
         belum_ditugaskan: 'Belum Ditugaskan',
-        stuck:            'Stuck >14 Hari',
-        permit_expiring:  'Permit Expiring',
-        termin_menunggu:  'Termin Menunggu',
+        stuck: 'Stuck >14 Hari',
+        permit_expiring: 'Permit Expiring',
+        termin_menunggu: 'Termin Menunggu',
     };
 
     // Main Filtering
@@ -342,12 +342,12 @@ const Sites = () => {
             site_sector_key: `${siteId}-S1`,
             project_type: projectType,
             stage: 'imported',
-            initiated_by: currentUser.id,
+            initiated_by: currentUser?.id || '',
             initiated_at: new Date().toISOString(),
             status: 'active' as const
         };
         atpWorkOrders.push(newWo);
-        
+
         // 2. Navigate to site detail with pekerjaan hash
         navigate(`/sites/${siteId}#pekerjaan/${newWo.id}`);
         setAssignModalSite(null);
@@ -467,7 +467,7 @@ const Sites = () => {
                         filterKey="termin_menunggu"
                         activeFilter={quickFilter}
                         onClick={() => handlePillClick('termin_menunggu')}
-                        visible={!['field'].includes(currentUser.role)}
+                        visible={currentUser ? !['field'].includes(currentUser.role) : true}
                     />
                 </div>
             )}
@@ -518,7 +518,7 @@ const Sites = () => {
                     {dashFilter && (
                         <div className="flex items-center gap-2">
                             <button
-                                onClick={() => { setDashFilter(null); setSearchParams(prev => { const n = new URLSearchParams(prev); ['stage','has_issue','has_paid_termin','has_pending_termin'].forEach(k => n.delete(k)); return n; }); }}
+                                onClick={() => { setDashFilter(null); setSearchParams(prev => { const n = new URLSearchParams(prev);['stage', 'has_issue', 'has_paid_termin', 'has_pending_termin'].forEach(k => n.delete(k)); return n; }); }}
                                 className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
                             >
                                 ← Dashboard
@@ -571,7 +571,7 @@ const Sites = () => {
                             <div className="flex items-center gap-2">
                                 {dashFilter && (
                                     <button
-                                        onClick={() => { setDashFilter(null); setSearchParams(prev => { const n = new URLSearchParams(prev); ['stage','has_issue','has_paid_termin','has_pending_termin'].forEach(k => n.delete(k)); return n; }); }}
+                                        onClick={() => { setDashFilter(null); setSearchParams(prev => { const n = new URLSearchParams(prev);['stage', 'has_issue', 'has_paid_termin', 'has_pending_termin'].forEach(k => n.delete(k)); return n; }); }}
                                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold rounded-full border border-blue-200 transition-colors"
                                     >
                                         Stage: {dashFilter.label} ×
@@ -609,7 +609,7 @@ const Sites = () => {
                                     {activeTab === 'active' && assignedSites.map((site, idx) => {
                                         const activeWo = atpWorkOrders.find(wo => wo.site_id === site.site_id && wo.status === 'active') || atpWorkOrders.find(wo => wo.site_id === site.site_id);
                                         const task = atpTasks.find(t => t.site_id === site.site_id);
-                                        
+
                                         return (
                                             <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-xs">
                                                 <td className="px-4 py-3 text-slate-400">{idx + 1}</td>
@@ -637,8 +637,8 @@ const Sites = () => {
                                                         <div className={clsx(
                                                             "w-1.5 h-1.5 rounded-full shrink-0",
                                                             (activeWo?.permit_status?.includes('5') || activeWo?.permit_status?.includes('7')) ? "bg-emerald-500" :
-                                                            (activeWo?.permit_status?.includes('1') || activeWo?.permit_status?.includes('3')) ? "bg-amber-500" :
-                                                            activeWo?.permit_status?.includes('9') ? "bg-red-500" : "bg-slate-300"
+                                                                (activeWo?.permit_status?.includes('1') || activeWo?.permit_status?.includes('3')) ? "bg-amber-500" :
+                                                                    activeWo?.permit_status?.includes('9') ? "bg-red-500" : "bg-slate-300"
                                                         )} />
                                                         <span className="font-bold text-slate-700 whitespace-nowrap">{activeWo?.permit_status || '1. Planning'}</span>
                                                     </div>
@@ -678,32 +678,32 @@ const Sites = () => {
                                                 <td className="px-4 py-3 font-mono text-slate-500">{activeWo?.sow_id || '—'}</td>
                                                 <td className="px-4 py-3 font-mono text-slate-500">{activeWo?.po_number || '—'}</td>
                                                 <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                                                     {activeWo?.atp_number ? (
-                                                         <button 
-                                                             onClick={() => {
-                                                                 openTab({
-                                                                     id: `atp-${activeWo.id}`,
-                                                                     label: `ATP${activeWo.atp_number ? activeWo.atp_number.slice(-6) : ''}`,
-                                                                     path: `/atp/${activeWo.id}`,
-                                                                     icon: '📋',
-                                                                     closeable: true
-                                                                 });
-                                                             }}
-                                                             className="text-blue-600 hover:underline font-mono text-xs font-bold"
-                                                         >
-                                                             {activeWo.atp_number}
-                                                         </button>
-                                                     ) : (
-                                                         <span className="text-slate-400 italic text-xs">Belum ada ATP</span>
-                                                     )}
-                                                 </td>
+                                                    {activeWo?.atp_number ? (
+                                                        <button
+                                                            onClick={() => {
+                                                                openTab({
+                                                                    id: `atp-${activeWo.id}`,
+                                                                    label: `ATP${activeWo.atp_number ? activeWo.atp_number.slice(-6) : ''}`,
+                                                                    path: `/atp/${activeWo.id}`,
+                                                                    icon: '📋',
+                                                                    closeable: true
+                                                                });
+                                                            }}
+                                                            className="text-blue-600 hover:underline font-mono text-xs font-bold"
+                                                        >
+                                                            {activeWo.atp_number}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-slate-400 italic text-xs">Belum ada ATP</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{site.batch_ref || 'Batch#1'}</td>
                                                 <td className="px-4 py-3 text-slate-400 italic text-[10px]">02. FFT Scan Done, Continue</td>
                                                 <td className="px-4 py-3 font-bold text-slate-600">P2</td>
                                                 <td className="px-4 py-3 font-mono text-slate-400">{site.latitude || '—'}</td>
                                                 <td className="px-4 py-3 font-mono text-slate-400">{site.longitude || '—'}</td>
                                                 <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{new Date().toISOString().split('T')[0]}</td>
-                                                
+
                                                 <td className="px-4 py-3 text-right">
                                                     <button onClick={() => navigate(`/sites/${site.site_id}`)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
                                                         <ExternalLink className="w-4 h-4" />
@@ -716,13 +716,13 @@ const Sites = () => {
                                     {/* --- MODE 2: ALL SITES TAB --- */}
                                     {activeTab === 'all' && sortedSites.map(site => {
                                         const tech = siteTechnicalDetails.find(t => t.site_id === site.site_id) || site.raw_data;
-                                        
+
                                         return (
                                             <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-[11px]">
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-mono font-bold text-slate-700">{site.site_id}</span>
-                                                        <button 
+                                                        <button
                                                             onClick={() => setAssignModalSite(site.site_id)}
                                                             className="opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex items-center justify-center"
                                                             title="Register project type for new work"
@@ -774,17 +774,17 @@ const Sites = () => {
                                         );
                                     })}
                                     {/* Empty state logic */}
-                                    {((activeTab === 'active' && assignedSites.length === 0) || 
-                                      (activeTab === 'all' && sortedSites.length === 0)) && (
-                                        <tr>
-                                            <td colSpan={15} className="px-4 py-12 text-center text-slate-500 bg-slate-50/50">
-                                                <div className="flex flex-col items-center">
-                                                    <FilterIcon className="w-8 h-8 text-slate-300 mb-2" />
-                                                    <p className="font-medium text-slate-600">Tidak ada site yang cocok dengan filter</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
+                                    {((activeTab === 'active' && assignedSites.length === 0) ||
+                                        (activeTab === 'all' && sortedSites.length === 0)) && (
+                                            <tr>
+                                                <td colSpan={15} className="px-4 py-12 text-center text-slate-500 bg-slate-50/50">
+                                                    <div className="flex flex-col items-center">
+                                                        <FilterIcon className="w-8 h-8 text-slate-300 mb-2" />
+                                                        <p className="font-medium text-slate-600">Tidak ada site yang cocok dengan filter</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
                                 </tbody>
                             </table>
                         </div>
@@ -792,7 +792,7 @@ const Sites = () => {
 
                     {/* Assign Modal */}
                     {assignModalSite && (
-                        <AssignProjectModal 
+                        <AssignProjectModal
                             siteId={assignModalSite}
                             onClose={() => setAssignModalSite(null)}
                             onAssign={(type) => handleAssignProject(assignModalSite, type)}
@@ -855,8 +855,8 @@ const Sites = () => {
             )}
 
             {/* ── Modals ─────────────────────────────────────────────────── */}
-            <ImportSiteModal 
-                isOpen={isBoqOpen} 
+            <ImportSiteModal
+                isOpen={isBoqOpen}
                 onClose={() => setIsBoqOpen(false)}
                 onImportExcel={(data, fileName) => { console.log('BoQ Excel imported:', fileName, data.length, 'rows'); setIsBoqOpen(false); }}
                 onAddManual={() => { setIsBoqOpen(false); }}

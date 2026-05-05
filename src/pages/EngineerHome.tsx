@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useNavigate } from 'react-router-dom';
 import { Camera, MapPin, Signal } from 'lucide-react';
 import { atpWorkOrders, siteMasterRecords } from '../data/mockData';
@@ -8,7 +8,7 @@ const EngineerHome = () => {
 
   // Filter for work orders in implementasi or similar stages.
   // For the mock, we assume the engineer can see all implementasi stages.
-  const activeWorkOrders = atpWorkOrders.filter(wo => 
+  const activeWorkOrders = atpWorkOrders.filter(wo =>
     ['implementasi', 'rfi_done', 'rfs_done'].includes(wo.stage)
   );
 
@@ -23,7 +23,7 @@ const EngineerHome = () => {
       <div className="p-4 space-y-4 -mt-4 relative z-10">
         {activeWorkOrders.map(wo => {
           const site = siteMasterRecords.find(s => s.site_id === wo.site_id);
-          
+
           return (
             <div key={wo.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-4 border-b border-slate-50">
@@ -39,16 +39,16 @@ const EngineerHome = () => {
                     {wo.stage}
                   </span>
                 </div>
-                
+
                 <p className="text-sm font-mono text-slate-600 mb-1">{wo.atp_number}</p>
                 <div className="flex items-start gap-1.5 text-sm text-slate-500">
                   <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
                   <span className="truncate">{site?.site_name || 'Unknown Site'}</span>
                 </div>
               </div>
-              
+
               <div className="p-3 bg-slate-50">
-                <button 
+                <button
                   onClick={() => navigate(`/engineer/upload/${wo.id}`)}
                   className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-sm hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
@@ -59,7 +59,7 @@ const EngineerHome = () => {
             </div>
           );
         })}
-        
+
         {activeWorkOrders.length === 0 && (
           <div className="text-center py-12 px-4">
             <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">

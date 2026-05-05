@@ -19,6 +19,7 @@ import {
 
 const SpkList = () => {
   const { currentUser } = useAuth();
+  if (!currentUser) return null;
   const navigate = useNavigate();
 
   // State
@@ -41,7 +42,7 @@ const SpkList = () => {
      }
      if (currentUser.role === 'team_leader' || currentUser.role === 'engineer') {
          // Show only SPKs assigned to their teams
-         const userTeams = teams.filter(t => t.members.some(m => m.personId === currentUser.id));
+         const userTeams = teams.filter(t => t.members?.some(m => m.person_id === currentUser.id));
          const teamIds = userTeams.map(t => t.id);
          return spkWorkOrders.filter(wo => wo.assignedTeamId && teamIds.includes(wo.assignedTeamId));
      }

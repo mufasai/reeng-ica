@@ -428,14 +428,22 @@ export const files: ProjectFile[] = [
     { id: 'f3', projectId: 'p2', title: 'Combat Drill Manual', originalName: 'manual_v1.pdf', size: '5.1 MB', type: 'PDF', uploadedAt: '2024-02-01', uploadedBy: 'u_lead' },
 ];
 
-export type UserRole = 'director' | 'operational' | 'admin' | 'finance' | 'field' | 'management' | 'backoffice';
+export type UserRole = 'director' | 'operational' | 'admin' | 'finance' | 'field' | 'management' | 'backoffice' | 'backoffice_admin' | 'team_leader' | 'engineer';
+
+export const getVisibleProjects = (projects: Project[], currentUser: User) => {
+    if (['director', 'admin', 'finance', 'operational', 'management', 'backoffice', 'backoffice_admin'].includes(currentUser.role)) {
+        return projects;
+    }
+    return projects.filter(p => p.type === currentUser.pekerjaan);
+};
 
 export interface User {
     id: string;
     name: string;
     email: string;
-    password: string;
+    password?: string;
     role: UserRole;
+    pekerjaan?: string;
     avatar?: string;
 }
 
@@ -463,7 +471,9 @@ export interface TeamMember {
     id: string;
     team_id: string; // -> teams.id
     person_id: string; // -> people.id
+    personId?: string; // camelCase alias for backward compatibility
     jabatan: string; // Leader | Engineer | Member | Transport | SITAC | Lainnya
+    role?: string; // Added for compatibility with some components
     is_field_leader: boolean;
     joined_date?: string;
     left_date?: string;
@@ -483,6 +493,7 @@ export interface Team {
     name: string;
     coordinator_id?: string; // -> people.id
     project_type: ProjectType;
+    projectId?: string; // Added for project linkage
     regional?: string;
     status_aktif: boolean;
     members?: TeamMember[]; // Keeping for legacy/convenience, though ideally queried from TeamMember table
@@ -2028,7 +2039,7 @@ export const getActiveSiteCountsByType = (currentUser: User, _allProjects: Proje
         RESCOPING: 0,
     };
 
-    // Which teams does this user belong to?
+
     const userTeamIds = Array.from(new Set(
         teamMembersRecords
             .filter(tm => tm.person_id === currentUser.id)

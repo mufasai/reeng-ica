@@ -15,6 +15,7 @@ const PENAGIHAN_TYPES = [
 
 const AddPenagihanModal = ({ siteId, onClose }: AddPenagihanModalProps) => {
   const { currentUser } = useAuth();
+  if (!currentUser) return null;
   
   const [tipe, setTipe] = useState('');
   const [deskripsi, setDeskripsi] = useState('');
@@ -43,11 +44,11 @@ const AddPenagihanModal = ({ siteId, onClose }: AddPenagihanModalProps) => {
       nominal: Number(nominal),
       status: 'submitted' as const,
       catatan,
-      submitted_by: currentUser.name,
+      submitted_by: currentUser?.name || '',
       submitted_at: new Date().toISOString(),
       documents: [],
       history: [
-        { action: 'submitted', by: currentUser.name, at: new Date().toISOString() }
+        { action: 'submitted', by: currentUser?.name || '', at: new Date().toISOString() }
       ]
     };
 

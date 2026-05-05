@@ -11,6 +11,7 @@ interface AddWorkOrderModalProps {
 
 const AddWorkOrderModal: React.FC<AddWorkOrderModalProps> = ({ isOpen, onClose, onCreate }) => {
   const { currentUser } = useAuth();
+  if (!currentUser) return null;
   const [formData, setFormData] = useState({
     woNumber: '',
     tanggalWo: '',
@@ -41,7 +42,7 @@ const AddWorkOrderModal: React.FC<AddWorkOrderModalProps> = ({ isOpen, onClose, 
       nilaiWo: Number(formData.nilaiWo),
       nomorKontrak: formData.nomorKontrak,
       status: 'Unassigned',
-      createdBy: currentUser.id,
+      createdBy: currentUser?.id || '',
     };
     onCreate(newWO);
     onClose();

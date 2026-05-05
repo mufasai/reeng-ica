@@ -120,11 +120,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const getVisibleProjects = () => {
     if (!currentUser) return [];
-    if (['director', 'admin', 'finance', 'operational', 'management', 'backoffice'].includes(currentUser.role)) {
+    if (['director', 'admin', 'finance', 'operational', 'management', 'backoffice', 'backoffice_admin'].includes(currentUser.role)) {
       return projects.filter(p => p.status === 'active');
     }
-    const userTeams = teams.filter(t => t.members?.some(m => m.person_id === currentUser.id));
-    return projects.filter(p => p.status === 'active');
+    const visibleTeams = teams.filter(t => t.members?.some(m => m.person_id === currentUser.id));
+    const projectIds = visibleTeams.map(t => (t as any).projectId).filter(Boolean);
+    return projects.filter(p => projectIds.includes(p.id) && p.status === 'active');
   };
 
   return (

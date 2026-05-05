@@ -12,6 +12,7 @@ interface InitiationModalProps {
 
 const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: InitiationModalProps) => {
   const { currentUser } = useAuth();
+  if (!currentUser) return null;
   
   const [projectType, setProjectType] = useState('');
   const [sector, setSector] = useState<number | ''>('');
@@ -43,7 +44,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
       project_type: projectType as any,
       stage: 'imported',
       status: 'active',
-      initiated_by: currentUser.id,
+      initiated_by: currentUser?.id || '',
       initiated_at: new Date().toISOString()
     };
 

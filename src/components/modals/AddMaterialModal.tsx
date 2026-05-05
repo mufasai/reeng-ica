@@ -25,7 +25,7 @@ interface AddMaterialModalProps {
 
 const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, siteId, onSubmit }) => {
     const { currentUser } = useAuth();
-    
+
     // Modal states
     const [mode, setMode] = useState<'master' | 'ocr' | 'manual'>('master');
     const [items, setItems] = useState<MaterialItem[]>([]);
@@ -33,14 +33,14 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
     const [sourceFile, setSourceFile] = useState<File | null>(null);
     const [scanConfidence, setScanConfidence] = useState<number | null>(null);
     const [globalStatus, setGlobalStatus] = useState('Dipesan');
-    
+
     // Master Selection States
     const [masterSearch, setMasterSearch] = useState('');
     const [masterSelections, setMasterSelections] = useState<Record<string, { jumlah: string; catatan: string }>>({});
 
     // Supporting document state
     const [supportingFile, setSupportingFile] = useState<File | null>(null);
-    
+
     // Refs for hidden file inputs
     const ocrInputRef = useRef<HTMLInputElement>(null);
     const supportingInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +70,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
     // Derived Master records
     const availableMasterRecords = useMemo(() => {
         return materialMasterRecords.filter(m => m.status_aktif && (
-            m.nama_material.toLowerCase().includes(masterSearch.toLowerCase()) || 
+            m.nama_material.toLowerCase().includes(masterSearch.toLowerCase()) ||
             (m.kode_material || '').toLowerCase().includes(masterSearch.toLowerCase())
         ));
     }, [masterSearch]);
@@ -113,7 +113,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
 
             const confidenceScore = Math.random() > 0.5 ? 0.92 : 0.65;
             setScanConfidence(confidenceScore);
-            
+
             setItems([
                 { id: `t1`, nama_material: 'Filter LTE 900 MHz', spesifikasi: '900MHz Bandpass Filter', jumlah: '2', satuan: 'pcs', keterangan: '' },
                 { id: `t2`, nama_material: 'Cable RG-8', spesifikasi: 'Coaxial 50ohm', jumlah: '10', satuan: 'm', keterangan: '' }
@@ -173,7 +173,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
                     // User inputs
                     jumlah: parseFloat(masterSelections[id].jumlah) || 0,
                     keterangan: masterSelections[id].catatan || null,
-                    
+
                     status: globalStatus,
                     added_by: currentUser?.id,
                     added_at: new Date().toISOString()
@@ -200,10 +200,10 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
         onSubmit(payload);
     };
 
-    const formatCurrency = (val: number | null) => {
-        if (!val) return '—';
-        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
-    };
+    // const formatCurrency = (val: number | null) => {
+    //     if (!val) return '—';
+    //     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
+    // };
 
     if (!isOpen) return null;
 
@@ -256,16 +256,16 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
 
                 {/* Content Body */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
-                    
+
                     {/* --- MASTER MODE --- */}
                     {mode === 'master' && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between gap-4">
                                 <div className="relative flex-1 max-w-sm">
                                     <Command className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Cari material di master..." 
+                                    <input
+                                        type="text"
+                                        placeholder="Cari material di master..."
                                         value={masterSearch}
                                         onChange={(e) => setMasterSearch(e.target.value)}
                                         className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 shadow-sm"
@@ -308,9 +308,9 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
                                                     <td className="p-3 align-middle">
                                                         {isSelected ? (
                                                             <div className="relative w-24">
-                                                                <input 
-                                                                    type="number" 
-                                                                    className="w-full pl-3 pr-8 py-1.5 border-2 border-blue-400 bg-white rounded font-bold text-blue-700 outline-none" 
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full pl-3 pr-8 py-1.5 border-2 border-blue-400 bg-white rounded font-bold text-blue-700 outline-none"
                                                                     min="0"
                                                                     autoFocus
                                                                     placeholder="0"
@@ -325,8 +325,8 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
                                                     </td>
                                                     <td className="p-3 align-middle">
                                                         {isSelected && (
-                                                            <input 
-                                                                type="text" 
+                                                            <input
+                                                                type="text"
                                                                 className="w-full px-3 py-1.5 border border-slate-300 rounded bg-white outline-none focus:border-blue-500 text-slate-700 placeholder:text-slate-300"
                                                                 placeholder="Catatan opsional..."
                                                                 value={masterSelections[item.id].catatan}
@@ -350,8 +350,8 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
 
                             <div className="text-center mt-2">
                                 <p className="text-sm text-slate-500">
-                                    Tidak menemukan material yang dicari? <br/>
-                                    Anda bisa <NavLink to="/materials" onClick={onClose} className="text-blue-600 font-bold hover:underline">menambahkan ke Material Master</NavLink> terlebih dahulu, 
+                                    Tidak menemukan material yang dicari? <br />
+                                    Anda bisa <NavLink to="/materials" onClick={onClose} className="text-blue-600 font-bold hover:underline">menambahkan ke Material Master</NavLink> terlebih dahulu,
                                     atau gunakan Input Manual untuk barang ad-hoc.
                                 </p>
                             </div>
@@ -360,7 +360,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
 
                     {/* --- OCR MODE --- */}
                     {mode === 'ocr' && isOcrPending && (
-                        <div 
+                        <div
                             className="bg-white border-2 border-dashed border-slate-300 rounded-lg p-12 flex flex-col items-center justify-center text-center hover:bg-slate-50 hover:border-blue-400 transition-colors cursor-pointer"
                             onClick={() => ocrInputRef.current?.click()}
                             onDrop={(e) => { e.preventDefault(); handleFileUploadChange(e as any); }}
@@ -397,7 +397,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
                                         <div className="flex items-start gap-2 bg-amber-50 text-amber-800 p-3 rounded-lg border border-amber-200 text-sm">
                                             <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500" />
                                             <span>
-                                                <strong>Perhatian:</strong> Hasil scan mungkin kurang akurat (Confidence Score: {(scanConfidence * 100).toFixed(0)}%). 
+                                                <strong>Perhatian:</strong> Hasil scan mungkin kurang akurat (Confidence Score: {(scanConfidence * 100).toFixed(0)}%).
                                                 Mohon periksa kembali kesesuaian data di bawah ini.
                                             </span>
                                         </div>
@@ -466,7 +466,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
                     <div className="flex-1 space-y-3">
                         <label className="block text-sm font-bold text-slate-700">Lampirkan foto/dokumen (Opsional)</label>
                         <div className="flex items-center gap-3">
-                            <button 
+                            <button
                                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-sm text-slate-700 font-bold flex items-center gap-2 transition-colors"
                                 onClick={() => supportingInputRef.current?.click()}
                             >
@@ -483,8 +483,8 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
                             )}
                         </div>
                         <p className="text-xs text-slate-500 font-medium">
-                            {mode === 'ocr' && sourceFile 
-                                ? "Dokumen OCR di-attach secara otomatis." 
+                            {mode === 'ocr' && sourceFile
+                                ? "Dokumen OCR di-attach secara otomatis."
                                 : "Lampirkan bukti berupa foto, DO, dll."}
                         </p>
                     </div>
@@ -495,7 +495,7 @@ const AddMaterialModal: React.FC<AddMaterialModalProps> = ({ isOpen, onClose, si
                     <button onClick={onClose} className="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">
                         Batal
                     </button>
-                    <button 
+                    <button
                         onClick={handleSave}
                         disabled={validCount === 0}
                         className={clsx(
