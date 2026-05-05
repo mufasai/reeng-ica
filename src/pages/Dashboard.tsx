@@ -12,7 +12,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { 
     sites, activityFeed, people,
     filterTerms, combatTerms, siteMasterRecords, type ProjectType,
-    teamMembersRecords, workOrders, getTerminSummary
+    teamMembersRecords, workOrders, getTerminSummary, atpWorkOrders
 } from '../data/mockData';
 import EngineerHome from './EngineerHome';
 
@@ -46,21 +46,18 @@ const Dashboard = () => {
     // 1. VISIBLE SITES
     // ----------------------------------------------------------------------
     const visibleSites = useMemo(() => {
-        const isRestricted = ['engineer', 'team_leader'].includes(currentUser.role);
+        const isRestricted = ['engineer', 'team_leader'].includes(currentUser?.role ?? '');
         if (!isRestricted) return sites;
-        
+
         const userTeamIds = teamMembersRecords
-            .filter(tm => tm.person_id === currentUser.id)
+            .filter(tm => tm.person_id === (currentUser?.id ?? ''))
             .map(tm => tm.team_id);
-            
+
         return sites.filter(s => {
              const master = siteMasterRecords.find(sm => sm.site_id === s.id);
              if (!master?.work_order_id) return false;
-             
-             // Check if user is in the team assigned to this site
              const wo = workOrders.find(w => w.id === master.work_order_id);
              if (!wo || !wo.assignedTeamId) return false;
-             
              return userTeamIds.includes(wo.assignedTeamId);
         });
     }, [currentUser]);
@@ -69,23 +66,36 @@ const Dashboard = () => {
     // 2. STATUS LAPANGAN (STAGES SUMMARY FROM siteMasterRecords)
     // ----------------------------------------------------------------------
     const stageSummary = useMemo(() => {
-        let survey = 0, menungguPermit = 0, permitReady = 0, aksesReady = 0;
-        let implementasi = 0, prosBast = 0, invoice = 0, issues = 0, selesai = 0;
+        // Derive stage from DB fields: implementasi_status + permit_status
+        let menungguPermit = 0, permitReady = 0;
+        let selesai = 0, cancelled = 0, ongoing = 0;
 
-        siteMasterRecords.forEach(master => {
-            const stage = master.stage || 'imported';
-            if (stage === 'survey') survey++;
-            else if (['assigned', 'permit_process', 'erfin_process', 'erfin_ready'].includes(stage)) menungguPermit++;
-            else if (stage === 'permit_ready') permitReady++;
-            else if (['akses_process', 'akses_ready'].includes(stage)) aksesReady++;
-            else if (['implementasi', 'rfi_done', 'rfs_done'].includes(stage)) implementasi++;
-            else if (['dokumen_done', 'bast'].includes(stage)) prosBast++;
-            else if (stage === 'invoice') invoice++;
-            else if (stage === 'completed') selesai++;
-            if ((stage as string) === 'issue_hold' || (stage as string) === 'survey_nok' || master.stage_notes?.toLowerCase().includes('issue')) issues++;
+        atpWorkOrders.forEach(wo => {
+            const impl = (wo.implementasi_status || '').toUpperCase();
+            const permit = (wo.permit_status || '');
+            if (impl === 'RFS') { selesai++; return; }
+            if (impl === 'CANCELLED') { cancelled++; return; }
+            if (impl === 'ON GOING') { ongoing++; return; }
+            // Awaiting or empty — classify by permit
+            if (permit.startsWith('5.') || permit.startsWith('4.')) permitReady++;
+            else if (permit.startsWith('9.')) cancelled++;
+            else menungguPermit++;
         });
-        return { survey, menungguPermit, permitReady, aksesReady, implementasi, prosBast, invoice, issues, selesai, total: siteMasterRecords.length };
-    }, []);
+
+        return {
+            survey: 0,
+            menungguPermit,
+            permitReady,
+            aksesReady: 0,
+            implementasi: ongoing,
+            prosBast: 0,
+            invoice: 0,
+            issues: 0,
+            selesai,
+            cancelled,
+            total: atpWorkOrders.length
+        };
+    }, [atpWorkOrders.length]);
 
     // ----------------------------------------------------------------------
     // 3. FINANCIAL SUMMARY
@@ -133,50 +143,51 @@ const Dashboard = () => {
     ];
 
     const getTypeSummary = (type: ProjectType) => {
-        const typeMasterSites = siteMasterRecords.filter(sm => sm.project_type === type);
-        const importedCount = typeMasterSites.length;
+        // Match against atpWorkOrders which come directly from DB
+        const dbType = type === 'FILTER' ? ['FILTERING', 'FILTER'] : [type];
+        const wos = atpWorkOrders.filter(w => dbType.includes((w.project_type || '').toUpperCase()));
+        // De-dup by site_id for unique site count
+        const uniqueSiteIds = new Set(wos.map(w => w.site_id));
+        const importedCount = uniqueSiteIds.size;
 
-        let awal = 0;
-        let permit = 0;
-        let akses = 0;
-        let impl = 0;
-        let selesai = 0;
-        typeMasterSites.forEach(s => {
-           const st = s.stage as string;
-           if (['imported', 'assigned'].includes(st)) awal++;
-           else if (['permit_process', 'permit_ready'].includes(st)) permit++;
-           else if (['akses_process', 'akses_ready'].includes(st)) akses++;
-           else if (['implementasi', 'rfi_done', 'rfs_done', 'dokumen_done', 'bast', 'invoice'].includes(st)) impl++;
-           else if (st === 'completed') selesai++;
+        let permit = 0, impl = 0, selesai = 0, awaiting = 0;
+        wos.forEach(w => {
+            const s = (w.implementasi_status || '').toUpperCase();
+            if (s === 'RFS') selesai++;
+            else if (s === 'ON GOING') impl++;
+            else if (s === 'AWAITING') awaiting++;
+            if ((w.permit_status || '').startsWith('5.')) permit++;
         });
 
-        return { importedCount, awal, permit, akses, impl, selesai };
+        return { importedCount, awal: awaiting, permit, akses: 0, impl, selesai };
     };
 
     // ----------------------------------------------------------------------
     // 5. LEFT COLUMN: BUTUH TINDAKAN SEGERA
     // ----------------------------------------------------------------------
     const actionNeededList = useMemo(() => {
-        let items: any[] = [];
-        siteMasterRecords.forEach(s => {
-            const daysDiff = s.stage_updated_at ? Math.floor((Date.now() - new Date(s.stage_updated_at).getTime()) / 86400000) : 0;
-            if (daysDiff > 14 || (s.stage as string) === 'issue_hold' || (s.stage as string) === 'survey_nok' || s.stage_notes?.toLowerCase().includes('issue')) {
-                let displayTitle = s.stage_notes || `${s.stage?.replace('_', ' ')} > 14 hari`;
-                if ((s.stage as string) === 'survey_nok') {
-                    displayTitle = s.stage_notes || 'Survey NOK - Butuh Update/Cancel';
-                }
-                
+        // Flag sites with problematic permit status or awaiting impl with expired/cancelled permits
+        const items: any[] = [];
+        const seen = new Set<string>();
+        atpWorkOrders.forEach(wo => {
+            if (seen.has(wo.site_id)) return;
+            const permit = (wo.permit_status || '');
+            const impl   = (wo.implementasi_status || '').toUpperCase();
+            const isIssue = permit.startsWith('6.') || // Expired permit
+                            (impl === 'AWAITING' && permit.startsWith('9.')); // Awaiting but cancelled permit
+            if (isIssue) {
+                seen.add(wo.site_id);
                 items.push({
-                    id: s.site_id,
-                    siteName: s.site_name,
-                    type: s.project_type,
-                    title: displayTitle,
-                    link: `/all-sites`
+                    id: wo.site_id,
+                    siteName: wo.site_name || wo.site_id,
+                    type: wo.project_type,
+                    title: permit.startsWith('6.') ? 'Expired Permit — butuh perpanjangan' : 'Permit Cancelled tapi masih Awaiting',
+                    link: `/sites/${wo.site_id}`
                 });
             }
         });
-        return items.slice(0, 5);
-    }, []);
+        return items.slice(0, 8);
+    }, [atpWorkOrders.length]);
 
     // ----------------------------------------------------------------------
     // 6. RIGHT COLUMN: PENGAJUAN MENUNGGU APPROVAL (Director View)
@@ -203,6 +214,33 @@ const Dashboard = () => {
         return list;
     }, [visibleSites]);
 
+    // ----------------------------------------------------------------------
+    // 6. SUMMARY MONITORING DATA (live from atpWorkOrders)
+    // ----------------------------------------------------------------------
+    const summaryData = useMemo(() => {
+        const byType: Record<string, { rfs: number; awaiting: number; ongoing: number; cancelled: number; total: number }> = {};
+
+        atpWorkOrders.forEach(w => {
+            const type = (w.project_type || 'FILTERING').toUpperCase();
+            const impl = (w.implementasi_status || '').toUpperCase();
+            if (!byType[type]) byType[type] = { rfs: 0, awaiting: 0, ongoing: 0, cancelled: 0, total: 0 };
+            byType[type].total++;
+            if (impl === 'RFS') byType[type].rfs++;
+            else if (impl === 'AWAITING') byType[type].awaiting++;
+            else if (impl === 'ON GOING') byType[type].ongoing++;
+            else if (impl === 'CANCELLED') byType[type].cancelled++;
+        });
+
+        const totalAll    = Object.values(byType).reduce((s, v) => s + v.total,     0);
+        const rfsAll      = Object.values(byType).reduce((s, v) => s + v.rfs,       0);
+        const awaitAll    = Object.values(byType).reduce((s, v) => s + v.awaiting,  0);
+        const cancAll     = Object.values(byType).reduce((s, v) => s + v.cancelled, 0);
+        const ongoAll     = Object.values(byType).reduce((s, v) => s + v.ongoing,   0);
+        const filterTotal = (byType['FILTERING'] || byType['FILTER'])?.total || 0;
+
+        return { byType, totalAll, rfsAll, awaitAll, cancAll, ongoAll, filterTotal };
+    }, [atpWorkOrders.length]);
+
     return (
         <div className="space-y-6 pb-16 animate-in fade-in duration-300">
             {/* ROW 1: HEADER (compact, no greeting) */}
@@ -214,7 +252,7 @@ const Dashboard = () => {
                         <p className="text-[13px] text-[#6B7280]">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     </div>
                     <div className="px-3 py-1 bg-[#EFF6FF] text-[#1D4ED8] text-[11px] rounded-full uppercase font-semibold tracking-wider">
-                        {currentUser.role.replace('_', ' ')}
+                        {currentUser?.role.replace('_', ' ')}
                     </div>
                 </div>
             </div>
@@ -257,6 +295,8 @@ const Dashboard = () => {
                 </div>
             )}
 
+
+
             {/* TAB CONTENT: OVERVIEW */}
             {activeTab === 'overview' && (
                 <div className="space-y-8 animate-in fade-in duration-300 mt-6">
@@ -266,29 +306,20 @@ const Dashboard = () => {
                         <h3 className="text-[11px] font-semibold text-[#9CA3AF] tracking-[0.08em] uppercase mb-4">
                             Status Lapangan
                         </h3>
-                        <div className="grid grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2">
+                        <div className="grid grid-cols-3 md:grid-cols-5 xl:grid-cols-6 gap-2">
                             {([
-                                { label: ['Proses','Survey'],    count: stageSummary.survey,        nav: '/sites?tab=data&stage=survey',                                               grad: 'linear-gradient(135deg,#06B6D4,#0891B2)', shadow: 'rgba(6,182,212,0.35)',    pulse: false },
-                                { label: ['Menunggu','Permit'],  count: stageSummary.menungguPermit, nav: '/sites?tab=data&stage=assigned,permit_process,erfin_process,erfin_ready', grad: 'linear-gradient(135deg,#64748B,#475569)', shadow: 'rgba(71,85,105,0.35)',   pulse: false },
-                                { label: ['Permit','Ready'],     count: stageSummary.permitReady,    nav: '/sites?tab=data&stage=permit_ready',                                        grad: 'linear-gradient(135deg,#F59E0B,#D97706)', shadow: 'rgba(245,158,11,0.4)', pulse: false },
-                                { label: ['Akses','Ready'],      count: stageSummary.aksesReady,     nav: '/sites?tab=data&stage=akses_process,akses_ready',                           grad: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', shadow: 'rgba(59,130,246,0.4)',  pulse: false },
-                                { label: ['Imple-','mentasi'],   count: stageSummary.implementasi,   nav: '/sites?tab=data&stage=implementasi,rfi_done,rfs_done',                      grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', shadow: 'rgba(139,92,246,0.4)', pulse: false },
-                                { label: ['Proses','BAST'],      count: stageSummary.prosBast,       nav: '/sites?tab=data&stage=dokumen_done,bast',                                   grad: 'linear-gradient(135deg,#F97316,#EA580C)', shadow: 'rgba(249,115,22,0.4)', pulse: false },
-                                { label: ['Invoice',''],         count: stageSummary.invoice,        nav: '/sites?tab=data&stage=invoice',                                             grad: 'linear-gradient(135deg,#0EA5E9,#0284C7)', shadow: 'rgba(14,165,233,0.4)', pulse: false },
-                                { label: ['Issue','⚡ Hold'],    count: stageSummary.issues,         nav: '/sites?tab=data&has_issue=true',                                            grad: 'linear-gradient(135deg,#F87171,#DC2626)', shadow: 'rgba(239,68,68,0.4)',   pulse: true  },
-                                { label: ['Selesai','✓ Done'],   count: stageSummary.selesai,        nav: '/sites?tab=data&stage=completed',                                           grad: 'linear-gradient(135deg,#34D399,#059669)', shadow: 'rgba(16,185,129,0.4)', pulse: false },
+                                { label: ['Menunggu','Permit'],  count: stageSummary.menungguPermit, nav: '/sites?tab=pekerjaan', grad: 'linear-gradient(135deg,#64748B,#475569)', shadow: 'rgba(71,85,105,0.35)',   pulse: false },
+                                { label: ['Permit','Ready'],     count: stageSummary.permitReady,    nav: '/sites?tab=pekerjaan', grad: 'linear-gradient(135deg,#F59E0B,#D97706)', shadow: 'rgba(245,158,11,0.4)', pulse: false },
+                                { label: ['On','Going'],         count: stageSummary.implementasi,   nav: '/sites?tab=pekerjaan', grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', shadow: 'rgba(139,92,246,0.4)', pulse: false },
+                                { label: ['RFS','✓ Done'],       count: stageSummary.selesai,        nav: '/sites?tab=pekerjaan', grad: 'linear-gradient(135deg,#34D399,#059669)', shadow: 'rgba(16,185,129,0.4)', pulse: false },
+                                { label: ['Cancelled',''],       count: stageSummary.cancelled,      nav: '/sites?tab=pekerjaan', grad: 'linear-gradient(135deg,#F87171,#DC2626)', shadow: 'rgba(239,68,68,0.4)',   pulse: false },
+                                { label: ['Total','Sites'],      count: stageSummary.total,          nav: '/sites?tab=pekerjaan', grad: 'linear-gradient(135deg,#2563EB,#1D4ED8)', shadow: 'rgba(37,99,235,0.4)',  pulse: false },
                             ] as const).map((card, i) => (
                                 <div key={i}
                                     onClick={() => navigate(card.nav)}
                                     className={clsx('relative rounded-xl p-3 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition-all duration-200 overflow-hidden', card.count === 0 && 'opacity-60')}
                                     style={{ background: card.grad, boxShadow: `0 4px 14px ${card.shadow}` }}
                                 >
-                                    {card.pulse && card.count > 0 && (
-                                        <span className="absolute top-2 right-2 flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-                                        </span>
-                                    )}
                                     <div className="absolute -right-2 -bottom-2 text-white/10 text-[56px] font-black leading-none select-none pointer-events-none">{card.count}</div>
                                     <p className="text-white/80 text-[9px] font-semibold uppercase tracking-[0.07em] mb-1.5 leading-tight">{card.label[0]}<br/>{card.label[1]}</p>
                                     <p className="text-white text-[28px] font-black leading-none">{card.count}</p>
@@ -397,38 +428,31 @@ const Dashboard = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
                         {/* CHART 1: Pipeline Distribution */}
                         <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
-                            <h3 className="font-bold text-[14px] text-[#111827] mb-4">Distribusi Status Site</h3>
+                            <h3 className="font-bold text-[14px] text-[#111827] mb-4">Distribusi Implementasi Status</h3>
                             <div className="h-[250px] w-full min-h-[250px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={[
                                                 { name: 'Menunggu Permit', value: stageSummary.menungguPermit, color: '#64748B' },
-                                                { name: 'Permit Ready', value: stageSummary.permitReady, color: '#F59E0B' },
-                                                { name: 'Akses Ready', value: stageSummary.aksesReady, color: '#3B82F6' },
-                                                { name: 'Implementasi', value: stageSummary.implementasi, color: '#8B5CF6' },
-                                                { name: 'Proses BAST', value: stageSummary.prosBast, color: '#F97316' },
-                                                { name: 'Selesai', value: stageSummary.selesai, color: '#10B981' }
+                                                { name: 'Permit Ready',    value: stageSummary.permitReady,    color: '#F59E0B' },
+                                                { name: 'On Going',        value: stageSummary.implementasi,   color: '#8B5CF6' },
+                                                { name: 'RFS',             value: stageSummary.selesai,         color: '#10B981' },
+                                                { name: 'Cancelled',       value: stageSummary.cancelled,      color: '#EF4444' }
                                             ].filter(d => d.value > 0)}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={90}
-                                            paddingAngle={2}
+                                            cx="50%" cy="50%"
+                                            innerRadius={60} outerRadius={90} paddingAngle={2}
                                             dataKey="value"
                                         >
-                                            {
-                                                [
-                                                    { name: 'Menunggu Permit', value: stageSummary.menungguPermit, color: '#64748B' },
-                                                    { name: 'Permit Ready', value: stageSummary.permitReady, color: '#F59E0B' },
-                                                    { name: 'Akses Ready', value: stageSummary.aksesReady, color: '#3B82F6' },
-                                                    { name: 'Implementasi', value: stageSummary.implementasi, color: '#8B5CF6' },
-                                                    { name: 'Proses BAST', value: stageSummary.prosBast, color: '#F97316' },
-                                                    { name: 'Selesai', value: stageSummary.selesai, color: '#10B981' }
-                                                ].filter(d => d.value > 0).map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                ))
-                                            }
+                                            {[
+                                                { name: 'Menunggu Permit', value: stageSummary.menungguPermit, color: '#64748B' },
+                                                { name: 'Permit Ready',    value: stageSummary.permitReady,    color: '#F59E0B' },
+                                                { name: 'On Going',        value: stageSummary.implementasi,   color: '#8B5CF6' },
+                                                { name: 'RFS',             value: stageSummary.selesai,         color: '#10B981' },
+                                                { name: 'Cancelled',       value: stageSummary.cancelled,      color: '#EF4444' }
+                                            ].filter(d => d.value > 0).map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
                                         </Pie>
                                         <RechartsTooltip formatter={(value) => [`${value} Sites`, 'Jumlah']} />
                                         <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
@@ -466,6 +490,109 @@ const Dashboard = () => {
                                         <Bar dataKey="Selesai" stackId="a" fill="#10B981" radius={[4, 4, 0, 0]} />
                                     </BarChart>
                                 </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SUMMARY MONITORING SECTION (embedded in overview) */}
+                    <div>
+                        <h3 className="text-[11px] font-semibold text-[#9CA3AF] tracking-[0.08em] uppercase mb-4 mt-2">Summary Monitoring</h3>
+                        <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden">
+                            {/* Dark header */}
+                            <div className="bg-[#161b22] px-6 py-4 flex justify-between items-center">
+                                <div>
+                                    <p className="text-[#58a6ff] text-[10px] font-mono font-semibold uppercase tracking-widest">SST Team · R03 Jakarta &amp; Banten</p>
+                                    <p className="text-[#e6edf3] font-bold text-[15px] mt-0.5">Monitoring Project Re-Engineering</p>
+                                </div>
+                                <div className="text-right font-mono text-[10px] text-[#8b949e]">
+                                    <p>Total: {summaryData.totalAll} Sites</p>
+                                    <p>{new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                                </div>
+                            </div>
+                            {/* TABLE 01 */}
+                            <div className="p-5 border-b border-slate-100">
+                                <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#6B7280] mb-3">TABLE 01 — Implementasi Status per Project Type</p>
+                                <div className="overflow-x-auto rounded-lg border border-slate-100">
+                                    <table className="w-full text-sm bg-white">
+                                        <thead><tr className="bg-slate-50">
+                                            <th className="text-left px-3 py-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-slate-500">Total</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-[#10B981]">RFS</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-[#F59E0B]">Awaiting</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-[#8B5CF6]">On Going</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-[#EF4444]">Cancelled</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-slate-500">% RFS</th>
+                                        </tr></thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {Object.entries(summaryData.byType).sort((a,b) => b[1].total - a[1].total).map(([type, v]) => {
+                                                const tc = type==='COMBAT'?'#E67E22':type.includes('FILTER')?'#2563EB':type==='RESCOPING'?'#7C3AED':'#374151';
+                                                const pct = v.total > 0 ? ((v.rfs/v.total)*100).toFixed(0) : '0';
+                                                return (<tr key={type} className="hover:bg-slate-50">
+                                                    <td className="px-3 py-2.5 font-bold text-[13px]" style={{color:tc}}>{type}</td>
+                                                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111827]">{v.total}</td>
+                                                    <td className="px-3 py-2.5 text-right font-mono text-[#10B981] font-semibold">{v.rfs||'—'}</td>
+                                                    <td className="px-3 py-2.5 text-right font-mono text-[#F59E0B]">{v.awaiting||'—'}</td>
+                                                    <td className="px-3 py-2.5 text-right font-mono text-[#8B5CF6]">{v.ongoing||'—'}</td>
+                                                    <td className="px-3 py-2.5 text-right font-mono text-[#EF4444]">{v.cancelled||'—'}</td>
+                                                    <td className="px-3 py-2.5 text-right"><span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded" style={{background:Number(pct)>=50?'rgba(16,185,129,0.1)':'rgba(245,158,11,0.1)',color:Number(pct)>=50?'#059669':'#D97706'}}>{pct}%</span></td>
+                                                </tr>);
+                                            })}
+                                            <tr className="bg-slate-50 border-t-2 border-slate-200">
+                                                <td className="px-3 py-2.5 font-bold text-[#111827]">Grand Total</td>
+                                                <td className="px-3 py-2.5 text-right font-mono font-bold text-[#111827]">{summaryData.totalAll}</td>
+                                                <td className="px-3 py-2.5 text-right font-mono font-bold text-[#10B981]">{summaryData.rfsAll}</td>
+                                                <td className="px-3 py-2.5 text-right font-mono font-bold text-[#F59E0B]">{summaryData.awaitAll}</td>
+                                                <td className="px-3 py-2.5 text-right font-mono font-bold text-[#8B5CF6]">{summaryData.ongoAll}</td>
+                                                <td className="px-3 py-2.5 text-right font-mono font-bold text-[#EF4444]">{summaryData.cancAll}</td>
+                                                <td className="px-3 py-2.5 text-right font-mono font-bold text-[#2563EB]">{summaryData.totalAll>0?((summaryData.rfsAll/summaryData.totalAll)*100).toFixed(0):0}%</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {/* TABLE 02 + 03 side by side */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-x divide-slate-100">
+                                <div className="p-5">
+                                    <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#6B7280] mb-3">TABLE 02 — Permit Status</p>
+                                    <table className="w-full text-sm bg-white">
+                                        <thead><tr className="bg-slate-50">
+                                            <th className="text-left px-3 py-2 text-[11px] font-bold text-slate-500">Permit Status</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-slate-500">Sites</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-slate-500">%</th>
+                                        </tr></thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {(() => { const g: Record<string,number>={}; atpWorkOrders.forEach(w=>{const k=w.permit_status||'(blank)';g[k]=(g[k]||0)+1;}); return Object.entries(g).sort((a,b)=>b[1]-a[1]).map(([ps,cnt])=>{
+                                                const pct=summaryData.totalAll>0?((cnt/summaryData.totalAll)*100).toFixed(1):'0';
+                                                return(<tr key={ps} className="hover:bg-slate-50">
+                                                    <td className="px-3 py-2 text-[12px] text-[#374151] font-medium">{ps}</td>
+                                                    <td className="px-3 py-2 text-right font-mono font-semibold text-[#111827]">{cnt}</td>
+                                                    <td className="px-3 py-2 text-right"><div className="flex items-center justify-end gap-1.5"><div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{width:`${(cnt/summaryData.totalAll)*100}%`}}/></div><span className="text-[11px] font-mono text-[#6B7280] w-9 text-right">{pct}%</span></div></td>
+                                                </tr>);
+                                            })})()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="p-5">
+                                    <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#6B7280] mb-3">TABLE 03 — Status ATP / Tagging</p>
+                                    <table className="w-full text-sm bg-white">
+                                        <thead><tr className="bg-slate-50">
+                                            <th className="text-left px-3 py-2 text-[11px] font-bold text-slate-500">Status ATP</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-slate-500">Sites</th>
+                                            <th className="text-right px-3 py-2 text-[11px] font-bold text-slate-500">%</th>
+                                        </tr></thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {(() => { const g: Record<string,number>={}; atpWorkOrders.forEach(w=>{const k=(w.status_atp||'(blank)').toUpperCase();g[k]=(g[k]||0)+1;}); return Object.entries(g).sort((a,b)=>b[1]-a[1]).map(([s,cnt])=>{
+                                                const c=s.includes('DONE')?'#10B981':s.includes('PDID')?'#F59E0B':s.includes('HOLD')?'#EF4444':'#6B7280';
+                                                const pct=summaryData.totalAll>0?((cnt/summaryData.totalAll)*100).toFixed(1):'0';
+                                                return(<tr key={s} className="hover:bg-slate-50">
+                                                    <td className="px-3 py-2 font-mono text-[11px] font-semibold" style={{color:c}}>{s}</td>
+                                                    <td className="px-3 py-2 text-right font-mono font-semibold text-[#111827]">{cnt}</td>
+                                                    <td className="px-3 py-2 text-right font-mono text-[11px] text-[#6B7280]">{pct}%</td>
+                                                </tr>);
+                                            })})()}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -629,6 +756,9 @@ const Dashboard = () => {
                         </div>
 
                     </div>
+
+
+
                 </div>
             )}
         </div>

@@ -51,7 +51,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
       setSortConfig({ key, direction });
   };
 
-  const canBulkAction = ['operational', 'admin'].includes(currentUser.role);
+  const canBulkAction = ['operational', 'admin'].includes(currentUser?.role ?? '');
   const [selectedSiteIds, setSelectedSiteIds] = useState<Set<string>>(new Set());
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>, visibleSiteIds: string[]) => {
@@ -71,7 +71,7 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
   };
 
   // Column visibility
-  const { visibilityMap, handleVisibilityChange, resetToDefault, col, currentCols } = useTableColumns(currentUser.id);
+  const { visibilityMap, handleVisibilityChange, resetToDefault, col, currentCols } = useTableColumns(currentUser?.id ?? 'guest');
   
   const toggleRow = (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
@@ -120,14 +120,14 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
   // RBAC Filter: Which sites can I see?
   const visibleSites = useMemo(() => {
       return sites.filter(site => {
-        if (currentUser.role !== 'field') return true;
+        if (currentUser?.role !== 'field') return true;
         if (!site.work_order_id) return false;
         
         // Check if user is in the team assigned to this site
         const wo = workOrders.find(w => w.id === site.work_order_id);
         if (!wo || !wo.assignedTeamId) return false;
 
-        const isMember = teamMembersRecords.some(tm => tm.team_id === wo.assignedTeamId && tm.person_id === currentUser.id);
+        const isMember = teamMembersRecords.some(tm => tm.team_id === wo.assignedTeamId && tm.person_id === currentUser?.id);
         return isMember;
       });
   }, [sites, currentUser]);

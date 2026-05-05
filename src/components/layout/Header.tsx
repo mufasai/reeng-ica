@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Menu, Mail, Search, MapPin, Copy, Check } from 'lucide-react';
+import { Bell, Menu, Mail, Search, MapPin, Copy, Check, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { siteMasterRecords, atpWorkOrders, activityFeed } from '../../data/mockData';
 import { useTabContext } from '../../context/TabContext';
+import { useAuth } from '../../context/AuthContext';
 import clsx from 'clsx';
 
 const Header = () => {
   const navigate = useNavigate();
   const { openTab } = useTabContext();
+  const { currentUser, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -260,14 +262,21 @@ const Header = () => {
        
         <div className="h-8 w-px bg-[var(--glass-border)] mx-2"></div>
 
-        <div className="flex items-center gap-3 cursor-pointer">
+        <div className="flex items-center gap-3">
             <div className="text-right hidden md:block">
-                <p className="text-sm font-semibold text-[var(--text-primary)] leading-tight">Administrator</p>
-                <p className="text-xs text-[var(--text-secondary)]">admin@appwork.com</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)] leading-tight">{currentUser?.name || 'Guest'}</p>
+                <p className="text-xs text-[var(--text-secondary)]">{currentUser?.email || ''}</p>
             </div>
             <div className="w-9 h-9 bg-[var(--glass-bg)] rounded-full overflow-hidden border border-[var(--glass-border)]">
-                <img src="https://ui-avatars.com/api/?name=Administrator&background=1E2D45&color=fff" alt="Profile" />
+                <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.name || 'U')}&background=2563eb&color=fff`} alt="Profile" />
             </div>
+            <button
+                onClick={() => { logout(); navigate('/'); }}
+                title="Keluar"
+                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            >
+                <LogOut className="w-4 h-4" />
+            </button>
         </div>
       </div>
     </header>

@@ -1,70 +1,49 @@
-
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { type User, USERS, type UserRole, teams, projects, type Project } from '../data/mockData';
 
-// ─── Final Confirmed RBAC Permission Matrix (March 2026) ───────────────────────
+// ─── RBAC Permission Matrix ─────────────────────────────────────────────────
 const PERMISSIONS: Record<string, UserRole[]> = {
-  // ─── DASHBOARD ──────────────────────────────────────────────────────────────
-  'dashboard.view':               ['director', 'operational', 'admin', 'finance', 'field'],
-  'dashboard.status_lapangan':    ['director', 'operational', 'admin', 'finance', 'field'],
-  'dashboard.financial_kpi':      ['director', 'operational', 'admin', 'finance'],
-  'dashboard.butuh_tindakan':     ['director', 'operational', 'admin', 'finance', 'field'],
-  'dashboard.pengajuan_review':   ['director', 'operational', 'admin', 'finance'],
-  'dashboard.peta_sites':         ['director', 'operational', 'admin', 'finance', 'field'],
-  'dashboard.aktivitas_terbaru':  ['director', 'operational', 'admin', 'finance'],
+  // DASHBOARD
+  'dashboard.view':               ['director', 'operational', 'admin', 'finance', 'field', 'management', 'backoffice'],
+  'dashboard.financial_kpi':      ['director', 'operational', 'admin', 'finance', 'management'],
+  'dashboard.pengajuan_review':   ['director', 'operational', 'admin', 'finance', 'management'],
 
-  // ─── SITES ──────────────────────────────────────────────────────────────────
-  // Note: field role sees only their team's sites (enforced separately by team_id filter)
-  'site.view_list':               ['director', 'operational', 'admin', 'finance'],
-  'site.view_import_history':     ['director', 'operational', 'admin', 'finance'],
-  'site.view_detail':             ['director', 'operational', 'admin', 'finance'],
-  'site.update_stage':            ['director', 'operational', 'admin', 'finance'],
+  // SITES
+  'site.view_list':               ['director', 'operational', 'admin', 'finance', 'management', 'backoffice'],
+  'site.view_detail':             ['director', 'operational', 'admin', 'finance', 'management', 'backoffice'],
+  'site.update_stage':            ['director', 'operational', 'admin'],
   'site.bulk_update':             ['director', 'operational', 'admin'],
-  'site.import_boq':              ['director', 'operational', 'admin'],
-  'site.import_review':           ['operational', 'admin'],
   'site.edit_data':               ['director', 'operational', 'admin'],
   'site.delete':                  ['operational'],
   'site.assign_team':             ['operational', 'admin'],
 
-  // ─── STAGE-SPECIFIC ─────────────────────────────────────────────────────────
-  'stage.imported_to_assigned':   ['operational', 'admin'],
-  'stage.assigned_to_permit':     ['operational', 'admin'],
-  'stage.permit_to_akses':        ['operational', 'admin'],
-  'stage.akses_to_implementasi':  ['operational', 'admin'],
+  // STAGE-SPECIFIC
   'stage.update_cico_rfi_rfs':    ['operational', 'admin'],
-  'stage.dokumen_to_bast':        ['operational', 'admin'],
-  'stage.bast_to_invoice':        ['operational', 'admin'],
-  'stage.report_issue':           ['operational', 'admin'],
+  'stage.report_issue':           ['operational', 'admin', 'field'],
 
-  // ─── MATERIAL ───────────────────────────────────────────────────────────────
-  // Note: field role sees own site only (enforced separately)
-  'material.view':                ['director', 'operational', 'admin', 'finance'],
+  // MATERIAL
+  'material.view':                ['director', 'operational', 'admin', 'finance', 'management'],
   'material.add':                 ['operational', 'admin'],
-  'material.edit_status':         ['operational', 'admin'],
 
-  // ─── FINANCIAL ──────────────────────────────────────────────────────────────
-  'financial.view_termin_status': ['director', 'operational', 'admin', 'finance'],
-  'financial.view_rp_amounts':    ['director', 'operational', 'admin', 'finance'],
-  'financial.submit_pengajuan':   ['operational', 'admin'],
-  'financial.approve_pengajuan':  ['director', 'finance'],
-  'financial.reject_pengajuan':   ['director', 'finance'],
-  'financial.mark_paid':          ['finance'],
+  // FINANCIAL / PEMBAYARAN
+  'financial.view_termin_status': ['director', 'operational', 'admin', 'finance', 'management'],
+  'financial.view_rp_amounts':    ['director', 'operational', 'admin', 'finance', 'management'],
+  'financial.submit_pengajuan':   ['operational', 'admin'],         // create payment request
+  'financial.approve_pengajuan':  ['director'],                     // director approves
+  'financial.reject_pengajuan':   ['director'],
+  'financial.mark_paid':          ['finance'],                      // finance sends receipt
 
-  // ─── PEOPLE & TEAMS ─────────────────────────────────────────────────────────
-  'people.view':                  ['director', 'operational', 'admin'],
-  'teams.view':                   ['director', 'operational', 'admin'],
+  // PEOPLE & TEAMS
+  'people.view':                  ['director', 'operational', 'admin', 'management'],
+  'teams.view':                   ['director', 'operational', 'admin', 'management'],
   'people.manage':                ['director', 'operational', 'admin'],
-  'teams.manage':                 ['director', 'operational', 'admin'],
-  'people.delete':                ['director', 'operational'],
 
-  // ─── SYSTEM ─────────────────────────────────────────────────────────────────
-  'system.options':               ['director', 'operational', 'admin'],
-  'system.manage_users':          ['director', 'operational', 'admin'],
-  'system.assign_roles':          ['director', 'operational', 'admin'],
+  // SYSTEM
+  'system.manage_users':          ['director', 'admin'],
 
-  // ─── LEGACY KEYS (backward compat with existing can() call-sites) ───────────
-  'view_dashboard_all':           ['director', 'operational', 'admin', 'finance'],
-  'view_financials':              ['director', 'operational', 'admin', 'finance'],
+  // Legacy keys (backward compat)
+  'view_dashboard_all':           ['director', 'operational', 'admin', 'finance', 'management'],
+  'view_financials':              ['director', 'operational', 'admin', 'finance', 'management'],
   'upload_evidence':              ['field', 'operational', 'admin'],
   'upload_docs':                  ['operational', 'admin'],
   'submit_request':               ['operational', 'admin'],
@@ -72,11 +51,14 @@ const PERMISSIONS: Record<string, UserRole[]> = {
   'process_payment':              ['finance'],
   'manage_data':                  ['operational', 'admin'],
   'edit_project':                 ['operational', 'admin'],
-  'export_data':                  ['director', 'operational', 'admin', 'finance'],
+  'export_data':                  ['director', 'operational', 'admin', 'finance', 'management'],
 };
 
 interface AuthContextType {
-  currentUser: User;
+  currentUser: User | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => { success: boolean; error?: string };
+  logout: () => void;
   switchRole: (role: UserRole) => void;
   can: (action: string) => boolean;
   hasRole: (...roles: UserRole[]) => boolean;
@@ -85,40 +67,68 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SESSION_KEY = 'smartelco_session_user_id';
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [currentUser, setCurrentUser] = useState<User>(
-    USERS.find(u => u.role === 'director') || USERS[0]
-  );
+  // Restore session from localStorage
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const savedId = localStorage.getItem(SESSION_KEY);
+    if (savedId) {
+      return USERS.find(u => u.id === savedId) || null;
+    }
+    return null;
+  });
+
+  const isAuthenticated = currentUser !== null;
+
+  const login = (email: string, password: string) => {
+    const user = USERS.find(
+      u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+    );
+    if (!user) {
+      return { success: false, error: 'Email atau password salah.' };
+    }
+    setCurrentUser(user);
+    localStorage.setItem(SESSION_KEY, user.id);
+    return { success: true };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem(SESSION_KEY);
+  };
 
   const switchRole = (role: UserRole) => {
     const user = USERS.find(u => u.role === role);
-    if (user) setCurrentUser(user);
+    if (user) {
+      setCurrentUser(user);
+      localStorage.setItem(SESSION_KEY, user.id);
+    }
   };
 
-  /** Check if the current user has a specific permission key */
   const can = (action: string): boolean => {
+    if (!currentUser) return false;
     const allowed = PERMISSIONS[action];
     if (!allowed) return false;
     return allowed.includes(currentUser.role);
   };
 
-  /** Check if the current user's role is any of the provided roles */
-  const hasRole = (...roles: UserRole[]): boolean =>
-    roles.includes(currentUser.role);
+  const hasRole = (...roles: UserRole[]): boolean => {
+    if (!currentUser) return false;
+    return roles.includes(currentUser.role);
+  };
 
   const getVisibleProjects = () => {
-    // Director, Admin, Finance, Operational see ALL active projects
-    if (['director', 'admin', 'finance', 'operational'].includes(currentUser.role)) {
+    if (!currentUser) return [];
+    if (['director', 'admin', 'finance', 'operational', 'management', 'backoffice'].includes(currentUser.role)) {
       return projects.filter(p => p.status === 'active');
     }
-    // Field: only projects their team is assigned to
-    const userTeams = teams.filter(t => t.members.some(m => m.personId === currentUser.id));
-    const projectIds = userTeams.map(t => t.projectId);
-    return projects.filter(p => p.status === 'active' && projectIds.includes(p.id));
+    const userTeams = teams.filter(t => t.members?.some(m => m.person_id === currentUser.id));
+    return projects.filter(p => p.status === 'active');
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, switchRole, can, hasRole, getVisibleProjects }}>
+    <AuthContext.Provider value={{ currentUser, isAuthenticated, login, logout, switchRole, can, hasRole, getVisibleProjects }}>
       {children}
     </AuthContext.Provider>
   );

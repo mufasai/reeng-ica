@@ -428,21 +428,26 @@ export const files: ProjectFile[] = [
     { id: 'f3', projectId: 'p2', title: 'Combat Drill Manual', originalName: 'manual_v1.pdf', size: '5.1 MB', type: 'PDF', uploadedAt: '2024-02-01', uploadedBy: 'u_lead' },
 ];
 
-export type UserRole = 'director' | 'operational' | 'admin' | 'finance' | 'field';
+export type UserRole = 'director' | 'operational' | 'admin' | 'finance' | 'field' | 'management' | 'backoffice';
 
 export interface User {
     id: string;
     name: string;
+    email: string;
+    password: string;
     role: UserRole;
     avatar?: string;
 }
 
 export const USERS: User[] = [
-    { id: 'u_field', name: 'Field Engineer', role: 'field' },
-    { id: 'u_ops', name: 'Operational Staff', role: 'operational' },
-    { id: 'u_fin', name: 'Finance Staff', role: 'finance' },
-    { id: 'u_dir', name: 'Director', role: 'director' },
-    { id: 'u_adm', name: 'Admin Backoffice', role: 'admin' },
+    { id: 'u_dipo',       name: 'Dipo SST',           email: 'dipo@smartelco.com',        password: 'diposst123',   role: 'director' },
+    { id: 'u_dir',       name: 'Direktur',            email: 'direktur@smartelco.com',    password: 'direktur123',  role: 'director' },
+    { id: 'u_mgmt',      name: 'Management',          email: 'management@smartelco.com',  password: 'mgmt123',      role: 'management' },
+    { id: 'u_fin',       name: 'Finance Staff',       email: 'finance@smartelco.com',     password: 'finance123',   role: 'finance' },
+    { id: 'u_test',      name: 'Test User',           email: 'test@smartelco.com',        password: 'test123',      role: 'field' },
+    { id: 'u_backoffice',name: 'Back Office',         email: 'backoffice@smartelco.com',  password: 'backoffice123',role: 'backoffice' },
+    { id: 'u_john',      name: 'John',                email: 'john@smartelco.com',        password: '123456',       role: 'operational' },
+    { id: 'u_adm',       name: 'Admin',               email: 'admin@smartelco.com',       password: 'admin123',     role: 'admin' },
 ];
 
 export interface Certification {
@@ -856,7 +861,7 @@ export interface MaterialTransaction {
     raw_data?: Record<string, any>;
 }
 
-export const materialTransactions: MaterialTransaction[] = [
+export let materialTransactions: MaterialTransaction[] = [
     {
         id: 'trx-1',
         material_master_id: 'mm-1',
@@ -1191,7 +1196,7 @@ export interface SiteMaster {
     geom?: string; // Added for consistency
 }
 
-export const siteMasterRecords: SiteMaster[] = [
+export let siteMasterRecords: SiteMaster[] = [
     {
         id: 'sm-rs001',
         unique_key: 'JKS-RESP-01',
@@ -2155,7 +2160,7 @@ export interface SiteTechnicalDetail {
 }
 
 // Seed with realistic demo data for testing
-export const siteTechnicalDetails: SiteTechnicalDetail[] = [
+export let siteTechnicalDetails: SiteTechnicalDetail[] = [
     // 6 rows for first mock site: 2 layers (ML + MR) × 3 sectors
     { id: 'tech-001', site_id: 'BKS001', ne_id: 'BKS001MT1', layer: 'ML', sector: 1, freq_band: 'L1800', longitude: 107.015, latitude: -6.215, ant_type: 'ZTE ATR518R14v06', height: 32, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_1800_1', enodeb_id: 50401, cell_id: 1, local_cell_id: 1, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
     { id: 'tech-002', site_id: 'BKS001', ne_id: 'BKS001MT2', layer: 'ML', sector: 2, freq_band: 'L1800', longitude: 107.015, latitude: -6.215, ant_type: 'ZTE ATR518R14v06', height: 32, tp_id: 'TP-BKS001', tp_name: 'TOWER_BERSAMA', cell_name: 'BKS001_1800_2', enodeb_id: 50401, cell_id: 2, local_cell_id: 2, cluster: 'BEKASI_SELATAN', region: 'JABAR', source_file: 'Detail_Site-ID.xlsx', imported_at: new Date().toISOString() },
@@ -2217,6 +2222,20 @@ export interface AtpWorkOrder {
   new_status_implementation?: string;
   prio?: string;
   file_date?: string;
+
+  // DB-populated fields (from sites table via initDB)
+  implementasi_status?: string;
+  site_name?: string;
+  ne_id?: string;
+  status_atp?: string;
+  issue_problem?: string;
+  note_implementasi?: string;
+  tanggal_rfs?: string;
+  note_foto_evidence?: string;
+  ineom_registered?: boolean;
+  tp_name?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface WorkOrderLog {
@@ -2233,7 +2252,7 @@ export const workOrderLogs: WorkOrderLog[] = [
   { id: 'wol-3', work_order_id: 'atp-wo-1', action: 'CI date set to 2026-03-10', user_id: 'u3', timestamp: '2026-03-10T08:30:00Z' }
 ];
 
-export const atpWorkOrders: AtpWorkOrder[] = [
+export let atpWorkOrders: AtpWorkOrder[] = [
   {
     id: 'atp-wo-1',
     site_id: 'JKS509',

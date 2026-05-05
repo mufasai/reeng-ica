@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Monitoring Project Re-Engineering — Summary</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --surface2: #21262d;
+    --border:   #30363d;
+    --accent:   #58a6ff;
+    --green:    #3fb950;
+    --red:      #f85149;
+    --yellow:   #d29922;
+    --orange:   #db6d28;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'IBM Plex Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  /* ── HEADER ─────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header-title { }
+  .header-title .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .header-title h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .header-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .header-meta span { display: block; }
+
+  /* ── MAIN ───────────────────────────────────── */
+  main { padding: 36px 40px; max-width: 1200px; margin: 0 auto; }
+
+  /* ── KPI CARDS ──────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 16px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .kpi-card.total::before  { background: var(--accent); }
+  .kpi-card.rfs::before    { background: var(--green); }
+  .kpi-card.awaiting::before { background: var(--yellow); }
+  .kpi-card.cancelled::before { background: var(--red); }
+  .kpi-card.ongoing::before { background: var(--orange); }
+  .kpi-card.filter::before { background: #a371f7; }
+
+  .kpi-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .kpi-card.total .kpi-value    { color: var(--accent); }
+  .kpi-card.rfs .kpi-value      { color: var(--green); }
+  .kpi-card.awaiting .kpi-value { color: var(--yellow); }
+  .kpi-card.cancelled .kpi-value{ color: var(--red); }
+  .kpi-card.ongoing .kpi-value  { color: var(--orange); }
+  .kpi-card.filter .kpi-value   { color: #a371f7; }
+
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* ── SECTION ─────────────────────────────────── */
+  .section { margin-bottom: 48px; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .section-number {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    letter-spacing: 0.08em;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ── TABLE ───────────────────────────────────── */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  thead th.num { text-align: right; }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+  }
+  tbody td.num {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  tbody td.muted { color: var(--muted); font-style: italic; }
+  tbody td code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--accent);
+  }
+
+  /* Row groups / type rows */
+  .row-group { background: rgba(255,255,255,0.015); }
+  .row-group td:first-child { color: var(--accent); font-weight: 600; }
+
+  .row-subtotal td { background: var(--surface2); }
+  .row-subtotal td { font-weight: 600; color: var(--muted); font-size: 12px; }
+
+  .row-grand td { background: rgba(88,166,255,0.06); border-top: 1px solid rgba(88,166,255,0.3); }
+  .row-grand td { font-weight: 700; color: var(--text); font-family: var(--mono); }
+
+  /* Status badges */
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-rfs      { background: rgba(63,185,80,0.15);  color: var(--green);  border: 1px solid rgba(63,185,80,0.3); }
+  .badge-awaiting { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); }
+  .badge-cancelled{ background: rgba(248,81,73,0.15);  color: var(--red);    border: 1px solid rgba(248,81,73,0.3); }
+  .badge-ongoing  { background: rgba(219,109,40,0.15); color: var(--orange); border: 1px solid rgba(219,109,40,0.3); }
+
+  .type-combat    { color: #e3b341; font-weight: 700; }
+  .type-filtering { color: var(--accent); font-weight: 700; }
+  .type-rescoping { color: #a371f7; font-weight: 700; }
+
+  /* indent */
+  .indent { padding-left: 28px !important; }
+  .indent2 { padding-left: 44px !important; }
+
+  /* ── FOOTER ─────────────────────────────────── */
+  footer {
+    text-align: center;
+    padding-top: 24px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  @media (max-width: 860px) {
+    header, main { padding: 20px; }
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">
+    <div class="eyebrow">SST Team · R03 Jakarta &amp; Banten</div>
+    <h1>Monitoring Project Re-Engineering</h1>
+  </div>
+  <div class="header-meta">
+    <span>Sheet: Summary</span>
+    <span>File Date: 21 April 2026</span>
+    <span>Total Sites: 218</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- KPI ROW -->
+  <div class="kpi-grid">
+    <div class="kpi-card total">
+      <div class="kpi-label">Total Sites</div>
+      <div class="kpi-value">218</div>
+      <div class="kpi-sub">Grand Total</div>
+    </div>
+    <div class="kpi-card rfs">
+      <div class="kpi-label">RFS</div>
+      <div class="kpi-value">92</div>
+      <div class="kpi-sub">Ready for Service</div>
+    </div>
+    <div class="kpi-card awaiting">
+      <div class="kpi-label">Awaiting</div>
+      <div class="kpi-value">56</div>
+      <div class="kpi-sub">Pending action</div>
+    </div>
+    <div class="kpi-card cancelled">
+      <div class="kpi-label">Cancelled</div>
+      <div class="kpi-value">67</div>
+      <div class="kpi-sub">Filtering only</div>
+    </div>
+    <div class="kpi-card ongoing">
+      <div class="kpi-label">On Going</div>
+      <div class="kpi-value">3</div>
+      <div class="kpi-sub">In progress</div>
+    </div>
+    <div class="kpi-card filter">
+      <div class="kpi-label">Filter Rows</div>
+      <div class="kpi-value">215</div>
+      <div class="kpi-sub">Number of FILTER</div>
+    </div>
+  </div>
+
+  <!-- TABLE 1 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-number">TABLE 01</span>
+      <span class="section-title">Implementasi Status vs Status ATP</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Project Type</th>
+            <th>Implementasi Status</th>
+            <th>Status ATP</th>
+            <th class="num">Num. Filter</th>
+            <th class="num">Num. Site ID</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- ── COMBAT ── -->
+          <tr class="row-group">
+            <td rowspan="4"><span class="type-combat">COMBAT</span></td>
+            <td><span class="badge badge-ongoing">On Going</span></td>
+            <td class="muted">(blank)</td>
+            <td class="num">—</td>
+            <td class="num">2</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">On Going Total</em></td>
+            <td></td>
+            <td class="num">—</td>
+            <td class="num" style="color:var(--orange);font-weight:600">2</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-rfs">RFS</span></td>
+            <td><code>TAGGING N/A</code></td>
+            <td class="num">—</td>
+            <td class="num">3</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">RFS Total</em></td>
+            <td></td>
+            <td class="num">—</td>
+            <td class="num" style="color:var(--green);font-weight:600">3</td>
+          </tr>
+
+          <!-- COMBAT SUBTOTAL -->
+          <tr class="row-subtotal">
+            <td><span class="type-combat">COMBAT Total</span></td>
+            <td></td>
+            <td></td>
+            <td class="num">—</td>
+            <td class="num">5</td>
+          </tr>
+
+          <!-- ── FILTERING ── -->
+          <tr class="row-group">
+            <td rowspan="14"><span class="type-filtering">FILTERING</span></td>
+            <td><span class="badge badge-awaiting">Awaiting</span></td>
+            <td><code>TAGGING N/A</code></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td class="muted">(blank)</td>
+            <td class="num">49</td>
+            <td class="num">47</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">Awaiting Total</em></td>
+            <td></td>
+            <td class="num" style="color:var(--yellow);font-weight:600">50</td>
+            <td class="num" style="color:var(--yellow);font-weight:600">48</td>
+          </tr>
+
+          <tr>
+            <td><span class="badge badge-cancelled">Cancelled</span></td>
+            <td class="muted">(blank)</td>
+            <td class="num">71</td>
+            <td class="num">67</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">Cancelled Total</em></td>
+            <td></td>
+            <td class="num" style="color:var(--red);font-weight:600">71</td>
+            <td class="num" style="color:var(--red);font-weight:600">67</td>
+          </tr>
+
+          <tr>
+            <td rowspan="4"><span class="badge badge-rfs">RFS</span></td>
+            <td><code>HOLD</code></td>
+            <td class="num">6</td>
+            <td class="num">4</td>
+          </tr>
+          <tr>
+            <td><code>REQUEST PDID</code></td>
+            <td class="num">31</td>
+            <td class="num">28</td>
+          </tr>
+          <tr>
+            <td><code>TAGGING N/A</code></td>
+            <td class="num">26</td>
+            <td class="num">25</td>
+          </tr>
+          <tr>
+            <td><code>UPLOAD TAGGING DONE</code></td>
+            <td class="num">31</td>
+            <td class="num">29</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">RFS Total</em></td>
+            <td></td>
+            <td class="num" style="color:var(--green);font-weight:600">94</td>
+            <td class="num" style="color:var(--green);font-weight:600">86</td>
+          </tr>
+
+          <!-- FILTERING SUBTOTAL -->
+          <tr class="row-subtotal">
+            <td><span class="type-filtering">FILTERING Total</span></td>
+            <td></td>
+            <td></td>
+            <td class="num">215</td>
+            <td class="num">201</td>
+          </tr>
+
+          <!-- ── RESCOPING ── -->
+          <tr class="row-group">
+            <td rowspan="6"><span class="type-rescoping">RESCOPING</span></td>
+            <td><span class="badge badge-awaiting">Awaiting</span></td>
+            <td class="muted">(blank)</td>
+            <td class="num">—</td>
+            <td class="num">8</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">Awaiting Total</em></td>
+            <td></td>
+            <td class="num">—</td>
+            <td class="num" style="color:var(--yellow);font-weight:600">8</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-ongoing">On Going</span></td>
+            <td class="muted">(blank)</td>
+            <td class="num">—</td>
+            <td class="num">1</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">On Going Total</em></td>
+            <td></td>
+            <td class="num">—</td>
+            <td class="num" style="color:var(--orange);font-weight:600">1</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-rfs">RFS</span></td>
+            <td><code>TAGGING N/A</code></td>
+            <td class="num">—</td>
+            <td class="num">3</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">RFS Total</em></td>
+            <td></td>
+            <td class="num">—</td>
+            <td class="num" style="color:var(--green);font-weight:600">3</td>
+          </tr>
+
+          <!-- RESCOPING SUBTOTAL -->
+          <tr class="row-subtotal">
+            <td><span class="type-rescoping">RESCOPING Total</span></td>
+            <td></td>
+            <td></td>
+            <td class="num">—</td>
+            <td class="num">12</td>
+          </tr>
+
+          <!-- GRAND TOTAL -->
+          <tr class="row-grand">
+            <td colspan="3">Grand Total</td>
+            <td class="num">215</td>
+            <td class="num">218</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TABLE 2 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-number">TABLE 02</span>
+      <span class="section-title">Implementasi Status vs Permit Status</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Project Type</th>
+            <th>Implementasi Status</th>
+            <th>Permit Status</th>
+            <th>Issue Problem</th>
+            <th class="num">Num. Site ID</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- ── COMBAT ── -->
+          <tr class="row-group">
+            <td rowspan="5"><span class="type-combat">COMBAT</span></td>
+            <td><span class="badge badge-ongoing">On Going</span></td>
+            <td>5. Permit Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">2</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">On Going Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--orange);font-weight:600">2</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-rfs">RFS</span></td>
+            <td>5. Permit Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">3</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">RFS Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--green);font-weight:600">3</td>
+          </tr>
+          <!-- subtotal -->
+          <tr class="row-subtotal">
+            <td><span class="type-combat">COMBAT Total</span></td>
+            <td></td><td></td>
+            <td class="num">5</td>
+          </tr>
+
+          <!-- ── FILTERING ── -->
+          <!-- Awaiting -->
+          <tr class="row-group">
+            <td rowspan="28"><span class="type-filtering">FILTERING</span></td>
+            <td rowspan="11"><span class="badge badge-awaiting">Awaiting</span></td>
+            <td rowspan="4">1. Planning</td>
+            <td>NEED CAF</td>
+            <td class="num">18</td>
+          </tr>
+          <tr><td>PERMIT ISSUE</td><td class="num">1</td></tr>
+          <tr><td>SITE-ID N/A IOMS</td><td class="num">2</td></tr>
+          <tr><td>TP ISSUE</td><td class="num">1</td></tr>
+
+          <tr>
+            <td>2. Waiting for TO Approval</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">6</td>
+          </tr>
+          <tr>
+            <td>4. Tpass Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">2</td>
+          </tr>
+          <tr>
+            <td>5. Permit Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">5</td>
+          </tr>
+          <tr>
+            <td>6. Expired Permit</td>
+            <td>PERMIT ISSUE</td>
+            <td class="num">2</td>
+          </tr>
+          <tr>
+            <td rowspan="3">9. Cancelled</td>
+            <td>DIALIHKAN KE MITRA LAIN</td>
+            <td class="num">6</td>
+          </tr>
+          <tr><td>SITE ISSUE COMCASE</td><td class="num">4</td></tr>
+          <tr><td>TOWER ISSUE</td><td class="num">1</td></tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">Awaiting Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--yellow);font-weight:600">48</td>
+          </tr>
+
+          <!-- Cancelled -->
+          <tr>
+            <td rowspan="11"><span class="badge badge-cancelled">Cancelled</span></td>
+            <td>1. Planning</td>
+            <td>SITE-ID N/A IOMS</td>
+            <td class="num">1</td>
+          </tr>
+          <tr>
+            <td rowspan="9">9. Cancelled</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">1</td>
+          </tr>
+          <tr><td>DIALIHKAN KE DATA BARU</td><td class="num">24</td></tr>
+          <tr><td>DIALIHKAN KE MITRA LAIN</td><td class="num">3</td></tr>
+          <tr><td>NEED CAF</td><td class="num">3</td></tr>
+          <tr><td>RESELLER TP</td><td class="num">1</td></tr>
+          <tr><td>RESELLER TP ISSUE</td><td class="num">1</td></tr>
+          <tr><td>SITE ISSUE COMCASE</td><td class="num">1</td></tr>
+          <tr><td>SITE-ID N/A IOMS</td><td class="num">30</td></tr>
+          <tr><td>TP ISSUE</td><td class="num">2</td></tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">Cancelled Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--red);font-weight:600">67</td>
+          </tr>
+
+          <!-- RFS -->
+          <tr>
+            <td rowspan="3"><span class="badge badge-rfs">RFS</span></td>
+            <td>4. Tpass Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">1</td>
+          </tr>
+          <tr>
+            <td>5. Permit Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">85</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">RFS Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--green);font-weight:600">86</td>
+          </tr>
+
+          <!-- FILTERING SUBTOTAL -->
+          <tr class="row-subtotal">
+            <td><span class="type-filtering">FILTERING Total</span></td>
+            <td></td><td></td>
+            <td class="num">201</td>
+          </tr>
+
+          <!-- ── RESCOPING ── -->
+          <tr class="row-group">
+            <td rowspan="7"><span class="type-rescoping">RESCOPING</span></td>
+            <td><span class="badge badge-awaiting">Awaiting</span></td>
+            <td>1. Planning</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">8</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">Awaiting Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--yellow);font-weight:600">8</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-ongoing">On Going</span></td>
+            <td>5. Permit Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">1</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">On Going Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--orange);font-weight:600">1</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-rfs">RFS</span></td>
+            <td>5. Permit Released</td>
+            <td>1. NO ISSUE</td>
+            <td class="num">3</td>
+          </tr>
+          <tr>
+            <td class="indent"><em style="color:var(--muted);font-size:12px">RFS Total</em></td>
+            <td></td><td></td>
+            <td class="num" style="color:var(--green);font-weight:600">3</td>
+          </tr>
+
+          <!-- RESCOPING SUBTOTAL -->
+          <tr class="row-subtotal">
+            <td><span class="type-rescoping">RESCOPING Total</span></td>
+            <td></td><td></td>
+            <td class="num">12</td>
+          </tr>
+
+          <!-- GRAND TOTAL -->
+          <tr class="row-grand">
+            <td colspan="4">Grand Total</td>
+            <td class="num">218</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  PT. SMARTELCO SOLUSI TEKNOLOGI · SST TEAM · MONITORING PROJECT RE-ENGINEERING · 21 APR 2026
+</footer>
+
+</body>
+</html>

@@ -7,7 +7,7 @@ import {
     MapPin, ChevronDown, Layers, X, ArrowRight
 } from 'lucide-react';
 import type { ProjectType, SiteStage } from '../data/mockData';
-import { siteMasterRecords } from '../data/mockData';
+import { siteMasterRecords, atpWorkOrders } from '../data/mockData';
 import { useNavigate } from 'react-router-dom';
 
 // -----------------------------------------------------------------------------
@@ -206,9 +206,17 @@ const MapWidget: React.FC<MapWidgetProps> = ({ className = '', height = '100%', 
         });
     }, [filterType, filterStage, filterCluster]);
 
-    // Sites valid for the map
+    // Sites valid for the map — try lat/lon from siteMasterRecords, fallback to atpWorkOrders
     const validMapSites = useMemo(() => {
-        return filteredSitesBase.filter(site => site.latitude != null && site.longitude != null);
+        return filteredSitesBase.map(site => {
+            let lat = (site as any).latitude;
+            let lon = (site as any).longitude;
+            if ((!lat || !lon)) {
+                const atp = atpWorkOrders.find(w => w.site_id === site.site_id && w.latitude && w.longitude);
+                if (atp) { lat = atp.latitude; lon = atp.longitude; }
+            }
+            return { ...site, latitude: lat, longitude: lon };
+        }).filter(site => site.latitude && site.longitude);
     }, [filteredSitesBase]);
 
     const missingCoordsCount = filteredSitesBase.length - validMapSites.length;

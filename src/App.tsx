@@ -1,5 +1,10 @@
-
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { TabProvider } from './context/TabContext';
+import { initAppDB } from './initDB';
+
+import LoginPage from './pages/LoginPage';
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import ProjectDetail from './pages/ProjectDetail';
@@ -17,13 +22,32 @@ import EngineerUpload from './pages/EngineerUpload';
 import Sites from './pages/Sites';
 import UserManagement from './pages/UserManagement';
 import MaterialMaster from './pages/MaterialMaster';
-import { TabProvider } from './context/TabContext';
 import AtpWorkPage from './pages/AtpWorkPage';
 
-function App() {
+// Loading screen while DB initializes
+const DBLoader = ({ onReady }: { onReady: () => void }) => {
+  useEffect(() => {
+    initAppDB().then(onReady);
+  }, [onReady]);
+
   return (
-    <BrowserRouter>
-      <TabProvider>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-center gap-4">
+      <div className="w-10 h-10 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+      <p className="text-blue-300/70 text-sm font-medium">Memuat data dari database...</p>
+    </div>
+  );
+};
+
+// Inner app — only rendered when authenticated
+const AppRoutes = () => {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return (
+    <TabProvider>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -48,7 +72,6 @@ function App() {
           <Route path="spk" element={<Navigate to="/work-orders" replace />} />
           <Route path="rescoping" element={<Navigate to="/projects/type/rescoping/sites" replace />} />
           <Route path="demo-guide" element={<DemoGuide />} />
-          {/* Redirects for unimplemented routes */}
           <Route path="budget" element={<Navigate to="/projects" replace />} />
           <Route path="reports" element={<Navigate to="/" replace />} />
           <Route path="all-sites" element={<Navigate to="/sites" replace />} />
@@ -58,7 +81,22 @@ function App() {
           <Route path="termin-payment" element={<TerminPayment />} />
         </Route>
       </Routes>
-      </TabProvider>
+    </TabProvider>
+  );
+};
+
+function App() {
+  const [dbReady, setDbReady] = useState(false);
+
+  if (!dbReady) {
+    return <DBLoader onReady={() => setDbReady(true)} />;
+  }
+
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   );
 }
