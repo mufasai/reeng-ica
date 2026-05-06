@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, AlertTriangle, ArrowRight } from 'lucide-react';
 import { type AtpWorkOrder, atpWorkOrders } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
+import { db } from '../../db';
 
 interface InitiationModalProps {
   siteId: string;
@@ -13,7 +14,7 @@ interface InitiationModalProps {
 const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: InitiationModalProps) => {
   const { currentUser } = useAuth();
   if (!currentUser) return null;
-  
+
   const [projectType, setProjectType] = useState('');
   const [sector, setSector] = useState<number | ''>('');
   const [atpNumber, setAtpNumber] = useState('');
@@ -23,7 +24,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
   // Check for conflicts
   const activeConflict = sector ? existingWorks.find(wo => wo.sector === Number(sector) && wo.status === 'active') : undefined;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectType || !sector || !poNumber) return;
 
@@ -44,22 +45,55 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
       project_type: projectType as any,
       stage: 'imported',
       status: 'active',
-      initiated_by: currentUser?.id || '',
+      initiated_by: currentUser?.id || 'system',
       initiated_at: new Date().toISOString()
     };
 
     // One active ATP logic
-    atpWorkOrders.forEach(wo => {
-        if (wo.site_id === siteId && wo.status === 'active') {
-            wo.status = 'historical' as any;
+    for (const wo of atpWorkOrders) {
+      if (wo.site_id === siteId && wo.status === 'active') {
+        wo.status = 'historical' as any;
+        if (wo.id) {
+          try {
+            await db.query('UPDATE $id MERGE { status: "historical" }', { id: wo.id });
+          } catch (err) {
+            console.error('Failed to update older work order to historical in SurrealDB:', err);
+          }
         }
-    });
+      }
+    }
 
-    // Update mock data
+    // Insert into SurrealDB sites table
+    try {
+      const dbRecord = {
+        site_id: siteId,
+        atp_number: atpNumber,
+        sow_id: sowId,
+        po_id: poNumber,
+        sector: Number(sector),
+        site_sector: `${siteId}-S${sector}`,
+        project_type: projectType,
+        stage: 'imported',
+        status: 'active',
+        initiated_by: currentUser?.id || 'system',
+        initiated_at: new Date().toISOString()
+      };
+
+      const res = await db.query<[any]>('INSERT INTO sites $record', { record: dbRecord });
+      console.log('Created sites record in SurrealDB:', res);
+      const inserted = res?.[0]?.[0];
+      if (inserted && inserted.id) {
+        newWork.id = String(inserted.id);
+      }
+    } catch (err) {
+      console.error('Failed to create sites record in SurrealDB:', err);
+    }
+
+    // Update local mock data
     atpWorkOrders.push(newWork);
-    
+
     if (onSuccess) {
-      onSuccess(newId);
+      onSuccess(newWork.id);
     } else {
       onClose();
     }
@@ -68,7 +102,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-        
+
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <h2 className="font-bold text-slate-800">Mulai Pekerjaan — {siteId}</h2>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
@@ -78,10 +112,10 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
 
         <div className="p-6 overflow-y-auto">
           <form id="initiation-form" onSubmit={handleSubmit} className="space-y-5">
-            
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Tipe Proyek <span className="text-red-500">*</span></label>
-              <select 
+              <select
                 required
                 value={projectType}
                 onChange={e => setProjectType(e.target.value)}
@@ -98,7 +132,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Sektor <span className="text-red-500">*</span></label>
-              <input 
+              <input
                 type="number"
                 min="1"
                 required
@@ -122,7 +156,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Nomor ATP</label>
-              <input 
+              <input
                 type="text"
                 value={atpNumber}
                 onChange={e => setAtpNumber(e.target.value)}
@@ -134,7 +168,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">SOW ID</label>
-              <input 
+              <input
                 type="text"
                 value={sowId}
                 onChange={e => setSowId(e.target.value)}
@@ -145,7 +179,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">PO Number <span className="text-red-500">*</span></label>
-              <input 
+              <input
                 type="text"
                 required
                 value={poNumber}
@@ -159,14 +193,14 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-          <button 
+          <button
             type="button"
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
             Batal
           </button>
-          <button 
+          <button
             type="submit"
             form="initiation-form"
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
