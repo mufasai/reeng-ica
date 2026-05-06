@@ -1,13 +1,14 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { atpWorkOrders, siteMasterRecords, workOrderLogs, teams, people, teamMembersRecords } from '../data/mockData';
-import { CheckCircle2, ChevronRight, Upload, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Upload, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { SaveIndicator, AutoSaveInput } from '../components/work-orders/AtpShared';
 import { PermitSection } from '../components/work-orders/PermitSection';
 import { ImplSection } from '../components/work-orders/ImplSection';
 import { PengajuanPembayaran } from '../components/work-orders/PengajuanPembayaran';
+import { db } from '../db';
 
 type WorkStep = 'permit' | 'implementasi' | 'atp' | 'penagihan' | 'foto' | 'file' | 'log';
 
@@ -49,14 +50,54 @@ const AtpWorkPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentUser, can } = useAuth();
-  const [activeTab, setActiveTab] = useState<WorkStep>('permit');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'penagihan' ? 'penagihan' : 'permit';
+  const [activeTab, setActiveTab] = useState<WorkStep>(initialTab as any);
   const [localWo, setLocalWo] = useState<any>(null);
   const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle');
+  const [dbLogs, setDbLogs] = useState<any[]>([]);
+  const [dbFiles, setDbFiles] = useState<any[]>([]);
+
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
+    show: false,
+    message: '',
+    type: 'success'
+  });
+
+  const showToastMsg = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message: msg, type });
+    setTimeout(() => setToast(t => ({ ...t, show: false })), 4000);
+  };
 
   useEffect(() => {
     const wo = atpWorkOrders.find(w => w.id === id);
     if (wo) setLocalWo({ ...wo });
   }, [id]);
+
+  useEffect(() => {
+    if (!id || !localWo) return;
+    const fetchDbData = async () => {
+      try {
+        // Fetch logs
+        const logsRes = await db.query('SELECT * FROM site_stage_logs WHERE work_order_id = $id', { id });
+        if (logsRes?.[0] && Array.isArray(logsRes[0]) && logsRes[0].length > 0) {
+          setDbLogs(logsRes[0]);
+        } else {
+          setDbLogs(workOrderLogs.filter(l => l.work_order_id === id));
+        }
+
+        // Fetch files
+        const filesRes = await db.query('SELECT * FROM site_files WHERE work_order_id = $id', { id });
+        if (filesRes?.[0] && Array.isArray(filesRes[0])) {
+          setDbFiles(filesRes[0]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch DB files/logs:', err);
+        setDbLogs(workOrderLogs.filter(l => l.work_order_id === id));
+      }
+    };
+    fetchDbData();
+  }, [id, localWo]);
 
   const site = useMemo(() => siteMasterRecords.find(s => s.site_id === localWo?.site_id), [localWo?.site_id]);
   const canEditFields = can('site.edit_data');
@@ -83,8 +124,78 @@ const AtpWorkPage = () => {
       await patchWO({ [field]: value });
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
-      workOrderLogs.push({ id: `wol-${Date.now()}`, work_order_id: localWo.id, action: `updated ${field} → ${value}`, user_id: currentUser?.id || 'system', timestamp: new Date().toISOString() });
+
+      const logData = {
+        work_order_id: localWo.id,
+        site_id: localWo.site_id,
+        action: `Field '${field}' diperbarui menjadi '${value}'`,
+        user_id: currentUser?.id || 'system',
+        timestamp: new Date().toISOString()
+      };
+
+      // Save log to DB
+      try {
+        await db.query('CREATE site_stage_logs CONTENT $data', { data: logData });
+        const logsRes = await db.query('SELECT * FROM site_stage_logs WHERE work_order_id = $id', { id: localWo.id });
+        if (logsRes?.[0] && Array.isArray(logsRes[0])) {
+          setDbLogs(logsRes[0]);
+        } else {
+          setDbLogs(prev => [logData, ...prev]);
+        }
+      } catch (err) {
+        console.error('Failed to create DB log:', err);
+        setDbLogs(prev => [logData, ...prev]);
+      }
     } catch { setSaveStatus('error'); }
+  };
+
+  const handleFileUpload = async (category: 'document' | 'photo', files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setSaveStatus('saving');
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileData = {
+          work_order_id: localWo.id,
+          site_id: localWo.site_id,
+          name: file.name,
+          type: category === 'photo' ? 'Photo' : file.name.split('.').pop()?.toUpperCase() || 'File',
+          size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+          category,
+          date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+          uploaded_by: currentUser?.id || 'system',
+          timestamp: new Date().toISOString()
+        };
+
+        await db.query('CREATE site_files CONTENT $data', { data: fileData });
+
+        const logData = {
+          work_order_id: localWo.id,
+          site_id: localWo.site_id,
+          action: `Mengunggah ${category === 'photo' ? 'foto' : 'dokumen'} '${file.name}'`,
+          user_id: currentUser?.id || 'system',
+          timestamp: new Date().toISOString()
+        };
+        await db.query('CREATE site_stage_logs CONTENT $data', { data: logData });
+      }
+
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      showToastMsg(`Sukses: ${files.length} file berhasil diunggah!`);
+
+      const filesRes = await db.query('SELECT * FROM site_files WHERE work_order_id = $id', { id: localWo.id });
+      if (filesRes?.[0] && Array.isArray(filesRes[0])) {
+        setDbFiles(filesRes[0]);
+      }
+      const logsRes = await db.query('SELECT * FROM site_stage_logs WHERE work_order_id = $id', { id: localWo.id });
+      if (logsRes?.[0] && Array.isArray(logsRes[0])) {
+        setDbLogs(logsRes[0]);
+      }
+    } catch (err) {
+      console.error('Failed to upload file:', err);
+      setSaveStatus('error');
+      showToastMsg('Gagal mengunggah file. Silakan coba kembali!', 'error');
+    }
   };
 
   const handleUpdateStage = async (next: string) => {
@@ -103,7 +214,36 @@ const AtpWorkPage = () => {
   const currentStageIdx = STAGE_STEPS.indexOf(localWo.stage || 'imported');
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-12 animate-in fade-in duration-300">
+    <div className="space-y-4 max-w-7xl mx-auto pb-12 animate-in fade-in duration-300 relative">
+      {/* Visual Success/Failed Pop-up Alert Toast */}
+      {toast.show && (
+        <div className={clsx(
+          "fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl border animate-in slide-in-from-top-4 duration-300",
+          toast.type === 'success' 
+            ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
+            : "bg-red-50 text-red-800 border-red-200"
+        )}>
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+          )}
+          <span className="text-sm font-bold tracking-tight">{toast.message}</span>
+        </div>
+      )}
+
+      {/* BACK TO SITE DETAIL BUTTON */}
+      <div className="flex justify-between items-center">
+        <button
+          onClick={() => navigate(`/sites/${localWo.site_id}`)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all border border-slate-200/80 shadow-sm"
+        >
+          <ArrowLeft className="w-4 h-4 text-slate-500" />
+          Kembali ke Detail Site ({localWo.site_id})
+        </button>
+        <SaveIndicator status={saveStatus} />
+      </div>
+
       {/* HEADER */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-6 py-5">
         <div className="flex items-center gap-3 mb-2">
@@ -185,7 +325,7 @@ const AtpWorkPage = () => {
           {activeTab === 'atp' && (
             <div className="max-w-4xl animate-in fade-in">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-black text-slate-800">ATP & Dokumen</h2>
+                <h2 className="text-lg font-black text-slate-800">ATP &amp; Dokumen</h2>
                 <SaveIndicator status={saveStatus} />
               </div>
               <div className="space-y-0 mb-8">
@@ -195,12 +335,16 @@ const AtpWorkPage = () => {
                   options={[{ label: 'REQUEST PDID', value: 'REQUEST PDID' }, { label: 'UPLOAD TAGGING DONE', value: 'UPLOAD TAGGING DONE' }, { label: 'TAGGING N/A', value: 'TAGGING N/A' }, { label: 'HOLD', value: 'HOLD' }]} />
                 <AutoSaveInput label="Note Foto Evidence" value={localWo.note_foto_evidence || localWo.foto_evidence_notes} field="foto_evidence_notes" type="textarea" onSave={handleFieldSave} />
               </div>
-              <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-slate-50 transition-colors cursor-pointer group">
+              
+              <label className="border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-slate-50 transition-colors cursor-pointer group">
+                <input type="file" multiple className="hidden" onChange={e => handleFileUpload('document', e.target.files)} />
                 <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <Upload className="w-5 h-5 text-blue-500" />
                 </div>
-                <p className="text-sm font-bold text-slate-700">Upload ATP Documents & Certificate</p>
-              </div>
+                <p className="text-sm font-bold text-slate-700">Upload ATP Documents &amp; Certificate</p>
+                <p className="text-xs text-slate-400 mt-1">Pilih satu atau beberapa dokumen untuk diunggah</p>
+              </label>
+
               {canEditFields && (
                 <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
                   <button className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 shadow-sm">Simpan Draft</button>
@@ -220,31 +364,43 @@ const AtpWorkPage = () => {
             <div className="animate-in fade-in">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-black text-slate-800">Galeri Foto</h2>
-                <button className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2">
+                <label className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 cursor-pointer transition-colors">
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={e => handleFileUpload('photo', e.target.files)} />
                   <Upload className="w-4 h-4" /> Upload Foto
-                </button>
+                </label>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {[1,2,3,4].map(i => (
-                  <div key={i} className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
-                    <ImageIcon className="w-8 h-8 text-slate-300 mb-2 group-hover:text-blue-400 transition-colors" />
-                    <p className="text-[10px] text-slate-400 text-center px-2">Sector {i} View</p>
+                {dbFiles.filter(f => f.category === 'photo').map((file, i) => (
+                  <div key={file.id || i} className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
+                    <ImageIcon className="w-8 h-8 text-blue-400 mb-2" />
+                    <p className="text-[11px] font-bold text-slate-700 px-2 text-center truncate w-full">{file.name}</p>
+                    <p className="text-[9px] text-slate-400 text-center mt-0.5">{file.size} · {file.date}</p>
                   </div>
                 ))}
+                {dbFiles.filter(f => f.category === 'photo').length === 0 && (
+                  [1,2,3,4].map(i => (
+                    <div key={i} className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
+                      <ImageIcon className="w-8 h-8 text-slate-300 mb-2 group-hover:text-blue-400 transition-colors" />
+                      <p className="text-[10px] text-slate-400 text-center px-2">Sector {i} View</p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
           {activeTab === 'file' && (
             <div className="animate-in fade-in">
-              <h2 className="text-lg font-black text-slate-800 mb-6">File & Lampiran</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-black text-slate-800">File &amp; Lampiran</h2>
+                <label className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 cursor-pointer transition-colors">
+                  <input type="file" multiple className="hidden" onChange={e => handleFileUpload('document', e.target.files)} />
+                  <Upload className="w-4 h-4" /> Upload Dokumen
+                </label>
+              </div>
               <div className="space-y-3">
-                {[
-                  { name: 'Permit_Approval.pdf', type: 'Permit', size: '2.4 MB', date: '10 Mar 2026' },
-                  { name: 'Implementasi_BAST_Draft.docx', type: 'Implementasi', size: '1.1 MB', date: '14 Mar 2026' },
-                  { name: 'ATP_Checklist.xlsx', type: 'ATP', size: '850 KB', date: '15 Mar 2026' },
-                ].map((f, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-shadow cursor-pointer group">
+                {dbFiles.filter(f => f.category === 'document' || !f.category).map((f, i) => (
+                  <div key={f.id || i} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-shadow cursor-pointer group">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                         <FileText className="w-5 h-5" />
@@ -252,7 +408,7 @@ const AtpWorkPage = () => {
                       <div>
                         <p className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{f.name}</p>
                         <div className="flex items-center gap-2 mt-1 text-[11px] font-medium text-slate-500">
-                          <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600">{f.type}</span>
+                          <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600">{f.type || 'DOCUMENT'}</span>
                           <span>{f.size}</span><span>·</span><span>{f.date}</span>
                         </div>
                       </div>
@@ -270,11 +426,10 @@ const AtpWorkPage = () => {
             <div className="animate-in fade-in max-w-3xl">
               <h2 className="text-lg font-black text-slate-800 mb-6">Activity Log</h2>
               <div className="relative pl-6 border-l-2 border-slate-100 space-y-6">
-                {workOrderLogs.filter(l => l.work_order_id === localWo.id)
-                  .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                  .map(log => (
-                  <div key={log.id} className="relative">
-                    <div className="absolute -left-[31px] w-4 h-4 rounded-full bg-slate-200 border-4 border-white" />
+                {dbLogs.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .map((log, i) => (
+                  <div key={log.id || i} className="relative">
+                    <div className="absolute -left-[31px] w-4 h-4 rounded-full bg-blue-500 border-4 border-white" />
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
                         {log.user_id.substring(0,2).toUpperCase()}

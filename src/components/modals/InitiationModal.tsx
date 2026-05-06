@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, AlertTriangle, ArrowRight } from 'lucide-react';
 import { type AtpWorkOrder, atpWorkOrders } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
+import { db } from '../../db';
 
 interface InitiationModalProps {
   siteId: string;
@@ -22,7 +23,7 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
   // Check for conflicts
   const activeConflict = sector ? existingWorks.find(wo => wo.sector === Number(sector) && wo.status === 'active') : undefined;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectType || !sector || !poNumber) return;
 
@@ -43,22 +44,55 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
       project_type: projectType as any,
       stage: 'imported',
       status: 'active',
-      initiated_by: currentUser.id,
+      initiated_by: currentUser?.id || 'system',
       initiated_at: new Date().toISOString()
     };
 
     // One active ATP logic
-    atpWorkOrders.forEach(wo => {
-        if (wo.site_id === siteId && wo.status === 'active') {
-            wo.status = 'historical' as any;
+    for (const wo of atpWorkOrders) {
+      if (wo.site_id === siteId && wo.status === 'active') {
+        wo.status = 'historical' as any;
+        if (wo.id) {
+          try {
+            await db.query('UPDATE $id MERGE { status: "historical" }', { id: wo.id });
+          } catch (err) {
+            console.error('Failed to update older work order to historical in SurrealDB:', err);
+          }
         }
-    });
+      }
+    }
 
-    // Update mock data
+    // Insert into SurrealDB sites table
+    try {
+      const dbRecord = {
+        site_id: siteId,
+        atp_number: atpNumber,
+        sow_id: sowId,
+        po_id: poNumber,
+        sector: Number(sector),
+        site_sector: `${siteId}-S${sector}`,
+        project_type: projectType,
+        stage: 'imported',
+        status: 'active',
+        initiated_by: currentUser?.id || 'system',
+        initiated_at: new Date().toISOString()
+      };
+
+      const res = await db.query<[any]>('INSERT INTO sites $record', { record: dbRecord });
+      console.log('Created sites record in SurrealDB:', res);
+      const inserted = res?.[0]?.[0];
+      if (inserted && inserted.id) {
+        newWork.id = String(inserted.id);
+      }
+    } catch (err) {
+      console.error('Failed to create sites record in SurrealDB:', err);
+    }
+
+    // Update local mock data
     atpWorkOrders.push(newWork);
     
     if (onSuccess) {
-      onSuccess(newId);
+      onSuccess(newWork.id);
     } else {
       onClose();
     }
