@@ -1,6 +1,7 @@
 import { Surreal } from 'surrealdb';
 
-export const db = new Surreal();
+const SurrealClass = Surreal || (Surreal as any).default;
+export const db = new SurrealClass();
 
 export async function connectDB() {
   if (db.status === 'connected') return;

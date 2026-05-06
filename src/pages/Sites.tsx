@@ -138,7 +138,7 @@ const Sites = () => {
     const navigate = useNavigate();
     const { openTab } = useTabContext();
     const { currentUser } = useAuth();
-    const hasImportAccess = ['director', 'operational', 'admin'].includes(currentUser.role);
+    const hasImportAccess = ['director', 'operational', 'admin'].includes(currentUser?.role || '');
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Tab Toggle ('data' | 'history')
@@ -187,7 +187,7 @@ const Sites = () => {
     });
 
     // Column visibility
-    const { visibilityMap, handleVisibilityChange, resetToDefault, currentCols } = useTableColumns(currentUser.id);
+    const { visibilityMap, handleVisibilityChange, resetToDefault, currentCols } = useTableColumns(currentUser?.id || '');
 
     // Section collapse state
     // const [isAssignedExpanded, setIsAssignedExpanded] = useState(true);
@@ -342,7 +342,7 @@ const Sites = () => {
             site_sector_key: `${siteId}-S1`,
             project_type: projectType,
             stage: 'imported',
-            initiated_by: currentUser.id,
+            initiated_by: currentUser?.id || 'system',
             initiated_at: new Date().toISOString(),
             status: 'active' as const
         };
@@ -467,7 +467,7 @@ const Sites = () => {
                         filterKey="termin_menunggu"
                         activeFilter={quickFilter}
                         onClick={() => handlePillClick('termin_menunggu')}
-                        visible={!['field'].includes(currentUser.role)}
+                        visible={!['field'].includes(currentUser?.role || '')}
                     />
                 </div>
             )}
@@ -611,7 +611,7 @@ const Sites = () => {
                                         const task = atpTasks.find(t => t.site_id === site.site_id);
                                         
                                         return (
-                                            <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-xs">
+                                            <tr key={site.id || `${site.site_id}-${site.sector || idx}`} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-xs">
                                                 <td className="px-4 py-3 text-slate-400">{idx + 1}</td>
                                                 <td className="px-4 py-3 font-bold text-slate-700">{site.project_type}</td>
                                                 <td className="px-4 py-3 font-mono font-bold text-blue-600">{site.site_id}</td>
@@ -714,11 +714,11 @@ const Sites = () => {
                                     })}
 
                                     {/* --- MODE 2: ALL SITES TAB --- */}
-                                    {activeTab === 'all' && sortedSites.map(site => {
+                                    {activeTab === 'all' && sortedSites.map((site, idx) => {
                                         const tech = siteTechnicalDetails.find(t => t.site_id === site.site_id) || site.raw_data;
                                         
                                         return (
-                                            <tr key={site.site_id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-[11px]">
+                                            <tr key={site.id || `${site.site_id}-${idx}`} className="hover:bg-slate-50 transition-colors group border-b border-slate-100 last:border-0 text-[11px]">
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-mono font-bold text-slate-700">{site.site_id}</span>
