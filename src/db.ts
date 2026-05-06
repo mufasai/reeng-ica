@@ -1,15 +1,9 @@
-// Mocking SurrealDB for now as it is not installed
-// import { Surreal } from 'surrealdb';
+// SurrealDB integration
+import { Surreal } from 'surrealdb';
 
-export const db: any = {
-  status: 'disconnected',
-  connect: async () => {},
-  signin: async () => {},
-  use: async () => {},
-};
+export const db = new Surreal();
 
 export async function connectDB() {
-  if (db.status === 'connected') return;
   try {
     let url = import.meta.env.VITE_SURREALDB_URL || 'https://surrealdb-production-b201.up.railway.app';
     const username = import.meta.env.VITE_SURREALDB_USER || 'root';
