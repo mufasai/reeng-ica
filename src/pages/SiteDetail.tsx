@@ -11,6 +11,7 @@ import InitiationModal from '../components/modals/InitiationModal';
 import AtpTable from '../components/work-orders/AtpTable';
 import { useCellSave } from '../hooks/useCellSave';
 import { useTabContext } from '../context/TabContext';
+import { db } from '../db';
 
 type MainTab = 'info' | 'pekerjaan' | 'log';
 
@@ -31,13 +32,13 @@ const SiteDetail = () => {
 
   const { saveField } = useCellSave();
   const [localSiteData, setLocalSiteData] = useState<any>(null);
+  const [dbLogs, setDbLogs] = useState<any[]>([]);
 
   useEffect(() => {
     const site = siteMasterRecords.find(s => s.site_id === id);
     if (site) setLocalSiteData({ ...site });
 
     if (hash.startsWith('pekerjaan/')) {
-      setMainTab('pekerjaan');
       setMainTab('pekerjaan');
     } else if (hash === 'pekerjaan') {
       setMainTab('pekerjaan');
@@ -51,6 +52,26 @@ const SiteDetail = () => {
 
   const site = localSiteData;
   const activeWorks = useMemo(() => atpWorkOrders.filter(wo => wo.site_id === id), [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const fetchLogs = async () => {
+      try {
+        const logsRes = await db.query('SELECT * FROM site_stage_logs WHERE site_id = $id', { id });
+        if (logsRes?.[0] && Array.isArray(logsRes[0]) && logsRes[0].length > 0) {
+          setDbLogs(logsRes[0]);
+        } else {
+          const workOrderIds = activeWorks.map(w => w.id);
+          setDbLogs(workOrderLogs.filter(l => workOrderIds.includes(l.work_order_id)));
+        }
+      } catch (err) {
+        console.error('Failed to fetch DB logs:', err);
+        const workOrderIds = activeWorks.map(w => w.id);
+        setDbLogs(workOrderLogs.filter(l => workOrderIds.includes(l.work_order_id)));
+      }
+    };
+    fetchLogs();
+  }, [id, activeWorks]);
 
   if (!site) {
     return (
@@ -249,16 +270,13 @@ const SiteDetail = () => {
 
   // ── Log Tab ─────────────────────────────────────────────────────────────────
   const renderLog = () => {
-    const workOrderIds = activeWorks.map(w => w.id);
-    const allLogs = workOrderLogs
-      .filter(l => workOrderIds.includes(l.work_order_id))
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const allLogs = [...dbLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     // Group by ATP
     const grouped: Record<string, typeof allLogs> = {};
     allLogs.forEach(log => {
       const wo = activeWorks.find(w => w.id === log.work_order_id);
-      const key = wo?.atp_number || wo?.id || 'unknown';
+      const key = wo?.atp_number || wo?.id || 'Site History';
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(log);
     });

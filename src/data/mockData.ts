@@ -1695,8 +1695,8 @@ export let siteMasterRecords: SiteMaster[] = [
         work_order_id: 'atp-wo-clg036'
     },
     {
-        id: 'sm-clg071',
-        unique_key: 'CLG071',
+        id: 'sm-clg071-1',
+        unique_key: 'CLG071-1',
         site_id: 'CLG071',
         ne_id: 'CLG071MT1',
         site_name: 'E_CLG071_Karangasemcilegon-PTI',
@@ -1723,8 +1723,8 @@ export let siteMasterRecords: SiteMaster[] = [
         work_order_id: 'atp-wo-clg071'
     },
     {
-        id: 'sm-clg115',
-        unique_key: 'CLG115',
+        id: 'sm-clg115-1',
+        unique_key: 'CLG115-1',
         site_id: 'CLG115',
         ne_id: 'CLG115MT1',
         site_name: 'E_CLG115_Bendungancilegon-TBG',
@@ -1751,8 +1751,8 @@ export let siteMasterRecords: SiteMaster[] = [
         work_order_id: 'atp-wo-clg115'
     },
     {
-        id: 'sm-clg117',
-        unique_key: 'CLG117',
+        id: 'sm-clg117-1',
+        unique_key: 'CLG117-1',
         site_id: 'CLG117',
         ne_id: 'CLG117MT1',
         site_name: 'E_CLG117M41_Kampungciporong-DMT',
@@ -1807,8 +1807,8 @@ export let siteMasterRecords: SiteMaster[] = [
         stage_notes: '9. Cancelled - SITE-ID N/A IOMS'
     },
     {
-        id: 'sm-clg071',
-        unique_key: 'CLG071',
+        id: 'sm-clg071-3',
+        unique_key: 'CLG071-3',
         site_id: 'CLG071',
         ne_id: 'CLG071MT1',
         site_name: 'E_CLG071_Karangasemcilegon-PTI',
@@ -1836,8 +1836,8 @@ export let siteMasterRecords: SiteMaster[] = [
         notes: 'Tidak bisa create permit karena sistemnya error. Sudah lapor ke helpdesk INEOM sejak 24 Feb'
     },
     {
-        id: 'sm-clg115',
-        unique_key: 'CLG115',
+        id: 'sm-clg115-3',
+        unique_key: 'CLG115-3',
         site_id: 'CLG115',
         ne_id: 'CLG115MT1',
         site_name: 'E_CLG115_Bendungancilegon-TBG',
@@ -1864,8 +1864,8 @@ export let siteMasterRecords: SiteMaster[] = [
         work_order_id: 'atp-wo-clg115'
     },
     {
-        id: 'sm-clg117',
-        unique_key: 'CLG117',
+        id: 'sm-clg117-3',
+        unique_key: 'CLG117-3',
         site_id: 'CLG117',
         ne_id: 'CLG117MT1',
         site_name: 'E_CLG117M41_Kampungciporong-DMT',
