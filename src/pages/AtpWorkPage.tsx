@@ -144,9 +144,28 @@ const AtpWorkPage = () => {
 
   const patchWO = async (updates: any) => {
     await new Promise(r => setTimeout(r, 300));
+    
+    // Update local work order mock
     const target = atpWorkOrders.find(w => w.id === localWo.id);
     if (target) Object.assign(target, updates);
+
+    // Update local site master mock
+    const targetSite = siteMasterRecords.find(s => s.site_id === localWo.site_id);
+    if (targetSite) Object.assign(targetSite, updates);
+
+    // Update local state
     setLocalWo((prev: any) => ({ ...prev, ...updates }));
+
+    // Try update DB
+    try {
+      const keys = Object.keys(updates);
+      if (keys.length > 0) {
+        let setString = keys.map(k => `${k} = $${k}`).join(', ');
+        await db.query(`UPDATE sites:${localWo.site_id} SET ${setString}, updated_at = time::now()`, updates);
+      }
+    } catch (e) {
+      console.warn("DB sync failed", e);
+    }
   };
 
   const handleFieldSave = async (field: string, value: any) => {
