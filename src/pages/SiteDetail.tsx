@@ -251,6 +251,11 @@ const SiteDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Teknis BTS (COMBAT only) ──────────────────────────────────────── */}
+      {localSiteData?.project_type === 'COMBAT' && (
+        <CombatBtsTeknis siteId={site.site_id} data={localSiteData} />
+      )}
     </div>
   );
 
@@ -365,6 +370,161 @@ const LogGroup = ({ atpKey, logs, activeWorks, onOpenWo }: any) => {
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+// ── Combat BTS Teknis Section ────────────────────────────────────────────────
+const BTS_TYPE_OPTS = ['Macro', 'Micro', 'Pico', 'Femto'];
+const MAST_TYPE_OPTS = ['Greenfield', 'Rooftop', 'IBS'];
+const POWER_SRC_OPTS = ['PLN', 'Genset', 'Solar', 'PLN+Genset'];
+const FREQ_BANDS = ['L700', 'L900', 'L1800', 'L2100', 'L2300', 'L2600'];
+const VENDOR_OPTS = ['Nokia', 'Ericsson', 'Huawei', 'ZTE'];
+
+const CombatBtsTeknis = ({ siteId, data }: { siteId: string; data: any }) => {
+  const [local, setLocal] = useState<any>({
+    bts_type: data.bts_type || '',
+    mast_type: data.mast_type || '',
+    mast_height: data.mast_height ?? '',
+    antenna_count: data.antenna_count ?? '',
+    power_source: data.power_source || '',
+    power_capacity_kva: data.power_capacity_kva ?? '',
+    luas_lahan_m2: data.luas_lahan_m2 ?? '',
+    access_road: data.access_road ?? null,
+    grounding_done: data.grounding_done ?? null,
+    lightning_rod: data.lightning_rod ?? null,
+    frequency_bands: Array.isArray(data.frequency_bands) ? data.frequency_bands : [],
+    vendors: Array.isArray(data.vendors) ? data.vendors : [],
+  });
+
+  const save = async (field: string, value: any) => {
+    setLocal((p: any) => ({ ...p, [field]: value }));
+    try {
+      await db.query(`UPDATE sites:${siteId} SET ${field} = $v, updated_at = time::now()`, { v: value });
+    } catch (e) {
+      console.error('BTS field save failed:', e);
+    }
+  };
+
+  const toggleChip = (field: 'frequency_bands' | 'vendors', val: string) => {
+    const arr: string[] = local[field] || [];
+    const next = arr.includes(val) ? arr.filter((v: string) => v !== val) : [...arr, val];
+    save(field, next);
+  };
+
+  const BtsField = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div>
+      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{label}</p>
+      {children}
+    </div>
+  );
+
+  const selectCls = "w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:border-blue-400";
+  const inputCls = "w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:border-blue-400";
+  const toggleCls = (active: boolean | null, trueVal: boolean) =>
+    clsx('px-2 py-0.5 rounded text-[11px] font-bold border cursor-pointer transition-colors',
+      active === trueVal ? (trueVal ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-red-50 text-red-700 border-red-200')
+        : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-400');
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 bg-orange-50/40 flex items-center gap-2">
+        <span className="text-base">🗼</span>
+        <h2 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Teknis BTS — Combat</h2>
+      </div>
+      <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+        <BtsField label="Tipe BTS">
+          <select className={selectCls} value={local.bts_type} onChange={e => save('bts_type', e.target.value)}>
+            <option value="">— Pilih —</option>
+            {BTS_TYPE_OPTS.map(o => <option key={o}>{o}</option>)}
+          </select>
+        </BtsField>
+
+        <BtsField label="Tipe Mast">
+          <select className={selectCls} value={local.mast_type} onChange={e => save('mast_type', e.target.value)}>
+            <option value="">— Pilih —</option>
+            {MAST_TYPE_OPTS.map(o => <option key={o}>{o}</option>)}
+          </select>
+        </BtsField>
+
+        <BtsField label="Tinggi Mast (m)">
+          <input type="number" className={inputCls} defaultValue={local.mast_height}
+            onBlur={e => save('mast_height', e.target.value ? Number(e.target.value) : null)} />
+        </BtsField>
+
+        <BtsField label="Jumlah Antena">
+          <input type="number" className={inputCls} defaultValue={local.antenna_count}
+            onBlur={e => save('antenna_count', e.target.value ? Number(e.target.value) : null)} />
+        </BtsField>
+
+        <BtsField label="Sumber Daya">
+          <select className={selectCls} value={local.power_source} onChange={e => save('power_source', e.target.value)}>
+            <option value="">— Pilih —</option>
+            {POWER_SRC_OPTS.map(o => <option key={o}>{o}</option>)}
+          </select>
+        </BtsField>
+
+        <BtsField label="Kapasitas Daya (kVA)">
+          <input type="number" className={inputCls} defaultValue={local.power_capacity_kva}
+            onBlur={e => save('power_capacity_kva', e.target.value ? Number(e.target.value) : null)} />
+        </BtsField>
+
+        <BtsField label="Luas Lahan (m²)">
+          <input type="number" className={inputCls} defaultValue={local.luas_lahan_m2}
+            onBlur={e => save('luas_lahan_m2', e.target.value ? Number(e.target.value) : null)} />
+        </BtsField>
+
+        <BtsField label="Akses Jalan">
+          <div className="flex gap-2 mt-1">
+            <span className={toggleCls(local.access_road, true)} onClick={() => save('access_road', true)}>Ada</span>
+            <span className={toggleCls(local.access_road, false)} onClick={() => save('access_road', false)}>Tidak Ada</span>
+          </div>
+        </BtsField>
+
+        <BtsField label="Grounding">
+          <div className="flex gap-2 mt-1">
+            <span className={toggleCls(local.grounding_done, true)} onClick={() => save('grounding_done', true)}>Selesai</span>
+            <span className={toggleCls(local.grounding_done, false)} onClick={() => save('grounding_done', false)}>Belum</span>
+          </div>
+        </BtsField>
+
+        <BtsField label="Lightning Rod">
+          <div className="flex gap-2 mt-1">
+            <span className={toggleCls(local.lightning_rod, true)} onClick={() => save('lightning_rod', true)}>Terpasang</span>
+            <span className={toggleCls(local.lightning_rod, false)} onClick={() => save('lightning_rod', false)}>Belum</span>
+          </div>
+        </BtsField>
+
+        <BtsField label="Frekuensi">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {FREQ_BANDS.map(b => (
+              <span key={b}
+                onClick={() => toggleChip('frequency_bands', b)}
+                className={clsx('px-2 py-0.5 rounded text-[11px] font-bold border cursor-pointer transition-colors',
+                  local.frequency_bands?.includes(b)
+                    ? 'bg-blue-50 text-blue-700 border-blue-300'
+                    : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-400')}>
+                {b}
+              </span>
+            ))}
+          </div>
+        </BtsField>
+
+        <BtsField label="Vendor">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {VENDOR_OPTS.map(v => (
+              <span key={v}
+                onClick={() => toggleChip('vendors', v)}
+                className={clsx('px-2 py-0.5 rounded text-[11px] font-bold border cursor-pointer transition-colors',
+                  local.vendors?.includes(v)
+                    ? 'bg-purple-50 text-purple-700 border-purple-300'
+                    : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-400')}>
+                {v}
+              </span>
+            ))}
+          </div>
+        </BtsField>
+      </div>
     </div>
   );
 };

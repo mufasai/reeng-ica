@@ -1180,7 +1180,12 @@ export interface SiteMaster {
     stage: SiteStage;
     stage_updated_at?: string;
     stage_notes?: string;
-    ineom_registered: boolean;
+    permit_status?: string | null;
+    impl_status?: string | null;
+    ioms_registered?: boolean;
+    ineom_registered?: boolean;
+    priority?: string;
+    is_relokasi?: boolean;
     import_source?: string;
     notes?: string;
     raw_data?: Record<string, any>;

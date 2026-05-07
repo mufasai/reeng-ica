@@ -10,9 +10,10 @@ interface Props {
   canEdit: boolean;
   teamOptions: { label: string; value: string }[];
   leaderOptions: { label: string; value: string }[];
+  isRescoping?: boolean;
 }
 
-export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveStatus, canEdit, teamOptions, leaderOptions }: Props) => {
+export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveStatus, canEdit, teamOptions, leaderOptions, isRescoping }: Props) => {
   const hasData = !!(localWo.implementasi_status || localWo.team || localWo.tanggal_rfs);
   const [editing, setEditing] = useState(!hasData);
   const locked = hasData && !editing;
@@ -54,8 +55,14 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
         </div>
         <div className="space-y-0">
           <AutoSaveInput label="CO Tanggal" value={localWo.co_date} field="co_date" type="date" onSave={handleFieldSave} locked={locked} />
-          <AutoSaveInput label="RFI Done" value={localWo.rfi_done} field="rfi_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
-          <AutoSaveInput label="RFS Done" value={localWo.rfs_done} field="rfs_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+          {isRescoping ? (
+            <AutoSaveInput label="RFI Done" value={localWo.rfi_done || localWo.impl_rfi_done} field="impl_rfi_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+          ) : (
+            <>
+              <AutoSaveInput label="RFI Done" value={localWo.rfi_done} field="rfi_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+              <AutoSaveInput label="RFS Done" value={localWo.rfs_done} field="rfs_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+            </>
+          )}
           <AutoSaveInput label="Impl Status" value={localWo.implementasi_status || localWo.impl_status} field="impl_status" type="select" onSave={handleFieldSave} locked={locked}
             options={[
               { label: 'Awaiting', value: 'Awaiting' },
@@ -71,6 +78,31 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
         <AutoSaveInput label="Note Implementasi" value={localWo.note_implementasi || localWo.impl_notes} field="impl_notes" type="textarea" onSave={handleFieldSave} locked={locked} />
       </div>
 
+      {isRescoping && (
+        <div className="mt-8 border-t border-slate-100 pt-6">
+          <h3 className="font-bold text-slate-800 mb-4">Akses Gedung</h3>
+          <AutoSaveInput label="Ada Akses Gedung?" value={localWo.has_akses_gedung} field="has_akses_gedung" type="checkbox" onSave={handleFieldSave} locked={locked} />
+          {localWo.has_akses_gedung && (
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-x-12 animate-in fade-in">
+              <div className="space-y-0">
+                <AutoSaveInput label="Nama Gedung" value={localWo.nama_gedung} field="nama_gedung" onSave={handleFieldSave} locked={locked} />
+                <AutoSaveInput label="PIC Gedung Nama" value={localWo.pic_gedung_nama} field="pic_gedung_nama" onSave={handleFieldSave} locked={locked} />
+              </div>
+              <div className="space-y-0">
+                <AutoSaveInput label="PIC Gedung Telp" value={localWo.pic_gedung_telp} field="pic_gedung_telp" onSave={handleFieldSave} locked={locked} />
+                <AutoSaveInput label="Status Akses Gedung" value={localWo.status_akses_gedung} field="status_akses_gedung" onSave={handleFieldSave} locked={locked} />
+                {!locked && (
+                  <label className="border border-dashed border-blue-300 rounded-lg p-3 flex items-center justify-center gap-2 mt-3 hover:bg-blue-50 cursor-pointer transition-colors text-blue-600 font-bold text-sm">
+                    <input type="file" className="hidden" />
+                    Upload Surat Izin Gedung
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {!locked && (
         <div className="mt-8 border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-50/50 cursor-pointer group hover:bg-slate-50 transition-colors">
           <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -85,8 +117,11 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
           <button className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
             Simpan Draft
           </button>
-          <button onClick={() => handleUpdateStage('atp')} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
-            Update Stage Implementasi <ChevronRight className="w-4 h-4" />
+          <button 
+            onClick={() => handleUpdateStage(isRescoping ? 'rfi_done' : 'atp')} 
+            className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+          >
+            {isRescoping ? 'Update Stage → RFI Done' : 'Update Stage Implementasi'} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       )}

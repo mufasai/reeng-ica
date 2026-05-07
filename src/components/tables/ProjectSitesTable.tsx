@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCellSave } from '../../hooks/useCellSave';
+import { countCombatDone, COMBAT_IMPL_STEPS } from '../../config/stagePipelines';
 import { InlineSectorEdit, InlineTeamEdit, InlineStageEdit, InlineSelectEdit } from '../common/InlineEditCells';
 import { type SiteMaster, teams, workOrders, filterTerms, combatTerms, siteStageLogs, USERS, teamMembersRecords, people, atpWorkOrders, atpTasks } from '../../data/mockData';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react';
@@ -297,12 +298,15 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                {col('atp_number') && <TableHead sortable onSort={() => handleSort('atp_number')} sortDirection={sortConfig?.key === 'atp_number' ? sortConfig.direction : undefined}>ATP Number</TableHead>}
                {col('sector') && <TableHead sortable onSort={() => handleSort('sector')} sortDirection={sortConfig?.key === 'sector' ? sortConfig.direction : undefined}>Sektor</TableHead>}
                {col('region') && <TableHead sortable onSort={() => handleSort('region')} sortDirection={sortConfig?.key === 'region' ? sortConfig.direction : undefined}>Region</TableHead>}
+               {col('priority') && <TableHead sortable onSort={() => handleSort('priority')} sortDirection={sortConfig?.key === 'priority' ? sortConfig.direction : undefined}>Priority</TableHead>}
                {col('tp_name') && <TableHead sortable onSort={() => handleSort('tp_name')} sortDirection={sortConfig?.key === 'tp_name' ? sortConfig.direction : undefined}>TP</TableHead>}
                {col('permit_status') && <TableHead>Permit Status</TableHead>}
                {col('impl_status') && <TableHead>Impl Status</TableHead>}
                {col('atp_status') && <TableHead>ATP Status</TableHead>}
+               {sites.some(s => s.project_type === 'COMBAT') && <TableHead>Impl Progress</TableHead>}
                {col('team') && <TableHead>Team</TableHead>}
                {col('stage') && <TableHead sortable onSort={() => handleSort('stage')} sortDirection={sortConfig?.key === 'stage' ? sortConfig.direction : undefined}>Stage</TableHead>}
+               {col('ioms') && <TableHead>IOMS</TableHead>}
                {col('days') && <TableHead sortable onSort={() => handleSort('days')} sortDirection={sortConfig?.key === 'days' ? sortConfig.direction : undefined}>Last Updated</TableHead>}
                {col('termin') && <TableHead className="w-[80px]">Termin</TableHead>}
                
@@ -389,13 +393,18 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                    </TableCell>
                                )}
                                {col('site_name') && (
-                                   <TableCell>
-                                       <Link to={`/sites/${site.site_id}`} className="font-medium text-[var(--blue-400)] hover:underline">
-                                           <div className="max-w-[150px] truncate" title={site.site_name}>
-                                               {site.site_name}
-                                           </div>
-                                       </Link>
-                                   </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                          <div className="flex items-center gap-2">
+                                            <Link to={`/sites/${site.site_id}`} className="font-semibold text-[var(--blue-400)] hover:underline break-all leading-tight">
+                                                {site.site_name}
+                                            </Link>
+                                            {site.project_type === 'RESCOPING' && site.is_relokasi && (
+                                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-bold rounded uppercase whitespace-nowrap">Relokasi</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                    </TableCell>
                                )}
                                {col('atp_number') && (
                                    <TableCell>
@@ -447,6 +456,14 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                        </span>
                                    </TableCell>
                                )}
+                               {col('priority') && (
+                                    <TableCell>
+                                      {site.priority === 'P1' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-red-100 text-red-700 font-bold text-[11px]">P1</span>}
+                                      {site.priority === 'P2' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-amber-100 text-amber-700 font-bold text-[11px]">P2</span>}
+                                      {site.priority === 'P3' && <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">P3</span>}
+                                      {!['P1','P2','P3'].includes(site.priority as string) && <span className="text-slate-300">—</span>}
+                                    </TableCell>
+                                )}
                                {col('tp_name') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</TableCell>}
                                {col('permit_status') && (
                                    <TableCell>
@@ -513,9 +530,30 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                         })()}
                                     </TableCell>
                                 )}
+                               {/* Impl Progress — Combat only */}
+                               {sites.some(s => s.project_type === 'COMBAT') && (
+                               <TableCell>
+                                 {site.project_type === 'COMBAT' ? (() => {
+                                   const steps = (site as any).combat_impl_steps || (atpWorkOrders.find(w => w.site_id === site.site_id) as any)?.combat_impl_steps;
+                                   const done = countCombatDone(steps);
+                                   const total = COMBAT_IMPL_STEPS.length;
+                                   const pct = Math.round((done / total) * 100);
+                                   return (
+                                     <div className="min-w-[80px]">
+                                       <div className="text-[11px] font-bold text-slate-700 mb-1">{done}/{total} tahap</div>
+                                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                         <div className="h-full bg-emerald-500 rounded-full transition-all"
+                                           style={{ width: `${pct}%` }} />
+                                       </div>
+                                     </div>
+                                   );
+                                 })() : <span className="text-slate-300">—</span>}
+                               </TableCell>
+                               )}
+
                                {col('team') && (
                                    <TableCell>
-                                       <InlineTeamEdit 
+                                       <InlineTeamEdit
                                             value={(site as any).team_assigned || team?.name || ''} 
                                             onSave={(val) => saveField(site.site_id, 'site', 'team_assigned', val)}
                                             options={teams.map(t => ({ label: t.name, value: t.name }))}
@@ -532,6 +570,20 @@ const ProjectSitesTable = ({ sites, onEdit, onDelete }: ProjectSitesTableProps) 
                                         />
                                    </TableCell>
                                )}
+                               {col('ioms') && (
+                                    <TableCell>
+                                        {site.ioms_registered ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                                Registered
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap border border-red-100">
+                                                ✗ Not Registered
+                                            </span>
+                                        )}
+                                    </TableCell>
+                                )}
                                {col('days') && (
                                    <TableCell className="text-xs font-medium text-slate-600 tabular-nums">
                                         {updateInfo.text}

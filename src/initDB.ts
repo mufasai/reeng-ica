@@ -113,12 +113,26 @@ export async function initAppDB() {
         prio:             String(s.prio || ''),
         prio_capex_final: String(s.prio_capex_final || ''),
         new_status_implementation: String(s.new_status_implementation || ''),
-        latitude:         Number(s.latitude) || 0,
-        longitude:        Number(s.longitude) || 0,
-        ne_id:            String(s.ne_id || ''),
-        site_name:        String(s.site_name || ''),
-        tp_name:          String(s.tp_name || ''),
-        ineom_registered: Boolean(s.ineom_registered),
+        latitude:            Number(s.latitude) || 0,
+        longitude:           Number(s.longitude) || 0,
+        ne_id:               String(s.ne_id || ''),
+        site_name:           String(s.site_name || ''),
+        tp_name:             String(s.tp_name || ''),
+        ineom_registered:    Boolean(s.ineom_registered),
+        combat_impl_steps:   (s.combat_impl_steps as any) || null,
+        // Combat BTS technical fields
+        bts_type:            String(s.bts_type || ''),
+        mast_type:           String(s.mast_type || ''),
+        mast_height:         Number(s.mast_height) || null,
+        antenna_count:       Number(s.antenna_count) || null,
+        power_source:        String(s.power_source || ''),
+        power_capacity_kva:  Number(s.power_capacity_kva) || null,
+        luas_lahan_m2:       Number(s.luas_lahan_m2) || null,
+        access_road:         s.access_road != null ? Boolean(s.access_road) : null,
+        grounding_done:      s.grounding_done != null ? Boolean(s.grounding_done) : null,
+        lightning_rod:       s.lightning_rod != null ? Boolean(s.lightning_rod) : null,
+        frequency_bands:     Array.isArray(s.frequency_bands) ? s.frequency_bands as string[] : [],
+        vendors:             Array.isArray(s.vendors) ? s.vendors as string[] : [],
       }));
 
       atpWorkOrders.length = 0;
@@ -157,7 +171,8 @@ export async function initAppDB() {
             geom:         (s.latitude && s.longitude)
                             ? `${s.latitude}, ${s.longitude}`
                             : '',
-          });
+            combat_impl_steps: (s.combat_impl_steps as any) || null,
+          } as any);
         }
       }
 

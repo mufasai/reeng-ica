@@ -2,20 +2,30 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { atpWorkOrders, siteMasterRecords, workOrderLogs, teams, people, teamMembersRecords } from '../data/mockData';
-import { CheckCircle2, ChevronRight, Upload, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Upload, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import { SaveIndicator, AutoSaveInput } from '../components/work-orders/AtpShared';
 import { PermitSection } from '../components/work-orders/PermitSection';
 import { ImplSection } from '../components/work-orders/ImplSection';
+import { CombatImplChecklist } from '../components/work-orders/CombatImplChecklist';
 import { PengajuanPembayaran } from '../components/work-orders/PengajuanPembayaran';
+import { RescopingSurveyTab } from '../components/work-orders/RescopingSurveyTab';
+import { RescopingErfinTab } from '../components/work-orders/RescopingErfinTab';
 import { db } from '../db';
+import {
+  COMBAT_STEPPER_NODES,
+  RESCOPING_STEPPER_NODES,
+  DEFAULT_COMBAT_IMPL_STEPS,
+  type CombatImplSteps,
+} from '../config/stagePipelines';
 
-type WorkStep = 'permit' | 'implementasi' | 'atp' | 'penagihan' | 'foto' | 'file' | 'log';
+type WorkStep = 'survey' | 'erfin' | 'permit' | 'implementasi' | 'atp' | 'penagihan' | 'foto' | 'file' | 'log';
 
+// Generic (Filter/Blacksite/L2H) stepper
 const STAGE_STEPS = ['imported', 'permit', 'implementasi', 'atp', 'bast', 'invoice', 'completed'];
 const STAGE_LABELS = ['1·Imported', '2·Permit', '3·Implementasi', '4·ATP', '5·BAST', '6·Invoice', '7·Selesai'];
 
-const INNER_TABS: { id: WorkStep; label: string; icon: any }[] = [
+const BASE_TABS: { id: WorkStep; label: string; icon: any }[] = [
   { id: 'permit',      label: 'Permit',        icon: FileText },
   { id: 'implementasi',label: 'Implementasi',  icon: Briefcase },
   { id: 'atp',         label: 'ATP & Dokumen', icon: FolderCheck },
@@ -51,12 +61,22 @@ const AtpWorkPage = () => {
   const navigate = useNavigate();
   const { currentUser, can } = useAuth();
   const [searchParams] = useSearchParams();
+  const [localWo, setLocalWo] = useState<any>(null);
+  const isRescopingParam = localWo?.project_type === 'RE-SCOPING' || localWo?.project_type === 'RESCOPING';
   const initialTab = searchParams.get('tab') === 'penagihan' ? 'penagihan' : 'permit';
   const [activeTab, setActiveTab] = useState<WorkStep>(initialTab as any);
-  const [localWo, setLocalWo] = useState<any>(null);
+  
+  // Update initial tab for rescoping if not explicitly set to something else
+  useEffect(() => {
+    if (isRescopingParam && activeTab === 'permit' && !searchParams.get('tab')) {
+      setActiveTab('survey');
+    }
+  }, [isRescopingParam, searchParams]);
+  
   const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle');
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [dbFiles, setDbFiles] = useState<any[]>([]);
+  const [combatSteps, setCombatSteps] = useState<CombatImplSteps>(DEFAULT_COMBAT_IMPL_STEPS);
 
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
@@ -71,7 +91,18 @@ const AtpWorkPage = () => {
 
   useEffect(() => {
     const wo = atpWorkOrders.find(w => w.id === id);
-    if (wo) setLocalWo({ ...wo });
+    if (wo) {
+      setLocalWo({ ...wo });
+      // Load combat steps from DB for COMBAT sites
+      if (wo.project_type === 'COMBAT') {
+        db.query(`SELECT combat_impl_steps FROM sites:${wo.site_id}`)
+          .then((res: any) => {
+            const steps = res?.[0]?.[0]?.combat_impl_steps;
+            if (steps) setCombatSteps({ ...DEFAULT_COMBAT_IMPL_STEPS, ...steps });
+          })
+          .catch(() => {});
+      }
+    }
   }, [id]);
 
   useEffect(() => {
@@ -211,7 +242,32 @@ const AtpWorkPage = () => {
       })
     : [];
 
-  const currentStageIdx = STAGE_STEPS.indexOf(localWo.stage || 'imported');
+  const isCombat = localWo.project_type === 'COMBAT';
+  const isRescoping = localWo.project_type === 'RE-SCOPING' || localWo.project_type === 'RESCOPING';
+
+  // Map raw stage to stepper node index
+  const currentStageIdx = isCombat
+    ? COMBAT_STEPPER_NODES.findIndex(n => n.stages.includes(localWo.stage || 'imported'))
+    : isRescoping
+    ? RESCOPING_STEPPER_NODES.findIndex(n => n.stages.includes(localWo.stage || 'imported'))
+    : STAGE_STEPS.indexOf(localWo.stage || 'imported');
+
+  const tabsToRender = useMemo(() => {
+    if (isRescoping) {
+      return [
+        { id: 'survey' as WorkStep, label: 'Survey', icon: FolderCheck, disabled: currentStageIdx < 1 && localWo.stage !== 'assigned' },
+        { id: 'erfin' as WorkStep, label: 'ERFIN', icon: FileText, disabled: currentStageIdx < 2 },
+        ...BASE_TABS.map(t => ({
+          ...t,
+          disabled: (t.id === 'permit' && currentStageIdx < 3) || 
+                    (t.id === 'implementasi' && currentStageIdx < 4) ||
+                    (t.id === 'atp' && currentStageIdx < 6) ||
+                    (t.id === 'penagihan' && currentStageIdx < 7)
+        }))
+      ];
+    }
+    return BASE_TABS.map(t => ({ ...t, disabled: false }));
+  }, [isRescoping, currentStageIdx, localWo.stage]);
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-12 animate-in fade-in duration-300 relative">
@@ -267,42 +323,90 @@ const AtpWorkPage = () => {
         </div>
       </div>
 
+      {/* SURVEY NOK RED BANNER */}
+      {isRescoping && localWo.stage === 'survey_nok' && (
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-center justify-between shadow-sm">
+          <div>
+            <p className="font-bold flex items-center gap-2"><AlertCircle className="w-5 h-5"/> ✗ Survey NOK — Proses Dihentikan</p>
+            <p className="text-sm mt-1 ml-7">Alasan: {localWo.survey_nok_reason}</p>
+          </div>
+          {['operational', 'admin'].includes(currentUser?.role || '') && (
+            <button onClick={async () => {
+              if (confirm('Yakin ingin reset status survey?')) {
+                await db.query(`UPDATE sites:${localWo.site_id} SET stage = 'survey', survey_result = null, survey_nok_reason = null, updated_at = time::now()`);
+                handleUpdateStage('survey');
+              }
+            }} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2 shadow-sm">
+              <RefreshCw className="w-4 h-4" /> Reset
+            </button>
+          )}
+        </div>
+      )}
+
       {/* STAGE STEPPER */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 flex items-start justify-between relative">
-        <div className="absolute top-1/2 left-10 right-10 h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
-        <div className="absolute top-1/2 left-10 h-0.5 bg-blue-500 -translate-y-1/2 z-0 transition-all duration-500"
-          style={{ width: `calc(${(currentStageIdx / (STAGE_STEPS.length - 1)) * 100}% - 40px)` }} />
-        {STAGE_STEPS.map((step, idx) => {
-          const isDone = idx < currentStageIdx;
-          const isCurrent = idx === currentStageIdx;
-          return (
-            <div key={step} className="relative z-10 flex flex-col items-center gap-3">
-              <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 shadow-sm',
-                isDone ? 'bg-emerald-500 text-white border-2 border-emerald-500' :
-                isCurrent ? 'bg-blue-600 text-white border-2 border-blue-600 ring-4 ring-blue-100' :
-                'bg-white text-slate-400 border-2 border-slate-200')}>
-                {isDone ? <CheckCircle2 className="w-5 h-5" /> : (idx + 1)}
-              </div>
-              <span className={clsx('text-[10px] font-black uppercase tracking-widest whitespace-nowrap',
-                isCurrent ? 'text-blue-700' : isDone ? 'text-slate-700' : 'text-slate-400')}>
-                {STAGE_LABELS[idx].split('·')[1]}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {(() => {
+        const nodes = isCombat
+          ? COMBAT_STEPPER_NODES.map(n => n.label)
+          : isRescoping
+          ? RESCOPING_STEPPER_NODES.map(n => n.label)
+          : STAGE_LABELS.map(l => l.split('·')[1]);
+        const nodeCount = nodes.length;
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 flex items-start justify-between relative">
+            <div className="absolute top-7 left-10 right-10 h-0.5 bg-slate-100 z-0" />
+            <div className="absolute top-7 left-10 h-0.5 bg-blue-500 z-0 transition-all duration-500"
+              style={{ width: `calc(${(Math.max(0, currentStageIdx) / (nodeCount - 1)) * 100}% - 40px)` }} />
+            {nodes.map((label, idx) => {
+              let isDone = idx < currentStageIdx;
+              let isCurrent = idx === currentStageIdx;
+
+              let isRed = false;
+              if (isRescoping && label === 'Survey' && localWo.stage === 'survey_nok') {
+                isRed = true;
+                isDone = false;
+                isCurrent = false;
+              }
+
+              return (
+                <div key={label} className="relative z-10 flex flex-col items-center gap-2">
+                  <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 shadow-sm',
+                    isRed ? 'bg-red-500 text-white border-2 border-red-500' :
+                    isDone ? 'bg-emerald-500 text-white border-2 border-emerald-500' :
+                    isCurrent ? 'bg-blue-600 text-white border-2 border-blue-600 ring-4 ring-blue-100' :
+                    'bg-white text-slate-400 border-2 border-slate-200')}>
+                    {isDone ? <CheckCircle2 className="w-5 h-5" /> : (idx + 1)}
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={clsx('text-[10px] font-black uppercase tracking-widest whitespace-nowrap',
+                      isRed ? 'text-red-600' : isCurrent ? 'text-blue-700' : isDone ? 'text-slate-700' : 'text-slate-400')}>
+                      {label}
+                    </span>
+                    {isRed && <span className="text-[10px] font-bold text-red-500 mt-0.5">✗ NOK</span>}
+                    {isRescoping && label === 'Survey' && isDone && localWo.survey_date && (
+                      <span className="text-[9px] font-medium text-slate-400 mt-0.5">{localWo.survey_date}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* WORKSPACE TABS */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col min-h-[600px]">
         <div className="flex border-b border-slate-200 bg-slate-50/50 overflow-x-auto hide-scrollbar">
-          {INNER_TABS.map(tab => {
+          {tabsToRender.map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
+            const disabled = tab.disabled;
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              <button key={tab.id} onClick={() => !disabled && setActiveTab(tab.id)}
                 className={clsx('flex items-center gap-2 px-6 py-4 border-b-2 text-sm font-semibold transition-colors whitespace-nowrap',
-                  active ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100/50')}>
-                <Icon className={clsx('w-4 h-4', active ? 'text-blue-600' : 'text-slate-400')} />
+                  active ? 'border-blue-600 text-blue-700 bg-white' : 
+                  disabled ? 'border-transparent text-slate-300 cursor-not-allowed bg-slate-50/50' : 
+                  'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100/50')}>
+                <Icon className={clsx('w-4 h-4', active ? 'text-blue-600' : disabled ? 'text-slate-300' : 'text-slate-400')} />
                 {tab.label}
               </button>
             );
@@ -310,6 +414,14 @@ const AtpWorkPage = () => {
         </div>
 
         <div className="flex-1 p-8">
+          {activeTab === 'survey' && isRescoping && (
+            <RescopingSurveyTab localWo={localWo} stageIdx={currentStageIdx} onUpdateStage={handleUpdateStage} saveStatus={saveStatus} />
+          )}
+
+          {activeTab === 'erfin' && isRescoping && (
+            <RescopingErfinTab localWo={localWo} stageIdx={currentStageIdx} onUpdateStage={handleUpdateStage} saveStatus={saveStatus} />
+          )}
+
           {activeTab === 'permit' && (
             <div className="max-w-4xl animate-in fade-in">
               <PermitSection localWo={localWo} handleFieldSave={handleFieldSave} handleUpdateStage={handleUpdateStage} saveStatus={saveStatus} canEdit={canEditFields} />
@@ -318,7 +430,24 @@ const AtpWorkPage = () => {
 
           {activeTab === 'implementasi' && (
             <div className="max-w-4xl animate-in fade-in">
-              <ImplSection localWo={localWo} handleFieldSave={handleFieldSave} handleUpdateStage={handleUpdateStage} saveStatus={saveStatus} canEdit={canEditFields} teamOptions={teamOptions} leaderOptions={leaderOptions} />
+              {isCombat ? (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-black text-slate-800">Implementasi — Combat</h2>
+                    <SaveIndicator status={saveStatus} />
+                  </div>
+                  <CombatImplChecklist
+                    siteId={localWo.site_id}
+                    steps={combatSteps}
+                    onUpdate={steps => setCombatSteps(steps)}
+                    onMarkSelesai={() => handleUpdateStage('dokumen_done')}
+                    currentStage={localWo.stage || 'imported'}
+                    canEdit={canEditFields}
+                  />
+                </div>
+              ) : (
+                <ImplSection localWo={localWo} handleFieldSave={handleFieldSave} handleUpdateStage={handleUpdateStage} saveStatus={saveStatus} canEdit={canEditFields} teamOptions={teamOptions} leaderOptions={leaderOptions} isRescoping={isRescoping} />
+              )}
             </div>
           )}
 

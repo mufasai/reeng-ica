@@ -21,16 +21,16 @@ export const ALL_COLS: ColDef[] = [
     { key: 'days', label: 'Last Updated', defaultVisible: true },
     { key: 'termin', label: 'Termin', defaultVisible: true },
     { key: 'actions', label: 'Actions', defaultVisible: true },
+    { key: 'priority', label: 'Priority', defaultVisible: true },
+    { key: 'ioms', label: 'IOMS', defaultVisible: true },
     // Optional (Hidden by default)
     { key: 'type', label: 'Type', defaultVisible: false },
     { key: 'sow_id', label: 'SOW ID', defaultVisible: false },
     { key: 'po_number', label: 'PO Number', defaultVisible: false },
     { key: 'field_leader', label: 'Field Leader', defaultVisible: false },
     { key: 'cluster', label: 'Cluster', defaultVisible: false },
-    { key: 'priority', label: 'Priority', defaultVisible: false },
     { key: 'batch', label: 'Batch', defaultVisible: false },
     { key: 'lat_long', label: 'Lat/Long', defaultVisible: false },
-    { key: 'ioms', label: 'IOMS', defaultVisible: false },
     { key: 'permit_expiry', label: 'Permit Expiry', defaultVisible: false },
     { key: 'po_tsel', label: 'PO Tsel', defaultVisible: false },
 ];
