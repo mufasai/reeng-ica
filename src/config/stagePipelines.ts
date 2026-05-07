@@ -82,16 +82,16 @@ export const RESCOPING_PIPELINE: SiteStage[] = [
 export const RESCOPING_VALID_TRANSITIONS: Record<string, string[]> = {
   imported:       ['assigned'],
   assigned:       ['survey'],
-  survey:         ['erfin_process', 'survey_nok'],  // branches on OK/NOK
-  survey_nok:     ['survey'],                        // reset only
+  survey:         ['erfin_process', 'survey_nok'],
+  survey_nok:     ['survey'],
   erfin_process:  ['erfin_ready'],
   erfin_ready:    ['permit_process'],
   permit_process: ['permit_ready'],
   permit_ready:   ['akses_process'],
   akses_process:  ['akses_ready'],
   akses_ready:    ['implementasi'],
-  implementasi:   ['rfi_done'],
-  rfi_done:       ['dokumen_done'],
+  implementasi:   ['dokumen_done'],   // RFI Done is a checkbox, not a stage gate
+  rfi_done:       ['dokumen_done'],   // backward-compat for old data
   dokumen_done:   ['bast'],
   bast:           ['invoice'],
   invoice:        ['completed'],
@@ -103,8 +103,8 @@ export const RESCOPING_STEPPER_NODES = [
   { label: 'Survey',         stages: ['assigned', 'survey', 'survey_nok'] },
   { label: 'ERFIN',          stages: ['erfin_process', 'erfin_ready'] },
   { label: 'Permit',         stages: ['permit_process', 'permit_ready'] },
-  { label: 'Implementasi',   stages: ['akses_process', 'akses_ready', 'implementasi'] },
-  { label: 'RFI',            stages: ['rfi_done'] },
-  { label: 'BAST',           stages: ['dokumen_done', 'bast'] },
+  { label: 'Implementasi',   stages: ['akses_process', 'akses_ready', 'implementasi', 'rfi_done'] },
+  { label: 'ATP',            stages: ['dokumen_done'] },
+  { label: 'BAST',           stages: ['bast'] },
   { label: 'Selesai',        stages: ['invoice', 'completed'] },
 ];

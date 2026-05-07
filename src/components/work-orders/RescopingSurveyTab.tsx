@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import clsx from 'clsx';
 import { db } from '../../db';
 
-export const RescopingSurveyTab = ({ localWo, onUpdateStage }: any) => {
+export const RescopingSurveyTab = ({ localWo, onUpdateStage, onFieldsSaved }: any) => {
   const { currentUser } = useAuth();
   const [surveyDate, setSurveyDate] = useState(localWo.survey_date || '');
   const [surveyResult, setSurveyResult] = useState<'ok' | 'nok' | null>(localWo.survey_result || null);
@@ -18,21 +18,25 @@ export const RescopingSurveyTab = ({ localWo, onUpdateStage }: any) => {
 
   const handleLanjutErfin = async () => {
     if (!surveyDate || surveyResult !== 'ok') return;
-    
-    await db.query(`UPDATE sites:${localWo.site_id} SET stage = 'erfin_process', survey_date = $date, survey_result = 'ok', updated_at = time::now()`, { date: surveyDate });
+    const fields = { stage: 'erfin_process', survey_date: surveyDate, survey_result: 'ok' };
+    await db.query(`UPDATE ${localWo.id} SET stage = 'erfin_process', survey_date = $date, survey_result = 'ok', updated_at = time::now()`, { date: surveyDate });
+    onFieldsSaved?.(fields);
     onUpdateStage('erfin_process');
   };
 
   const handleTandaiNok = async () => {
     if (!nokReason) return;
-    
-    await db.query(`UPDATE sites:${localWo.site_id} SET stage = 'survey_nok', survey_result = 'nok', survey_nok_reason = $reason, updated_at = time::now()`, { reason: nokReason });
+    const fields = { stage: 'survey_nok', survey_result: 'nok', survey_nok_reason: nokReason };
+    await db.query(`UPDATE ${localWo.id} SET stage = 'survey_nok', survey_result = 'nok', survey_nok_reason = $reason, updated_at = time::now()`, { reason: nokReason });
+    onFieldsSaved?.(fields);
     onUpdateStage('survey_nok');
   };
 
   const handleReset = async () => {
     if (confirm('Yakin ingin reset status survey?')) {
-      await db.query(`UPDATE sites:${localWo.site_id} SET stage = 'survey', survey_result = null, survey_nok_reason = null, updated_at = time::now()`);
+      const fields = { stage: 'survey', survey_result: null, survey_nok_reason: null };
+      await db.query(`UPDATE ${localWo.id} SET stage = 'survey', survey_result = null, survey_nok_reason = null, updated_at = time::now()`);
+      onFieldsSaved?.(fields);
       onUpdateStage('survey');
     }
   };

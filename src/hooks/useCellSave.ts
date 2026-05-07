@@ -24,12 +24,12 @@ export const useCellSave = () => {
 
                     // Sync back to SurrealDB (sites table)
                     const surrealId = record.id;
-                    if (surrealId) {
+                    if (surrealId && surrealId.includes(':')) {
                         // Map local UI fields back to SurrealDB column names if needed
                         let dbFieldName = fieldName;
                         if (fieldName === 'status') dbFieldName = 'permit_status';
                         
-                        await db.query('UPDATE $id MERGE $data', { id: surrealId, data: { [dbFieldName]: newValue } });
+                        await db.query(`UPDATE ${surrealId} MERGE $data`, { data: { [dbFieldName]: newValue } });
                         console.log(`Saved to SurrealDB sites record ${surrealId}:`, { [dbFieldName]: newValue });
                     }
 
@@ -39,8 +39,8 @@ export const useCellSave = () => {
                         if (wo) {
                             wo.stage = newValue;
                             const woSurrealId = wo.id;
-                            if (woSurrealId) {
-                                await db.query('UPDATE $id MERGE { stage: $newValue }', { id: woSurrealId, newValue });
+                            if (woSurrealId && woSurrealId.includes(':')) {
+                                await db.query(`UPDATE ${woSurrealId} MERGE { stage: $newValue }`, { newValue });
                                 console.log(`Synced stage back to SurrealDB active workOrder ${woSurrealId}: ${newValue}`);
                             }
                         }
@@ -54,7 +54,7 @@ export const useCellSave = () => {
 
                     // Sync back to SurrealDB (sites table)
                     const surrealId = record.id;
-                    if (surrealId) {
+                    if (surrealId && surrealId.includes(':')) {
                         // Map local UI fields back to SurrealDB column names if needed
                         let dbFieldName = fieldName;
                         if (fieldName === 'po_number') dbFieldName = 'po_id';
@@ -62,7 +62,7 @@ export const useCellSave = () => {
                         if (fieldName === 'sow_id') dbFieldName = 'sow_id';
                         if (fieldName === 'team_id') dbFieldName = 'team';
 
-                        await db.query('UPDATE $id MERGE $data', { id: surrealId, data: { [dbFieldName]: newValue } });
+                        await db.query(`UPDATE ${surrealId} MERGE $data`, { data: { [dbFieldName]: newValue } });
                         console.log(`Saved to SurrealDB work order record ${surrealId}:`, { [dbFieldName]: newValue });
                     }
 
@@ -72,8 +72,8 @@ export const useCellSave = () => {
                             if (wo.site_id === record.site_id && wo.id !== recordId && wo.status === 'active') {
                                 wo.status = 'historical' as any;
                                 const otherSurrealId = wo.id;
-                                if (otherSurrealId) {
-                                    await db.query('UPDATE $id MERGE { status: "historical" }', { id: otherSurrealId });
+                                if (otherSurrealId && otherSurrealId.includes(':')) {
+                                    await db.query(`UPDATE ${otherSurrealId} MERGE { status: "historical" }`);
                                 }
                             }
                         }

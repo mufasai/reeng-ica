@@ -3,7 +3,7 @@ import { Upload, ChevronRight, FileText } from 'lucide-react';
 import clsx from 'clsx';
 import { db } from '../../db';
 
-export const RescopingErfinTab = ({ localWo, stageIdx, onUpdateStage }: any) => {
+export const RescopingErfinTab = ({ localWo, stageIdx, onUpdateStage, onFieldsSaved }: any) => {
   const [erfinNo, setErfinNo] = useState(localWo.erfin_number || '');
   const [erfinDate, setErfinDate] = useState(localWo.erfin_date || '');
   const [erfinReadyDate, setErfinReadyDate] = useState(localWo.erfin_ready_date || '');
@@ -12,12 +12,12 @@ export const RescopingErfinTab = ({ localWo, stageIdx, onUpdateStage }: any) => 
 
   const isHistorical = localWo.stage && ['permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed'].includes(localWo.stage) && !localWo.erfin_number;
 
-  const handleSimpanDraft = async () => {
-    await db.query(`UPDATE sites:${localWo.site_id} SET erfin_number = $num, erfin_date = $date, erfin_ready_date = $ready, erfin_note = $note, updated_at = time::now()`, { num: erfinNo, date: erfinDate, ready: erfinReadyDate, note: erfinNote });
-  };
+
 
   const handleLanjutPermit = async () => {
-    await db.query(`UPDATE sites:${localWo.site_id} SET stage = 'permit_process', erfin_number = $num, erfin_date = $date, erfin_ready_date = $ready, erfin_note = $note, updated_at = time::now()`, { num: erfinNo, date: erfinDate, ready: erfinReadyDate, note: erfinNote });
+    const fields = { stage: 'permit_process', erfin_number: erfinNo, erfin_date: erfinDate, erfin_ready_date: erfinReadyDate, erfin_note: erfinNote };
+    await db.query(`UPDATE ${localWo.id} SET stage = 'permit_process', erfin_number = $num, erfin_date = $date, erfin_ready_date = $ready, erfin_note = $note, updated_at = time::now()`, { num: erfinNo, date: erfinDate, ready: erfinReadyDate, note: erfinNote });
+    onFieldsSaved?.(fields);
     onUpdateStage('permit_process');
   };
 
@@ -104,12 +104,9 @@ export const RescopingErfinTab = ({ localWo, stageIdx, onUpdateStage }: any) => 
           <textarea value={erfinNote} onChange={e => setErfinNote(e.target.value)} rows={2} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Opsional..." />
         </div>
 
-        <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
-          <button onClick={handleSimpanDraft} className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 shadow-sm">
-            Simpan Draft
-          </button>
+        <div className="flex items-center justify-end mt-8 pt-6 border-t border-slate-100">
           <button onClick={handleLanjutPermit} disabled={!erfinNo || !hasFile} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-            ERFIN Ready — Lanjut ke Permit <ChevronRight className="w-4 h-4" />
+            Update ERFIN Stage <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>

@@ -2245,6 +2245,7 @@ export interface AtpWorkOrder {
   ne_id?: string;
   status_atp?: string;
   issue_problem?: string;
+  issue_implementasi?: string;
   note_implementasi?: string;
   tanggal_rfs?: string;
   note_foto_evidence?: string;

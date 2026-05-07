@@ -254,7 +254,7 @@ const SiteDetail = () => {
 
       {/* ── Teknis BTS (COMBAT only) ──────────────────────────────────────── */}
       {localSiteData?.project_type === 'COMBAT' && (
-        <CombatBtsTeknis siteId={site.site_id} data={localSiteData} />
+        <CombatBtsTeknis dbRecordId={site.id} data={localSiteData} />
       )}
     </div>
   );
@@ -381,7 +381,7 @@ const POWER_SRC_OPTS = ['PLN', 'Genset', 'Solar', 'PLN+Genset'];
 const FREQ_BANDS = ['L700', 'L900', 'L1800', 'L2100', 'L2300', 'L2600'];
 const VENDOR_OPTS = ['Nokia', 'Ericsson', 'Huawei', 'ZTE'];
 
-const CombatBtsTeknis = ({ siteId, data }: { siteId: string; data: any }) => {
+const CombatBtsTeknis = ({ dbRecordId, data }: { dbRecordId: string; data: any }) => {
   const [local, setLocal] = useState<any>({
     bts_type: data.bts_type || '',
     mast_type: data.mast_type || '',
@@ -400,7 +400,7 @@ const CombatBtsTeknis = ({ siteId, data }: { siteId: string; data: any }) => {
   const save = async (field: string, value: any) => {
     setLocal((p: any) => ({ ...p, [field]: value }));
     try {
-      await db.query(`UPDATE sites:${siteId} SET ${field} = $v, updated_at = time::now()`, { v: value });
+      await db.query(`UPDATE ${dbRecordId} SET ${field} = $v, updated_at = time::now()`, { v: value });
     } catch (e) {
       console.error('BTS field save failed:', e);
     }

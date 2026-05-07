@@ -7,32 +7,42 @@ export interface ColDef {
 }
 
 export const ALL_COLS: ColDef[] = [
-    { key: 'site_id', label: 'SITE_ID', defaultVisible: true },
-    { key: 'site_name', label: 'Site Name', defaultVisible: true },
-    { key: 'atp_number', label: 'ATP Number', defaultVisible: true },
-    { key: 'sector', label: 'Sektor', defaultVisible: true },
+    { key: 'no', label: 'No', defaultVisible: true },
+    { key: 'project_type', label: 'Project Type', defaultVisible: true },
+    { key: 'site_id', label: 'Site ID', defaultVisible: true },
+    { key: 'site_moving_status', label: 'Site Moving Status', defaultVisible: true },
+    { key: 'final_site_id', label: 'Final Site ID', defaultVisible: true },
+    { key: 'site_sector_final', label: 'Site Sector Final', defaultVisible: true },
+    { key: 'sector', label: 'Sector', defaultVisible: true },
+    { key: 'filter_per_sector', label: 'Filter Per Sector', defaultVisible: true },
     { key: 'region', label: 'Region', defaultVisible: true },
-    { key: 'tp_name', label: 'TP', defaultVisible: true },
+    { key: 'ne_id', label: 'NE ID', defaultVisible: true },
+    { key: 'site_name', label: 'Site Name', defaultVisible: true },
+    { key: 'tp_name', label: 'TP Name', defaultVisible: true },
+    { key: 'ioms_registered', label: 'IOMS Registered', defaultVisible: true },
     { key: 'permit_status', label: 'Permit Status', defaultVisible: true },
-    { key: 'impl_status', label: 'Impl Status', defaultVisible: true },
-    { key: 'atp_status', label: 'ATP Status', defaultVisible: true },
+    { key: 'issue_problem', label: 'Issue Problem', defaultVisible: true },
+    { key: 'note_problem', label: 'Note Problem', defaultVisible: true },
+    { key: 'send_permit_format', label: 'Send Permit Format', defaultVisible: true },
+    { key: 'implementasi_status', label: 'Implementasi Status', defaultVisible: true },
+    { key: 'tanggal_rfs', label: 'Tanggal RFS', defaultVisible: true },
     { key: 'team', label: 'Team', defaultVisible: true },
-    { key: 'stage', label: 'Stage', defaultVisible: true },
-    { key: 'days', label: 'Last Updated', defaultVisible: true },
-    { key: 'termin', label: 'Termin', defaultVisible: true },
+    { key: 'team_onsite_status', label: 'Team Onsite Status', defaultVisible: true },
+    { key: 'issue_implementasi', label: 'Issue Implementasi', defaultVisible: true },
+    { key: 'note_implementasi', label: 'Note Implementasi', defaultVisible: true },
+    { key: 'status_atp', label: 'Status ATP', defaultVisible: true },
+    { key: 'note_foto_evidence', label: 'Note Foto Evidence', defaultVisible: true },
+    { key: 'ppid', label: 'PPID', defaultVisible: true },
+    { key: 'sow_id', label: 'SOW ID', defaultVisible: true },
+    { key: 'po_id', label: 'PO ID', defaultVisible: true },
+    { key: 'tiket_number', label: 'Tiket Number', defaultVisible: true },
+    { key: 'prio_capex_final', label: 'Prio Capex Final', defaultVisible: true },
+    { key: 'new_status_implementation', label: 'New Status Implementation', defaultVisible: true },
+    { key: 'prio', label: 'Prio', defaultVisible: true },
+    { key: 'latitude', label: 'Latitude', defaultVisible: true },
+    { key: 'longitude', label: 'Longitude', defaultVisible: true },
+    { key: 'file_date', label: 'File Date', defaultVisible: true },
     { key: 'actions', label: 'Actions', defaultVisible: true },
-    { key: 'priority', label: 'Priority', defaultVisible: true },
-    { key: 'ioms', label: 'IOMS', defaultVisible: true },
-    // Optional (Hidden by default)
-    { key: 'type', label: 'Type', defaultVisible: false },
-    { key: 'sow_id', label: 'SOW ID', defaultVisible: false },
-    { key: 'po_number', label: 'PO Number', defaultVisible: false },
-    { key: 'field_leader', label: 'Field Leader', defaultVisible: false },
-    { key: 'cluster', label: 'Cluster', defaultVisible: false },
-    { key: 'batch', label: 'Batch', defaultVisible: false },
-    { key: 'lat_long', label: 'Lat/Long', defaultVisible: false },
-    { key: 'permit_expiry', label: 'Permit Expiry', defaultVisible: false },
-    { key: 'po_tsel', label: 'PO Tsel', defaultVisible: false },
 ];
 
 const MOBILE_COLS = ['site_id', 'site_name', 'stage', 'actions'];
@@ -115,6 +125,9 @@ export const useTableColumns = (userId: string) => {
         if (isMobile) {
             return MOBILE_COLS.includes(key);
         }
+        // Unknown keys (e.g. stale localStorage entries) are treated as hidden,
+        // preventing phantom columns when column definitions are renamed/removed.
+        if (!ALL_COLS.some(c => c.key === key)) return false;
         return visibilityMap[key] !== false;
     }, [isMobile, visibilityMap]);
 

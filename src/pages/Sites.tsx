@@ -13,6 +13,7 @@ import AssignProjectModal from '../components/modals/AssignProjectModal';
 import { useAuth } from '../context/AuthContext';
 import { useTabContext } from '../context/TabContext';
 import { PlusCircle, ExternalLink, Plus } from 'lucide-react';
+import { db } from '../db';
 
 // ─── Constants & Helpers ────────────────────────────────────────────────────────
 const ACTIVE_WORK_COLS = [
@@ -20,7 +21,7 @@ const ACTIVE_WORK_COLS = [
     'FILTER PER SECTOR', 'REGION', 'NE_ID', 'SITE_NAME', 'TP NAME', 'IOMS REGISTERED', 'PERMIT STATUS',
     'ISSUE PROBLEM', 'NOTE PROBLEM', 'SEND PERMIT FORMAT', 'IMPLEMENTASI STATUS', 'Tanggal RFS', 'TEAM',
     'TEAM ONSITE STATUS', 'ISSUE IMPLEMENTASI', 'NOTE IMPLEMENTASI', 'STATUS ATP', 'NOTE FOTO EVIDENCE',
-    'PPID', 'ATP NUMBER', 'SOW ID', 'PO ID', 'TIKET NUMBER', 'PRIO CAPEX FINAL', 'NEW STATUS IMPLEMENTATION', 'PRIO',
+    'PPID', 'SOW ID', 'PO ID', 'TIKET NUMBER', 'PRIO CAPEX FINAL', 'NEW STATUS IMPLEMENTATION', 'PRIO',
     'LATITUDE', 'LONGITUDE', 'FILE DATE'
 ];
 
@@ -330,7 +331,7 @@ const Sites = () => {
         return { assignedSites: assigned };
     }, [sortedSites, atpWorkOrders.length]);
 
-    const handleAssignProject = (siteId: string, projectType: ProjectType) => {
+    const handleAssignProject = async (siteId: string, projectType: ProjectType) => {
         // 1. Create minimal work order
         const newWo: AtpWorkOrder = {
             id: `atp-new-${siteId.toLowerCase()}-${Date.now()}`,
@@ -346,6 +347,31 @@ const Sites = () => {
             initiated_at: new Date().toISOString(),
             status: 'active' as const
         };
+
+        const dbRecord = {
+            site_id: siteId,
+            atp_number: '',
+            sow_id: '',
+            po_id: '',
+            sector: 1,
+            site_sector: `${siteId}-S1`,
+            project_type: projectType,
+            stage: 'imported',
+            status: 'active',
+            initiated_by: currentUser?.id || 'system',
+            initiated_at: new Date().toISOString()
+        };
+
+        try {
+            const res = await db.query<[any]>('INSERT INTO sites $record', { record: dbRecord });
+            const inserted = res?.[0]?.[0];
+            if (inserted && inserted.id) {
+                newWo.id = String(inserted.id);
+            }
+        } catch (err) {
+            console.error('Failed to create sites record in SurrealDB:', err);
+        }
+
         atpWorkOrders.push(newWo);
 
         // 2. Navigate to site detail with pekerjaan hash
@@ -498,6 +524,12 @@ const Sites = () => {
                         )}
                     >
                         🌐 Semua Site
+                        <span className={clsx(
+                            "ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border",
+                            activeTab === 'all' ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-500 border-slate-200"
+                        )}>
+                            {sortedSites.length}
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}

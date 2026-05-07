@@ -12,6 +12,7 @@ import { db } from '../../db';
 
 interface Props {
   siteId: string;
+  dbRecordId: string;
   steps: CombatImplSteps;
   onUpdate: (steps: CombatImplSteps) => void;
   onMarkSelesai: () => void;
@@ -39,7 +40,7 @@ const borderColor: Record<CombatImplStepStatus, string> = {
   pending:     'border-l-slate-200 bg-white',
 };
 
-export const CombatImplChecklist = ({ siteId, steps, onUpdate, onMarkSelesai, currentStage, canEdit }: Props) => {
+export const CombatImplChecklist = ({ siteId, dbRecordId, steps, onUpdate, onMarkSelesai, currentStage, canEdit }: Props) => {
   const [expanded, setExpanded] = useState<Set<CombatImplStepKey>>(new Set());
   const [saving, setSaving] = useState<CombatImplStepKey | null>(null);
 
@@ -70,7 +71,7 @@ export const CombatImplChecklist = ({ siteId, steps, onUpdate, onMarkSelesai, cu
         .join(', ');
       const params: Record<string, any> = { ...patch };
       await db.query(
-        `UPDATE sites:${siteId} SET ${setClauses}, updated_at = time::now()`,
+        `UPDATE ${dbRecordId} SET ${setClauses}, updated_at = time::now()`,
         params
       );
     } catch (e) {
