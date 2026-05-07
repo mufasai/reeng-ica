@@ -1,10 +1,10 @@
+// SurrealDB integration
 import { Surreal } from 'surrealdb';
 
 const SurrealClass = Surreal || (Surreal as any).default;
 export const db = new SurrealClass();
 
 export async function connectDB() {
-  if (db.status === 'connected') return;
   try {
     let url = import.meta.env.VITE_SURREALDB_URL || 'https://surrealdb-production-b201.up.railway.app';
     const username = import.meta.env.VITE_SURREALDB_USER || 'root';

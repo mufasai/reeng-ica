@@ -23,6 +23,7 @@ import {
 
 const ProjectList = () => {
   const { currentUser, can } = useAuth();
+  if (!currentUser) return null;
   const navigate = useNavigate();
 
   // State for Projects (to allow adding new ones in mock)
@@ -37,15 +38,15 @@ const ProjectList = () => {
 
   // 1. Get Data based on Role
   const rawProjects = useMemo(() => {
-    if (currentUser.role === 'engineer') return []; // Should be redirected, but for safety
+    if (currentUser.role === ('engineer' as any)) return []; 
 
     if (currentUser.role === 'management' || currentUser.role === 'finance') {
         return projectList;
     } 
     
     // For Team Leader
-    const userTeams = teams.filter(t => t.members.some(m => m.personId === currentUser.id));
-    const projectIds = userTeams.map(t => t.projectId);
+    const userTeams = teams.filter(t => t.members?.some(m => m.person_id === currentUser.id));
+    const projectIds = userTeams.map(t => (t as any).projectId);
     return projectList.filter(p => projectIds.includes(p.id));
   }, [currentUser, projectList]);
 
@@ -67,14 +68,14 @@ const ProjectList = () => {
   );
   
   // RBAC: Redirect Engineer
-  if (currentUser.role === 'engineer') {
+  if (currentUser.role === ('engineer' as any)) {
       return <Navigate to="/" replace />;
   }
 
   // Helper to Aggregate Data
   const getProjectStats = (projectId: string) => {
       const projectSites = sites.filter(s => s.projectId === projectId);
-      const projectTeams = teams.filter(t => t.projectId === projectId);
+      const projectTeams = teams.filter(t => (t as any).projectId === projectId);
       const totalBudget = projectSites.reduce((sum, site) => sum + site.budget, 0);
       
       return {

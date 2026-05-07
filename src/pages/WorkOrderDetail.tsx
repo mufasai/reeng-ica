@@ -12,6 +12,7 @@ const WorkOrderDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
+    if (!currentUser) return null;
     
     // Simulate DB state for this WO
     const [wo, setWo] = useState<WorkOrder | undefined>(workOrders.find(w => w.id === id));
@@ -38,11 +39,11 @@ const WorkOrderDetail = () => {
     }
 
     const assignedTeam = teams.find(t => t.id === wo.assignedTeamId);
-    const teamLeader = assignedTeam?.members.find(m => m.role === 'team_leader');
-    const leaderPerson = people.find(p => p.id === teamLeader?.personId);
+    const teamLeader = assignedTeam?.members?.find(m => (m as any).role === 'team_leader' || m.jabatan === 'Leader');
+    const leaderPerson = people.find(p => p.id === teamLeader?.person_id);
 
     const isManagementOrAdmin = ['management', 'backoffice_admin'].includes(currentUser.role);
-    const isTeamLeader = currentUser.role === 'team_leader' && leaderPerson?.id === currentUser.id;
+    const isTeamLeader = (currentUser.role as any) === 'team_leader' && leaderPerson?.id === currentUser.id;
 
     // --- Actions ---
 

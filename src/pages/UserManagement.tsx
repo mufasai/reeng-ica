@@ -26,19 +26,29 @@ const MOCK_USERS: MockUser[] = [
 ];
 
 const ROLE_COLORS: Record<UserRole, string> = {
-    director:    'bg-purple-50 text-purple-700 border-purple-200',
-    operational: 'bg-blue-50 text-blue-700 border-blue-200',
-    admin:       'bg-amber-50 text-amber-700 border-amber-200',
-    finance:     'bg-emerald-50 text-emerald-700 border-emerald-200',
-    field:       'bg-slate-50 text-slate-600 border-slate-200',
+    director:         'bg-purple-50 text-purple-700 border-purple-200',
+    operational:      'bg-blue-50 text-blue-700 border-blue-200',
+    admin:            'bg-amber-50 text-amber-700 border-amber-200',
+    finance:          'bg-emerald-50 text-emerald-700 border-emerald-200',
+    field:            'bg-slate-50 text-slate-600 border-slate-200',
+    management:       'bg-indigo-50 text-indigo-700 border-indigo-200',
+    backoffice:       'bg-pink-50 text-pink-700 border-pink-200',
+    backoffice_admin: 'bg-rose-50 text-rose-700 border-rose-200',
+    team_leader:      'bg-cyan-50 text-cyan-700 border-cyan-200',
+    engineer:         'bg-teal-50 text-teal-700 border-teal-200',
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
-    director:    'Director',
-    operational: 'Operational',
-    admin:       'Admin',
-    finance:     'Finance',
-    field:       'Field',
+    director:         'Director',
+    operational:      'Operational',
+    admin:            'Admin',
+    finance:          'Finance',
+    field:            'Field',
+    management:       'Management',
+    backoffice:       'Back Office',
+    backoffice_admin: 'Back Office Admin',
+    team_leader:      'Team Leader',
+    engineer:         'Engineer',
 };
 
 const formatDate = (iso?: string) => {
@@ -152,6 +162,11 @@ const UserModal = ({ isOpen, onClose, editingUser, currentUserId }: UserModalPro
                                 <option value="admin">Admin</option>
                                 <option value="finance">Finance</option>
                                 <option value="field">Field</option>
+                                <option value="management">Management</option>
+                                <option value="backoffice">Backoffice</option>
+                                <option value="backoffice_admin">Backoffice Admin</option>
+                                <option value="team_leader">Team Leader</option>
+                                <option value="engineer">Engineer</option>
                             </select>
                         </div>
                         {/* Team field — only shown when role = field */}
@@ -189,6 +204,7 @@ const UserModal = ({ isOpen, onClose, editingUser, currentUserId }: UserModalPro
 // ─── Main Page ───────────────────────────────────────────────────────────────
 const UserManagement = () => {
     const { currentUser, can } = useAuth();
+    if (!currentUser) return null;
     const [users, setUsers] = useState<MockUser[]>(MOCK_USERS);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<MockUser | undefined>(undefined);
