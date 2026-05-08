@@ -1,21 +1,25 @@
 import { useState } from 'react';
-import { ChevronRight, ImageIcon, Lock, Pencil } from 'lucide-react';
+import { ChevronRight, Lock, Pencil } from 'lucide-react';
 import { SaveIndicator, AutoSaveInput } from './AtpShared';
+import { FileUploadZone } from './FileUploadZone';
 
 interface Props {
   localWo: any;
-  handleFieldSave: (field: string, value: any) => Promise<void>;
-  handleUpdateStage: (stage: string) => Promise<void>;
+  handleFieldSave: (field: string, value: any) => Promise<any>;
+  handleUpdateStage: (stage: string) => Promise<any>;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   canEdit: boolean;
   teamOptions: { label: string; value: string }[];
   leaderOptions: { label: string; value: string }[];
+  isRescoping?: boolean;
+  onFileUpload: (category: 'document' | 'photo', files: File[]) => Promise<void>;
 }
 
-export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveStatus, canEdit, teamOptions, leaderOptions }: Props) => {
+export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveStatus, canEdit, teamOptions, leaderOptions, isRescoping, onFileUpload }: Props) => {
+  const isPastImpl = ['atp', 'dokumen_done', 'bast', 'invoice', 'completed', 'rfi_done'].includes(localWo.stage);
   const hasData = !!(localWo.implementasi_status || localWo.team || localWo.tanggal_rfs);
   const [editing, setEditing] = useState(!hasData);
-  const locked = hasData && !editing;
+  const locked = (isPastImpl || hasData) && !editing;
 
   return (
     <div>
@@ -23,7 +27,7 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
         <h2 className="text-lg font-black text-slate-800">Implementasi</h2>
         <div className="flex items-center gap-3">
           <SaveIndicator status={saveStatus} />
-          {canEdit && hasData && (
+          {canEdit && (hasData || isPastImpl) && (
             <button
               onClick={() => setEditing(!editing)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors"
@@ -38,7 +42,13 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
         </div>
       </div>
 
-      {locked && (
+      {isPastImpl && (
+        <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-lg text-xs text-emerald-700 font-bold">
+          <Lock className="w-3.5 h-3.5" /> Data terkunci karena stage implementasi telah selesai.
+        </div>
+      )}
+
+      {!isPastImpl && locked && (
         <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 font-medium">
           <Lock className="w-3.5 h-3.5" /> Data tersimpan dari DB. Klik <strong>Edit</strong> untuk mengubah.
         </div>
@@ -54,8 +64,14 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
         </div>
         <div className="space-y-0">
           <AutoSaveInput label="CO Tanggal" value={localWo.co_date} field="co_date" type="date" onSave={handleFieldSave} locked={locked} />
-          <AutoSaveInput label="RFI Done" value={localWo.rfi_done} field="rfi_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
-          <AutoSaveInput label="RFS Done" value={localWo.rfs_done} field="rfs_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+          {isRescoping ? (
+            <AutoSaveInput label="RFI Done" value={localWo.rfi_done || localWo.impl_rfi_done} field="impl_rfi_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+          ) : (
+            <>
+              <AutoSaveInput label="RFI Done" value={localWo.rfi_done} field="rfi_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+              <AutoSaveInput label="RFS Done" value={localWo.rfs_done} field="rfs_done" type="checkbox" onSave={handleFieldSave} locked={locked} />
+            </>
+          )}
           <AutoSaveInput label="Impl Status" value={localWo.implementasi_status || localWo.impl_status} field="impl_status" type="select" onSave={handleFieldSave} locked={locked}
             options={[
               { label: 'Awaiting', value: 'Awaiting' },
@@ -71,25 +87,79 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
         <AutoSaveInput label="Note Implementasi" value={localWo.note_implementasi || localWo.impl_notes} field="impl_notes" type="textarea" onSave={handleFieldSave} locked={locked} />
       </div>
 
-      {!locked && (
-        <div className="mt-8 border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-50/50 cursor-pointer group hover:bg-slate-50 transition-colors">
-          <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-            <ImageIcon className="w-5 h-5 text-blue-500" />
-          </div>
-          <p className="text-sm font-bold text-slate-700">Upload Implementation Photos</p>
+      {isRescoping && (
+        <div className="mt-8 border-t border-slate-100 pt-6">
+          <h3 className="font-bold text-slate-800 mb-4">Akses Gedung</h3>
+          <AutoSaveInput label="Ada Akses Gedung?" value={localWo.has_akses_gedung} field="has_akses_gedung" type="checkbox" onSave={handleFieldSave} locked={locked} />
+          {localWo.has_akses_gedung && (
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-x-12 animate-in fade-in">
+              <div className="space-y-0">
+                <AutoSaveInput label="Nama Gedung" value={localWo.nama_gedung} field="nama_gedung" onSave={handleFieldSave} locked={locked} />
+                <AutoSaveInput label="PIC Gedung Nama" value={localWo.pic_gedung_nama} field="pic_gedung_nama" onSave={handleFieldSave} locked={locked} />
+              </div>
+              <div className="space-y-0">
+                <AutoSaveInput label="PIC Gedung Telp" value={localWo.pic_gedung_telp} field="pic_gedung_telp" onSave={handleFieldSave} locked={locked} />
+                <AutoSaveInput label="Status Akses Gedung" value={localWo.status_akses_gedung} field="status_akses_gedung" onSave={handleFieldSave} locked={locked} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {!locked && (
-        <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
-          <button className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
-            Simpan Draft
-          </button>
-          <button onClick={() => handleUpdateStage('atp')} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
-            Update Stage Implementasi <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {/* Upload zones — always visible for evidence capture */}
+      <div className="mt-8 space-y-3">
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Upload Bukti Implementasi</p>
+        <FileUploadZone
+          label="Upload Foto Implementasi"
+          hint="JPG, PNG — drag & drop atau klik · tersimpan di tab Foto"
+          accept="image/*"
+          icon="image"
+          onUpload={files => onFileUpload('photo', files)}
+        />
+        <FileUploadZone
+          label="Upload Dokumen Implementasi"
+          hint="Surat jalan, BA, laporan — tersimpan di tab File & Lampiran"
+          accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+          icon="document"
+          compact
+          onUpload={files => onFileUpload('document', files)}
+        />
+      </div>
+
+      <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
+        {editing ? (
+          <>
+            <button
+              onClick={() => setEditing(false)}
+              className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                handleUpdateStage(isRescoping ? 'dokumen_done' : 'atp');
+                setEditing(false);
+              }}
+              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+            >
+              {isRescoping ? 'Selesai Implementasi' : 'Update Implementasi Stage'} <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        ) : (
+          isPastImpl ? (
+            <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in">
+              ✓ Stage Implementasi Selesai
+            </div>
+          ) : (
+            <button
+              onClick={() => handleUpdateStage(isRescoping ? 'dokumen_done' : 'atp')}
+              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+            >
+              {isRescoping ? 'Selesai Implementasi' : 'Update Implementasi Stage'} <ChevronRight className="w-4 h-4" />
+            </button>
+          )
+        )}
+      </div>
     </div>
   );
 };

@@ -1,0 +1,97 @@
+# SurrealDB Architecture & Data Flow
+
+This document outlines the database schema, involved tables, and end-to-end data flow for the Reengineering Budget Tracking tool. It serves as an engineering reference for the QA and implementation process.
+
+---
+
+## 1. Tables Involved in SurrealDB
+
+The application interacts with several core tables inside the `project_budget` database (namespace `yerico`):
+
+### A. `sites` (ReEngineering Progress & Work Orders)
+* **Purpose**: This is the central transactional table. Each record represents one site-sector work order (ReEngineering progress).
+* **Record ID Format**: `sites:<site_id>` (e.g., `sites:COC611`, `sites:TGR402`, etc.)
+* **Fields Mapped & Synchronized**:
+  * `site_id` (String) — Unique identifier for the base site.
+  * `project_type` (String) — `COMBAT`, `FILTER`, `L2H`, `RESCOPING`, `BLACKSITE`.
+  * `stage` (String) — Current step in the pipeline (e.g., `imported`, `permit`, `implementasi`, `atp`, `completed`).
+  * `atp_number` / `po_id` / `sow_id` / `sector` (String/Number) — Work order parameters.
+  * **Permit Fields**:
+    * `permit_status` (String) — e.g. `5. Permit Released`
+    * `permit_create_date` / `permit_start` / `permit_expiry` (Date Strings)
+    * `pic` / `pic_telp` (String)
+    * `tpas_no` / `tp_no` / `caf_no` (String)
+    * `lock_type` (String)
+  * **Implementation Fields**:
+    * `implementasi_status` (String) — e.g. `RFS`
+    * `team` (String) — Assigned execution team ID.
+    * `field_leader_id` (String)
+    * `plan_date` / `tanggal_rfs` / `ci_date` / `co_date` (Date Strings)
+    * `impl_rfi_done` / `rfi_done` / `rfs_done` (Boolean)
+  * `updated_at` / `initiated_at` (Datetime)
+
+### B. `site_stage_logs` (Audit & History Logs)
+* **Purpose**: Audit trails of all operational updates (field changes, stage transitions, files uploads).
+* **Fields**:
+  * `work_order_id` / `site_id` (String)
+  * `action` (String) — e.g., `"Mengubah status permit menjadi 5. Permit Released"`
+  * `user_id` (String)
+  * `timestamp` (Datetime)
+
+### C. `site_files` (Uploaded Documents & Evidence Photos)
+* **Purpose**: Metadata of uploaded attachments (permit documents, RFI/RFS letters, site photos).
+* **Fields**:
+  * `work_order_id` / `site_id` (String)
+  * `name` / `type` / `size` (String)
+  * `category` (String) — `"document"` or `"photo"`
+  * `uploaded_by` (String)
+  * `timestamp` (Datetime)
+
+---
+
+## 2. End-to-End Data Flow
+
+The following diagram visualizes the interactive data flow between the user interface, local memory states, and SurrealDB:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Field / Admin User
+    participant FE as React Frontend UI State (localWo)
+    participant Mock as Local Array State (atpWorkOrders)
+    participant DB as SurrealDB (Production)
+
+    Note over User, DB: Scenario A: Initial Page Load & Refresh
+    DB->>Mock: SELECT * FROM sites (initAppDB on refresh)
+    Note right of DB: Full permit & impl fields<br/>fetched and mapped
+    Mock->>FE: Match by work order ID (setLocalWo)
+    FE->>User: Displays latest synchronized data
+
+    Note over User, DB: Scenario B: User edits a field (Auto-Save)
+    User->>FE: Changes input field (e.g. PIC Nama)
+    FE->>FE: setSaveStatus('saving')
+    FE->>Mock: Update in-memory local copy (Object.assign)
+    FE->>DB: UPDATE sites:<site_id> SET pic = $pic (via patchWO)
+    DB-->>FE: Returns 200 OK
+    FE->>FE: setSaveStatus('saved') (Success pop-up / toast)
+
+    Note over User, DB: Scenario C: User updates stage & finishes process
+    User->>FE: Clicks "Update Stage Permit"
+    FE->>DB: UPDATE sites:<site_id> SET stage = 'implementasi'
+    DB-->>FE: Returns 200 OK
+    FE->>FE: showToastMsg('Sukses: Stage diperbarui!')
+    Note over FE: Form transitions to locked default,<br/>"Perbarui Stage" & "Edit" buttons stay available
+```
+
+---
+
+## 3. Core Architecture Rules & Best Practices Implemented
+
+1. **Auto-Saving**: Input fields use `AutoSaveInput` components. When blurred or changed, they trigger `handleFieldSave`, which performs a delta update (`patchWO`) containing only the modified key.
+2. **Key-Value Dictionary Mapping**: Frontend operational field names are mapped to SurrealDB database column names seamlessly:
+   * `team_id` $\rightarrow$ `team`
+   * `impl_status` $\rightarrow$ `implementasi_status`
+   * `impl_notes` $\rightarrow$ `note_implementasi`
+   * `actual_date` $\rightarrow$ `tanggal_rfs`
+   * `tower_provider` $\rightarrow$ `tp_name`
+3. **No-Loss-On-Refresh**: By ensuring `initAppDB` reads 100% of the active database columns and maps them directly into `atpWorkOrders` on launch, refreshes pull the exact state from your Production SurrealDB instantly.

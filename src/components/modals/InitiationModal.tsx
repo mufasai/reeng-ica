@@ -53,9 +53,9 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
     for (const wo of atpWorkOrders) {
       if (wo.site_id === siteId && wo.status === 'active') {
         wo.status = 'historical' as any;
-        if (wo.id) {
+        if (wo.id && wo.id.includes(':')) {
           try {
-            await db.query('UPDATE $id MERGE { status: "historical" }', { id: wo.id });
+            await db.query(`UPDATE ${wo.id} MERGE { status: "historical" }`);
           } catch (err) {
             console.error('Failed to update older work order to historical in SurrealDB:', err);
           }

@@ -2,20 +2,31 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { atpWorkOrders, siteMasterRecords, workOrderLogs, teams, people, teamMembersRecords } from '../data/mockData';
-import { CheckCircle2, ChevronRight, Upload, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle } from 'lucide-react';
+import { CheckCircle2, ChevronRight, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import { SaveIndicator, AutoSaveInput } from '../components/work-orders/AtpShared';
 import { PermitSection } from '../components/work-orders/PermitSection';
 import { ImplSection } from '../components/work-orders/ImplSection';
+import { CombatImplChecklist } from '../components/work-orders/CombatImplChecklist';
 import { PengajuanPembayaran } from '../components/work-orders/PengajuanPembayaran';
+import { RescopingSurveyTab } from '../components/work-orders/RescopingSurveyTab';
+import { RescopingErfinTab } from '../components/work-orders/RescopingErfinTab';
 import { db } from '../db';
+import { FileUploadZone } from '../components/work-orders/FileUploadZone';
+import {
+  COMBAT_STEPPER_NODES,
+  RESCOPING_STEPPER_NODES,
+  DEFAULT_COMBAT_IMPL_STEPS,
+  type CombatImplSteps,
+} from '../config/stagePipelines';
 
-type WorkStep = 'permit' | 'implementasi' | 'atp' | 'penagihan' | 'foto' | 'file' | 'log';
+type WorkStep = 'survey' | 'erfin' | 'permit' | 'implementasi' | 'atp' | 'penagihan' | 'foto' | 'file' | 'log';
 
+// Generic (Filter/Blacksite/L2H) stepper
 const STAGE_STEPS = ['imported', 'permit', 'implementasi', 'atp', 'bast', 'invoice', 'completed'];
 const STAGE_LABELS = ['1·Imported', '2·Permit', '3·Implementasi', '4·ATP', '5·BAST', '6·Invoice', '7·Selesai'];
 
-const INNER_TABS: { id: WorkStep; label: string; icon: any }[] = [
+const BASE_TABS: { id: WorkStep; label: string; icon: any }[] = [
   { id: 'permit',      label: 'Permit',        icon: FileText },
   { id: 'implementasi',label: 'Implementasi',  icon: Briefcase },
   { id: 'atp',         label: 'ATP & Dokumen', icon: FolderCheck },
@@ -51,12 +62,22 @@ const AtpWorkPage = () => {
   const navigate = useNavigate();
   const { currentUser, can } = useAuth();
   const [searchParams] = useSearchParams();
+  const [localWo, setLocalWo] = useState<any>(null);
+  const isRescopingParam = localWo?.project_type === 'RE-SCOPING' || localWo?.project_type === 'RESCOPING';
   const initialTab = searchParams.get('tab') === 'penagihan' ? 'penagihan' : 'permit';
   const [activeTab, setActiveTab] = useState<WorkStep>(initialTab as any);
-  const [localWo, setLocalWo] = useState<any>(null);
+  
+  // Update initial tab for rescoping if not explicitly set to something else
+  useEffect(() => {
+    if (isRescopingParam && activeTab === 'permit' && !searchParams.get('tab')) {
+      setActiveTab('survey');
+    }
+  }, [isRescopingParam, searchParams]);
+  
   const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle');
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [dbFiles, setDbFiles] = useState<any[]>([]);
+  const [combatSteps, setCombatSteps] = useState<CombatImplSteps>(DEFAULT_COMBAT_IMPL_STEPS);
 
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
@@ -70,24 +91,55 @@ const AtpWorkPage = () => {
   };
 
   useEffect(() => {
-    const wo = atpWorkOrders.find(w => w.id === id);
-    if (wo) setLocalWo({ ...wo });
+    if (!id) return;
+
+    // Instant render from in-memory cache
+    const cached = atpWorkOrders.find(w => w.id === id);
+    if (cached) {
+      setLocalWo({ ...cached });
+      if (cached.project_type === 'COMBAT' && (cached as any).combat_impl_steps) {
+        setCombatSteps({ ...DEFAULT_COMBAT_IMPL_STEPS, ...(cached as any).combat_impl_steps });
+      }
+    }
+
+    // Authoritative fetch — overwrites cache with DB truth so refresh never loses data
+    db.query(`SELECT * FROM ${id}`)
+      .then((res: any) => {
+        const fresh = res?.[0]?.[0];
+        if (!fresh) return;
+        const freshId = String(fresh.id ?? id);
+        setLocalWo((prev: any) => ({
+          ...prev,
+          ...fresh,
+          id: freshId,
+          // Normalise field aliases that components expect
+          team_id: String(fresh.team ?? fresh.team_id ?? prev?.team_id ?? ''),
+        }));
+        // Keep in-memory cache in sync
+        const target = atpWorkOrders.find(w => w.id === id) as any;
+        if (target) Object.assign(target, { ...fresh, id: freshId });
+        // Load combat steps
+        if (String(fresh.project_type || '').toUpperCase() === 'COMBAT' && fresh.combat_impl_steps) {
+          setCombatSteps({ ...DEFAULT_COMBAT_IMPL_STEPS, ...fresh.combat_impl_steps });
+        }
+      })
+      .catch((e) => console.warn('[AtpWorkPage] DB refresh failed, using cache:', e));
   }, [id]);
 
+  // Logs and files are independent of localWo — only re-fetch when id changes
   useEffect(() => {
-    if (!id || !localWo) return;
+    if (!id) return;
     const fetchDbData = async () => {
       try {
-        // Fetch logs
-        const logsRes = await db.query('SELECT * FROM site_stage_logs WHERE work_order_id = $id', { id });
+        const [logsRes, filesRes] = await Promise.all([
+          db.query('SELECT * FROM site_stage_logs WHERE work_order_id = $id', { id }),
+          db.query('SELECT * FROM site_files WHERE work_order_id = $id', { id }),
+        ]);
         if (logsRes?.[0] && Array.isArray(logsRes[0]) && logsRes[0].length > 0) {
           setDbLogs(logsRes[0]);
         } else {
           setDbLogs(workOrderLogs.filter(l => l.work_order_id === id));
         }
-
-        // Fetch files
-        const filesRes = await db.query('SELECT * FROM site_files WHERE work_order_id = $id', { id });
         if (filesRes?.[0] && Array.isArray(filesRes[0])) {
           setDbFiles(filesRes[0]);
         }
@@ -97,10 +149,37 @@ const AtpWorkPage = () => {
       }
     };
     fetchDbData();
-  }, [id, localWo]);
+  }, [id]);
 
   const site = useMemo(() => siteMasterRecords.find(s => s.site_id === localWo?.site_id), [localWo?.site_id]);
   const canEditFields = can('site.edit_data');
+
+  const isCombat = localWo?.project_type === 'COMBAT';
+  const isRescoping = localWo?.project_type === 'RE-SCOPING' || localWo?.project_type === 'RESCOPING';
+
+  // Map raw stage to stepper node index
+  const currentStageIdx = isCombat
+    ? COMBAT_STEPPER_NODES.findIndex(n => n.stages.includes(localWo?.stage || 'imported'))
+    : isRescoping
+    ? RESCOPING_STEPPER_NODES.findIndex(n => n.stages.includes(localWo?.stage || 'imported'))
+    : STAGE_STEPS.indexOf(localWo?.stage || 'imported');
+
+  const tabsToRender = useMemo(() => {
+    if (isRescoping) {
+      return [
+        { id: 'survey' as WorkStep, label: 'Survey', icon: FolderCheck, disabled: currentStageIdx < 1 && localWo?.stage !== 'assigned' },
+        { id: 'erfin' as WorkStep, label: 'ERFIN', icon: FileText, disabled: currentStageIdx < 2 },
+        ...BASE_TABS.map(t => ({
+          ...t,
+          disabled: (t.id === 'permit' && currentStageIdx < 3) || 
+                    (t.id === 'implementasi' && currentStageIdx < 4) ||
+                    (t.id === 'atp' && currentStageIdx < 5) ||
+                    (t.id === 'penagihan' && currentStageIdx < 7)
+        }))
+      ];
+    }
+    return BASE_TABS.map(t => ({ ...t, disabled: false }));
+  }, [isRescoping, currentStageIdx, localWo?.stage]);
 
   if (!localWo || !site) {
     return (
@@ -113,23 +192,89 @@ const AtpWorkPage = () => {
 
   const patchWO = async (updates: any) => {
     await new Promise(r => setTimeout(r, 300));
-    const target = atpWorkOrders.find(w => w.id === localWo.id);
-    if (target) Object.assign(target, updates);
-    setLocalWo((prev: any) => ({ ...prev, ...updates }));
+    
+    const keyMap: Record<string, string> = {
+      po_number:          'po_id',
+      team_id:            'team',
+      impl_status:        'implementasi_status',
+      impl_notes:         'note_implementasi',
+      actual_date:        'tanggal_rfs',
+      tower_provider:     'tp_name',
+      // ATP tab fields — normalise to the canonical DB column name
+      pdid:               'ppid',
+      atp_status:         'status_atp',
+      foto_evidence_notes:'note_foto_evidence',
+    };
+
+    const target = atpWorkOrders.find(w => w.id === localWo.id) as any;
+    if (target) {
+      Object.assign(target, updates);
+      if (updates.impl_status) target.implementasi_status = updates.impl_status;
+      if (updates.impl_notes) target.note_implementasi = updates.impl_notes;
+      if (updates.actual_date) target.tanggal_rfs = updates.actual_date;
+      if (updates.team_id) target.team = updates.team_id;
+    }
+
+    const targetSite = siteMasterRecords.find(s => s.site_id === localWo.site_id) as any;
+    if (targetSite) {
+      Object.assign(targetSite, updates);
+      if (updates.impl_status) targetSite.implementasi_status = updates.impl_status;
+      if (updates.impl_notes) targetSite.note_implementasi = updates.impl_notes;
+      if (updates.actual_date) targetSite.tanggal_rfs = updates.actual_date;
+      if (updates.team_id) targetSite.team = updates.team_id;
+    }
+
+    setLocalWo((prev: any) => {
+      const nextWo = { ...prev, ...updates };
+      if (updates.impl_status) nextWo.implementasi_status = updates.impl_status;
+      if (updates.impl_notes) nextWo.note_implementasi = updates.impl_notes;
+      if (updates.actual_date) nextWo.tanggal_rfs = updates.actual_date;
+      if (updates.team_id) nextWo.team = updates.team_id;
+      return nextWo;
+    });
+
+    try {
+      const dbUpdates: any = {};
+      for (const k of Object.keys(updates)) {
+        const dbKey = keyMap[k] || k;
+        dbUpdates[dbKey] = updates[k];
+      }
+      const dbKeys = Object.keys(dbUpdates);
+      if (dbKeys.length > 0) {
+        let setString = dbKeys.map(k => `${k} = $${k}`).join(', ');
+        await db.query(`UPDATE ${localWo.id} SET ${setString}, updated_at = time::now()`, dbUpdates);
+        console.log(`Saved stage/field update to SurrealDB for ${localWo.id}:`, dbUpdates);
+      }
+      return true;
+    } catch (e) {
+      console.warn("DB sync failed", e);
+      return false;
+    }
   };
 
-  const handleFieldSave = async (field: string, value: any) => {
+  const handleFieldSave = async (field: string, value: any): Promise<boolean> => {
     setSaveStatus('saving');
     try {
-      await patchWO({ [field]: value });
+      const ok = await patchWO({ [field]: value });
+      if (!ok) {
+        setSaveStatus('error');
+        return false;
+      }
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
+
+      const currentStage = localWo.stage || 'imported';
+      const action = field === 'stage'
+        ? `Stage diperbarui: '${currentStage}' → '${value}'`
+        : `[${currentStage}] Field '${field}' diperbarui menjadi '${String(value).substring(0, 120)}'`;
 
       const logData = {
         work_order_id: localWo.id,
         site_id: localWo.site_id,
-        action: `Field '${field}' diperbarui menjadi '${value}'`,
+        action,
         user_id: currentUser?.id || 'system',
+        user_name: currentUser?.name || currentUser?.id || 'System',
+        stage_at_time: currentStage,
         timestamp: new Date().toISOString()
       };
 
@@ -146,15 +291,21 @@ const AtpWorkPage = () => {
         console.error('Failed to create DB log:', err);
         setDbLogs(prev => [logData, ...prev]);
       }
-    } catch { setSaveStatus('error'); }
+      return true;
+    } catch { 
+      setSaveStatus('error'); 
+      return false;
+    }
   };
 
-  const handleFileUpload = async (category: 'document' | 'photo', files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleFileUpload = async (category: 'document' | 'photo', files: File[] | FileList | null, tag?: string) => {
+    const fileArray = !files ? [] : Array.isArray(files) ? files : Array.from(files);
+    if (fileArray.length === 0) return;
     setSaveStatus('saving');
+    const currentStage = localWo.stage || 'imported';
+    const resolvedTag = tag || (category === 'photo' ? `photo_${currentStage}` : `doc_${currentStage}`);
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (const file of fileArray) {
         const fileData = {
           work_order_id: localWo.id,
           site_id: localWo.site_id,
@@ -162,8 +313,11 @@ const AtpWorkPage = () => {
           type: category === 'photo' ? 'Photo' : file.name.split('.').pop()?.toUpperCase() || 'File',
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
           category,
+          tag: resolvedTag,
+          stage_at_upload: currentStage,
           date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
           uploaded_by: currentUser?.id || 'system',
+          uploaded_by_name: currentUser?.name || currentUser?.id || 'System',
           timestamp: new Date().toISOString()
         };
 
@@ -172,8 +326,10 @@ const AtpWorkPage = () => {
         const logData = {
           work_order_id: localWo.id,
           site_id: localWo.site_id,
-          action: `Mengunggah ${category === 'photo' ? 'foto' : 'dokumen'} '${file.name}'`,
+          action: `[${currentStage}] Upload ${category === 'photo' ? 'foto' : 'dokumen'}: '${file.name}'`,
           user_id: currentUser?.id || 'system',
+          user_name: currentUser?.name || currentUser?.id || 'System',
+          stage_at_time: currentStage,
           timestamp: new Date().toISOString()
         };
         await db.query('CREATE site_stage_logs CONTENT $data', { data: logData });
@@ -181,7 +337,7 @@ const AtpWorkPage = () => {
 
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
-      showToastMsg(`Sukses: ${files.length} file berhasil diunggah!`);
+      showToastMsg(`Sukses: ${fileArray.length} file berhasil diunggah!`);
 
       const filesRes = await db.query('SELECT * FROM site_files WHERE work_order_id = $id', { id: localWo.id });
       if (filesRes?.[0] && Array.isArray(filesRes[0])) {
@@ -199,7 +355,31 @@ const AtpWorkPage = () => {
   };
 
   const handleUpdateStage = async (next: string) => {
-    await handleFieldSave('stage', next);
+    // Gate 1: entering implementation requires permit released
+    const IMPL_ENTRY_STAGES = ['akses_process', 'akses_ready', 'implementasi'];
+    if (IMPL_ENTRY_STAGES.includes(next) || (next === 'implementasi')) {
+      const permitOk = /^[57]/.test(localWo.permit_status || '');
+      if (!permitOk) {
+        showToastMsg('Permit belum Released — status harus "5. Permit Released" sebelum implementasi.', 'error');
+        return;
+      }
+    }
+
+    // Gate 2: advancing to ATP requires RFS (Filter / L2H / Blacksite only)
+    if (next === 'atp' && !isCombat && !isRescoping) {
+      const rfsOk = localWo.rfs_done === true || localWo.implementasi_status === 'RFS';
+      if (!rfsOk) {
+        showToastMsg('RFS belum selesai — centang "RFS Done" atau set status "RFS" sebelum melanjutkan ke ATP.', 'error');
+        return;
+      }
+    }
+
+    const success = await handleFieldSave('stage', next);
+    if (success) {
+      showToastMsg(`Sukses: Stage berhasil diperbarui ke '${next.toUpperCase()}'!`, 'success');
+    } else {
+      showToastMsg(`Gagal: Stage tidak dapat diperbarui ke '${next.toUpperCase()}'!`, 'error');
+    }
   };
 
   const teamOptions = teams.map(t => ({ label: t.name, value: t.id }));
@@ -211,7 +391,7 @@ const AtpWorkPage = () => {
       })
     : [];
 
-  const currentStageIdx = STAGE_STEPS.indexOf(localWo.stage || 'imported');
+
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-12 animate-in fade-in duration-300 relative">
@@ -267,42 +447,90 @@ const AtpWorkPage = () => {
         </div>
       </div>
 
+      {/* SURVEY NOK RED BANNER */}
+      {isRescoping && localWo.stage === 'survey_nok' && (
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-center justify-between shadow-sm">
+          <div>
+            <p className="font-bold flex items-center gap-2"><AlertCircle className="w-5 h-5"/> ✗ Survey NOK — Proses Dihentikan</p>
+            <p className="text-sm mt-1 ml-7">Alasan: {localWo.survey_nok_reason}</p>
+          </div>
+          {['operational', 'admin'].includes(currentUser?.role || '') && (
+            <button onClick={async () => {
+              if (confirm('Yakin ingin reset status survey?')) {
+                await db.query(`UPDATE ${localWo.id} SET stage = 'survey', survey_result = null, survey_nok_reason = null, updated_at = time::now()`);
+                handleUpdateStage('survey');
+              }
+            }} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2 shadow-sm">
+              <RefreshCw className="w-4 h-4" /> Reset
+            </button>
+          )}
+        </div>
+      )}
+
       {/* STAGE STEPPER */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 flex items-start justify-between relative">
-        <div className="absolute top-1/2 left-10 right-10 h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
-        <div className="absolute top-1/2 left-10 h-0.5 bg-blue-500 -translate-y-1/2 z-0 transition-all duration-500"
-          style={{ width: `calc(${(currentStageIdx / (STAGE_STEPS.length - 1)) * 100}% - 40px)` }} />
-        {STAGE_STEPS.map((step, idx) => {
-          const isDone = idx < currentStageIdx;
-          const isCurrent = idx === currentStageIdx;
-          return (
-            <div key={step} className="relative z-10 flex flex-col items-center gap-3">
-              <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 shadow-sm',
-                isDone ? 'bg-emerald-500 text-white border-2 border-emerald-500' :
-                isCurrent ? 'bg-blue-600 text-white border-2 border-blue-600 ring-4 ring-blue-100' :
-                'bg-white text-slate-400 border-2 border-slate-200')}>
-                {isDone ? <CheckCircle2 className="w-5 h-5" /> : (idx + 1)}
-              </div>
-              <span className={clsx('text-[10px] font-black uppercase tracking-widest whitespace-nowrap',
-                isCurrent ? 'text-blue-700' : isDone ? 'text-slate-700' : 'text-slate-400')}>
-                {STAGE_LABELS[idx].split('·')[1]}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {(() => {
+        const nodes = isCombat
+          ? COMBAT_STEPPER_NODES.map(n => n.label)
+          : isRescoping
+          ? RESCOPING_STEPPER_NODES.map(n => n.label)
+          : STAGE_LABELS.map(l => l.split('·')[1]);
+        const nodeCount = nodes.length;
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 flex items-start justify-between relative">
+            <div className="absolute top-7 left-10 right-10 h-0.5 bg-slate-100 z-0" />
+            <div className="absolute top-7 left-10 h-0.5 bg-blue-500 z-0 transition-all duration-500"
+              style={{ width: `calc(${(Math.max(0, currentStageIdx) / (nodeCount - 1)) * 100}% - 40px)` }} />
+            {nodes.map((label, idx) => {
+              let isDone = idx < currentStageIdx;
+              let isCurrent = idx === currentStageIdx;
+
+              let isRed = false;
+              if (isRescoping && label === 'Survey' && localWo.stage === 'survey_nok') {
+                isRed = true;
+                isDone = false;
+                isCurrent = false;
+              }
+
+              return (
+                <div key={label} className="relative z-10 flex flex-col items-center gap-2">
+                  <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 shadow-sm',
+                    isRed ? 'bg-red-500 text-white border-2 border-red-500' :
+                    isDone ? 'bg-emerald-500 text-white border-2 border-emerald-500' :
+                    isCurrent ? 'bg-blue-600 text-white border-2 border-blue-600 ring-4 ring-blue-100' :
+                    'bg-white text-slate-400 border-2 border-slate-200')}>
+                    {isDone ? <CheckCircle2 className="w-5 h-5" /> : (idx + 1)}
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={clsx('text-[10px] font-black uppercase tracking-widest whitespace-nowrap',
+                      isRed ? 'text-red-600' : isCurrent ? 'text-blue-700' : isDone ? 'text-slate-700' : 'text-slate-400')}>
+                      {label}
+                    </span>
+                    {isRed && <span className="text-[10px] font-bold text-red-500 mt-0.5">✗ NOK</span>}
+                    {isRescoping && label === 'Survey' && isDone && localWo.survey_date && (
+                      <span className="text-[9px] font-medium text-slate-400 mt-0.5">{localWo.survey_date}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* WORKSPACE TABS */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col min-h-[600px]">
         <div className="flex border-b border-slate-200 bg-slate-50/50 overflow-x-auto hide-scrollbar">
-          {INNER_TABS.map(tab => {
+          {tabsToRender.map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
+            const disabled = tab.disabled;
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              <button key={tab.id} onClick={() => !disabled && setActiveTab(tab.id)}
                 className={clsx('flex items-center gap-2 px-6 py-4 border-b-2 text-sm font-semibold transition-colors whitespace-nowrap',
-                  active ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100/50')}>
-                <Icon className={clsx('w-4 h-4', active ? 'text-blue-600' : 'text-slate-400')} />
+                  active ? 'border-blue-600 text-blue-700 bg-white' : 
+                  disabled ? 'border-transparent text-slate-300 cursor-not-allowed bg-slate-50/50' : 
+                  'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100/50')}>
+                <Icon className={clsx('w-4 h-4', active ? 'text-blue-600' : disabled ? 'text-slate-300' : 'text-slate-400')} />
                 {tab.label}
               </button>
             );
@@ -310,15 +538,78 @@ const AtpWorkPage = () => {
         </div>
 
         <div className="flex-1 p-8">
+          {activeTab === 'survey' && isRescoping && (
+            <RescopingSurveyTab
+              localWo={localWo}
+              stageIdx={currentStageIdx}
+              onUpdateStage={handleUpdateStage}
+              saveStatus={saveStatus}
+              onFieldsSaved={(fields: any) => {
+                setLocalWo((prev: any) => ({ ...prev, ...fields }));
+                const target = atpWorkOrders.find(w => w.id === localWo.id) as any;
+                if (target) Object.assign(target, fields);
+              }}
+            />
+          )}
+
+          {activeTab === 'erfin' && isRescoping && (
+            <RescopingErfinTab
+              localWo={localWo}
+              stageIdx={currentStageIdx}
+              onUpdateStage={handleUpdateStage}
+              saveStatus={saveStatus}
+              onFieldsSaved={(fields: any) => {
+                setLocalWo((prev: any) => ({ ...prev, ...fields }));
+                const target = atpWorkOrders.find(w => w.id === localWo.id) as any;
+                if (target) Object.assign(target, fields);
+              }}
+            />
+          )}
+
           {activeTab === 'permit' && (
             <div className="max-w-4xl animate-in fade-in">
-              <PermitSection localWo={localWo} handleFieldSave={handleFieldSave} handleUpdateStage={handleUpdateStage} saveStatus={saveStatus} canEdit={canEditFields} />
+              <PermitSection
+                localWo={localWo}
+                handleFieldSave={handleFieldSave}
+                handleUpdateStage={handleUpdateStage}
+                saveStatus={saveStatus}
+                canEdit={canEditFields}
+                onFileUpload={(cat, files) => handleFileUpload(cat, files, cat === 'photo' ? 'permit_photo' : 'permit_doc')}
+              />
             </div>
           )}
 
           {activeTab === 'implementasi' && (
             <div className="max-w-4xl animate-in fade-in">
-              <ImplSection localWo={localWo} handleFieldSave={handleFieldSave} handleUpdateStage={handleUpdateStage} saveStatus={saveStatus} canEdit={canEditFields} teamOptions={teamOptions} leaderOptions={leaderOptions} />
+              {isCombat ? (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-black text-slate-800">Implementasi — Combat</h2>
+                    <SaveIndicator status={saveStatus} />
+                  </div>
+                  <CombatImplChecklist
+                    siteId={localWo.site_id}
+                    dbRecordId={localWo.id}
+                    steps={combatSteps}
+                    onUpdate={steps => setCombatSteps(steps)}
+                    onMarkSelesai={() => handleUpdateStage('dokumen_done')}
+                    currentStage={localWo.stage || 'imported'}
+                    canEdit={canEditFields}
+                  />
+                </div>
+              ) : (
+                <ImplSection
+                  localWo={localWo}
+                  handleFieldSave={handleFieldSave}
+                  handleUpdateStage={handleUpdateStage}
+                  saveStatus={saveStatus}
+                  canEdit={canEditFields}
+                  teamOptions={teamOptions}
+                  leaderOptions={leaderOptions}
+                  isRescoping={isRescoping}
+                  onFileUpload={(cat, files) => handleFileUpload(cat, files, cat === 'photo' ? 'impl_photo' : 'impl_doc')}
+                />
+              )}
             </div>
           )}
 
@@ -336,20 +627,18 @@ const AtpWorkPage = () => {
                 <AutoSaveInput label="Note Foto Evidence" value={localWo.note_foto_evidence || localWo.foto_evidence_notes} field="foto_evidence_notes" type="textarea" onSave={handleFieldSave} />
               </div>
               
-              <label className="border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-slate-50 transition-colors cursor-pointer group">
-                <input type="file" multiple className="hidden" onChange={e => handleFileUpload('document', e.target.files)} />
-                <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <Upload className="w-5 h-5 text-blue-500" />
-                </div>
-                <p className="text-sm font-bold text-slate-700">Upload ATP Documents &amp; Certificate</p>
-                <p className="text-xs text-slate-400 mt-1">Pilih satu atau beberapa dokumen untuk diunggah</p>
-              </label>
+              <FileUploadZone
+                label="Upload ATP Documents & Certificate"
+                hint="PDF, DOCX, JPG, PNG — drag & drop atau klik"
+                accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                icon="document"
+                onUpload={files => handleFileUpload('document', files, `atp_doc`)}
+              />
 
               {canEditFields && (
-                <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
-                  <button className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 shadow-sm">Simpan Draft</button>
+                <div className="flex items-center justify-end mt-8 pt-6 border-t border-slate-100">
                   <button onClick={() => handleUpdateStage('bast')} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2">
-                    Tandai ATP Selesai <ChevronRight className="w-4 h-4" />
+                    Update ATP Stage <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -362,63 +651,83 @@ const AtpWorkPage = () => {
 
           {activeTab === 'foto' && (
             <div className="animate-in fade-in">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-black text-slate-800">Galeri Foto</h2>
-                <label className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 cursor-pointer transition-colors">
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={e => handleFileUpload('photo', e.target.files)} />
-                  <Upload className="w-4 h-4" /> Upload Foto
-                </label>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {dbFiles.filter(f => f.category === 'photo').map((file, i) => (
-                  <div key={file.id || i} className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
-                    <ImageIcon className="w-8 h-8 text-blue-400 mb-2" />
-                    <p className="text-[11px] font-bold text-slate-700 px-2 text-center truncate w-full">{file.name}</p>
-                    <p className="text-[9px] text-slate-400 text-center mt-0.5">{file.size} · {file.date}</p>
-                  </div>
-                ))}
-                {dbFiles.filter(f => f.category === 'photo').length === 0 && (
-                  [1,2,3,4].map(i => (
-                    <div key={i} className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
-                      <ImageIcon className="w-8 h-8 text-slate-300 mb-2 group-hover:text-blue-400 transition-colors" />
-                      <p className="text-[10px] text-slate-400 text-center px-2">Sector {i} View</p>
+              <h2 className="text-lg font-black text-slate-800 mb-4">Galeri Foto</h2>
+              <FileUploadZone
+                className="mb-6"
+                label="Upload Foto"
+                hint="JPG, PNG — drag & drop atau klik · tersimpan di galeri ini"
+                accept="image/*"
+                icon="image"
+                compact
+                onUpload={files => handleFileUpload('photo', files, `photo_${localWo.stage || 'general'}`)}
+              />
+              {dbFiles.filter(f => f.category === 'photo').length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <ImageIcon className="w-12 h-12 mb-3 text-slate-200" />
+                  <p className="text-sm font-semibold">Belum ada foto diunggah</p>
+                  <p className="text-xs mt-1">Foto dari tab Permit dan Implementasi akan muncul di sini</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {dbFiles.filter(f => f.category === 'photo').map((file, i) => (
+                    <div key={file.id || i} className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
+                      <ImageIcon className="w-8 h-8 text-blue-400 mb-2" />
+                      <p className="text-[11px] font-bold text-slate-700 px-2 text-center truncate w-full">{file.name}</p>
+                      <p className="text-[9px] text-slate-400 text-center mt-0.5">{file.size} · {file.date}</p>
+                      {file.tag && (
+                        <span className="absolute top-1.5 right-1.5 text-[8px] font-black uppercase px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">
+                          {file.tag.replace(/_/g, ' ')}
+                        </span>
+                      )}
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'file' && (
             <div className="animate-in fade-in">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-black text-slate-800">File &amp; Lampiran</h2>
-                <label className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 cursor-pointer transition-colors">
-                  <input type="file" multiple className="hidden" onChange={e => handleFileUpload('document', e.target.files)} />
-                  <Upload className="w-4 h-4" /> Upload Dokumen
-                </label>
-              </div>
-              <div className="space-y-3">
-                {dbFiles.filter(f => f.category === 'document' || !f.category).map((f, i) => (
-                  <div key={f.id || i} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-shadow cursor-pointer group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{f.name}</p>
-                        <div className="flex items-center gap-2 mt-1 text-[11px] font-medium text-slate-500">
-                          <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600">{f.type || 'DOCUMENT'}</span>
-                          <span>{f.size}</span><span>·</span><span>{f.date}</span>
+              <h2 className="text-lg font-black text-slate-800 mb-4">File &amp; Lampiran</h2>
+              <FileUploadZone
+                className="mb-6"
+                label="Upload Dokumen"
+                hint="PDF, DOCX, XLSX, JPG, PNG — drag & drop atau klik"
+                accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                icon="document"
+                compact
+                onUpload={files => handleFileUpload('document', files, `doc_${localWo.stage || 'general'}`)}
+              />
+              {dbFiles.filter(f => f.category === 'document' || !f.category).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <FileText className="w-12 h-12 mb-3 text-slate-200" />
+                  <p className="text-sm font-semibold">Belum ada dokumen diunggah</p>
+                  <p className="text-xs mt-1">Dokumen dari tab Permit dan Implementasi akan muncul di sini</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {dbFiles.filter(f => f.category === 'document' || !f.category).map((f, i) => (
+                    <div key={f.id || i} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-shadow cursor-pointer group">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{f.name}</p>
+                          <div className="flex items-center gap-2 mt-1 text-[11px] font-medium text-slate-500">
+                            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600">{f.type || 'DOCUMENT'}</span>
+                            {f.tag && <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-100 uppercase text-[9px] font-black">{f.tag.replace(/_/g, ' ')}</span>}
+                            <span>{f.size}</span><span>·</span><span>{f.date}</span>
+                          </div>
                         </div>
                       </div>
+                      <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                        <Download className="w-5 h-5" />
+                      </button>
                     </div>
-                    <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                      <Download className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

@@ -15,6 +15,10 @@ export const SaveIndicator = ({ status }: { status: 'idle' | 'saving' | 'saved' 
 };
 
 export const AutoSaveInput = ({ label, value, field, type = 'text', onSave, options, warningThresholdDays, locked }: any) => {
+  // Hooks must be called unconditionally — before any early return
+  const [val, setVal] = useState(value || '');
+  useEffect(() => { setVal(value || ''); }, [value]);
+
   if (locked) {
     return (
       <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-3 border-b border-slate-50 px-2 -mx-2">
@@ -25,9 +29,6 @@ export const AutoSaveInput = ({ label, value, field, type = 'text', onSave, opti
       </div>
     );
   }
-
-  const [val, setVal] = useState(value || '');
-  useEffect(() => { setVal(value || ''); }, [value]);
 
   const handleBlur = () => { if (val !== (value || '')) onSave(field, val); };
   const handleChange = (e: any) => {

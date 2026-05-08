@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, FileSpreadsheet, CheckCircle2, ChevronDown, ListPlus, Loader2, Play } from 'lucide-react';
 import clsx from 'clsx';
 import * as XLSX from 'xlsx';
-import { siteMasterRecords, atpTasks, people, teamMembersRecords, materialTransactions, materialMasterRecords, savedExcelTemplates, siteTechnicalDetails } from '../../data/mockData';
+import { siteMasterRecords, atpTasks, people, teamMembersRecords, materialTransactions, materialMasterRecords, savedExcelTemplates, siteTechnicalDetails, atpWorkOrders } from '../../data/mockData';
 
 interface MultiSheetExcelModalProps {
     isOpen: boolean;
@@ -444,11 +444,35 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                 let errorCount = 0;
                 
                 sheet.data.forEach(row => {
-                    const siteId = row[mapDict['site_id']];
-                    if (!siteId) { errorCount++; return; }
+                    const rawSiteId = row[mapDict['site_id']];
+                    if (!rawSiteId) { errorCount++; return; }
 
-                    const existingSite = siteMasterRecords.find(s => String(s.site_id).toLowerCase() === String(siteId).toLowerCase() || String(s.unique_key).toLowerCase() === String(siteId).toLowerCase());
+                    let searchSiteId = String(rawSiteId).trim();
+                    let priority: string | null = null;
+                    const priorityMatch = searchSiteId.match(/\s*\((P[1-3])\)$/i);
+                    if (priorityMatch) {
+                        priority = priorityMatch[1].toUpperCase();
+                        searchSiteId = searchSiteId.replace(/\s*\((P[1-3])\)$/i, '').trim();
+                    }
+
+                    if (searchSiteId.includes('_')) {
+                        const parts = searchSiteId.split('_');
+                        searchSiteId = parts[0];
+                    }
+
+                    const existingSite = siteMasterRecords.find(s => 
+                        String(s.site_id).toLowerCase() === searchSiteId.toLowerCase() || 
+                        String(s.unique_key).toLowerCase() === searchSiteId.toLowerCase() || 
+                        String(s.site_id).toLowerCase() === String(rawSiteId).toLowerCase()
+                    );
+                    
                     if (existingSite) {
+                        if (existingSite.project_type === 'COMBAT' && String(rawSiteId).includes('_')) {
+                            existingSite.site_name = String(rawSiteId);
+                        }
+                        if (existingSite.project_type === 'RESCOPING' && priority) {
+                            existingSite.priority = priority as any;
+                        }
                         // Apply normalizations
                         const rawPermit = row[mapDict['permit']];
                         if (rawPermit) {
@@ -458,8 +482,38 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
 
                         const rawImpl = row[mapDict['impl']];
                         if (rawImpl) {
-                            const newStage = getImplStatusMap(rawImpl);
-                            if (newStage) existingSite.stage = newStage as any;
+                            if (existingSite.project_type === 'COMBAT') {
+                                const implStr = String(rawImpl).toUpperCase();
+                                if (implStr.includes('RFS')) {
+                                    existingSite.stage = 'dokumen_done';
+                                    (existingSite as any).combat_impl_steps = {
+                                        sitac: { status: 'done', date: new Date().toISOString() },
+                                        cme: { status: 'done', date: new Date().toISOString() },
+                                        power: { status: 'done', date: new Date().toISOString() },
+                                        transmission: { status: 'done', date: new Date().toISOString() },
+                                        integration: { status: 'done', date: new Date().toISOString() },
+                                        rfs: { status: 'done', date: new Date().toISOString() }
+                                    };
+                                } else if (implStr.includes('ON GOING') || implStr.includes('AWAITING')) {
+                                    existingSite.stage = 'implementasi';
+                                } else if (implStr.includes('CANCELLED')) {
+                                    existingSite.stage = 'cancelled' as any;
+                                }
+                            } else if (existingSite.project_type === 'RESCOPING') {
+                                const implStr = String(rawImpl).toUpperCase();
+                                if (implStr.includes('RFS')) {
+                                    existingSite.stage = 'rfi_done';
+                                } else if (implStr.includes('ON GOING')) {
+                                    existingSite.stage = 'implementasi';
+                                } else if (implStr.includes('AWAITING')) {
+                                    existingSite.stage = 'permit_process';
+                                } else if (implStr.includes('CANCELLED')) {
+                                    existingSite.stage = 'cancelled' as any;
+                                }
+                            } else {
+                                const newStage = getImplStatusMap(rawImpl);
+                                if (newStage) existingSite.stage = newStage as any;
+                            }
                         }
 
                         // TEAM Lookup
@@ -488,6 +542,13 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                         const mappedExcelHeaders = Object.values(mapDict).filter(Boolean);
                         const dynamicData: Record<string, any> = {};
                         Object.keys(row).forEach(header => {
+                            if (String(header).toUpperCase().includes('IOMS')) {
+                                const val = String(row[header]).toUpperCase();
+                                if (val.includes('NOT REGISTERED')) {
+                                    existingSite.ioms_registered = false;
+                                }
+                            }
+
                             if (!mappedExcelHeaders.includes(header) && !header.startsWith('__EMPTY')) {
                                 dynamicData[header] = row[header];
                             }
@@ -499,11 +560,11 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                         };
                         
                         if (rawStatusatp || rawAtpTicket || rawAtpNote) {
-                            let atpTask = atpTasks.find(a => a.site_id === siteId);
+                            let atpTask = atpTasks.find(a => a.site_id === searchSiteId || a.site_id === existingSite.site_id);
                             if (!atpTask) {
                                 atpTask = {
                                     id: `atp-new-${Date.now()}-${Math.random()}`,
-                                    site_id: siteId,
+                                    site_id: searchSiteId,
                                     pdid: null,
                                     tiket_atp: null,
                                     tagging_status: 'pending',
@@ -519,7 +580,13 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                 const s = String(rawStatusatp).toUpperCase();
                                 if (s.includes('REQUEST PDID')) atpTask.tagging_status = 'pending';
                                 else if (s.includes('UPLOAD TAGGING DONE')) atpTask.tagging_status = 'done';
-                                else if (s.includes('TAGGING N/A')) atpTask.tagging_status = 'na';
+                                else if (s.includes('TAGGING N/A')) {
+                                    atpTask.tagging_status = 'na';
+                                    if (existingSite.project_type === 'COMBAT' || existingSite.project_type === 'RESCOPING') {
+                                        let wo = atpWorkOrders.find((w: any) => w.site_id === searchSiteId || w.site_id === existingSite.site_id);
+                                        if (wo) wo.issue_status = 'TAGGING N/A';
+                                    }
+                                }
                                 else if (s.includes('HOLD')) atpTask.catatan = atpTask.catatan ? atpTask.catatan + ' | HOLD' : 'HOLD';
                             }
 
