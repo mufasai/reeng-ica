@@ -1,6 +1,22 @@
 // SurrealDB integration
 import { Surreal } from 'surrealdb';
 
+/**
+ * Converts a SurrealDB RecordId (SDK v2 object or raw string) to a clean 'table:id' string.
+ * Strips any trailing ':N' digit-only suffix that can appear due to SDK serialization picking up
+ * the sector field (e.g. 'sites:nanoid:1' → 'sites:nanoid').
+ */
+export function cleanRecordId(raw: unknown, fallback = ''): string {
+  // SDK v2 returns RecordId objects with `tb` (table) and `id` (raw id) properties
+  if (raw && typeof raw === 'object' && 'tb' in (raw as any) && 'id' in (raw as any)) {
+    const obj = raw as { tb: string; id: unknown };
+    return `${obj.tb}:${String(obj.id)}`;
+  }
+  const str = String(raw || fallback);
+  if (!str || str === 'undefined' || str === 'null') return fallback;
+  return str;
+}
+
 const SurrealClass = Surreal || (Surreal as any).default;
 export const db = new SurrealClass();
 

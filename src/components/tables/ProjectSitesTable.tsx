@@ -43,7 +43,7 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
   const [itemsPerPage] = useState(10);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'latest_update', direction: 'desc' });
 
   const handleSort = (key: string) => {
       let direction: 'asc' | 'desc' = 'asc';
@@ -134,12 +134,33 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
       });
   }, [sites, currentUser]);
 
+  const getWoLatestUpdate = (siteId: string): number => {
+    const wos = atpWorkOrders.filter(w => w.site_id === siteId);
+    return wos.reduce((max, w) => {
+      const t = new Date((w as any).updated_at || w.initiated_at || 0).getTime();
+      return isNaN(t) ? max : Math.max(max, t);
+    }, 0);
+  };
+
+  const fmtRelative = (ts: number): string => {
+    if (!ts) return '—';
+    const ms = Date.now() - ts;
+    const mins = Math.floor(ms / 60000);
+    const hours = Math.floor(ms / 3600000);
+    const days = Math.floor(ms / 86400000);
+    if (mins < 1) return 'Baru saja';
+    if (mins < 60) return `${mins}m lalu`;
+    if (hours < 24) return `${hours}j lalu`;
+    if (days <= 3) return `${days}h lalu`;
+    return new Date(ts).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' });
+  };
+
   // Search Filter
   const filteredSites = useMemo(() => {
       let result = visibleSites.filter(site => {
         const lowerSearch = searchTerm.toLowerCase();
-        const siteMatch = site.site_name.toLowerCase().includes(lowerSearch) ||
-                         site.site_id.toLowerCase().includes(lowerSearch);
+        const siteMatch = String(site.site_name || '').toLowerCase().includes(lowerSearch) ||
+                         String(site.site_id || '').toLowerCase().includes(lowerSearch);
         
         // Search ATP numbers
         const wos = atpWorkOrders.filter(w => w.site_id === site.site_id);
@@ -163,6 +184,9 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
               } else if (sortConfig.key === 'days') {
                   aValue = a.stage_updated_at ? new Date(a.stage_updated_at).getTime() : 0;
                   bValue = b.stage_updated_at ? new Date(b.stage_updated_at).getTime() : 0;
+              } else if (sortConfig.key === 'latest_update') {
+                  aValue = getWoLatestUpdate(a.site_id);
+                  bValue = getWoLatestUpdate(b.site_id);
               }
 
               if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -297,6 +321,7 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                 {col('no') && <TableHead>No</TableHead>}
                 {col('project_type') && <TableHead>Project Type</TableHead>}
                 {col('site_id') && <TableHead sortable onSort={() => handleSort('site_id')} sortDirection={sortConfig?.key === 'site_id' ? sortConfig.direction : undefined}>Site ID</TableHead>}
+                {col('tiket_number') && <TableHead>Tiket Number</TableHead>}
                 {col('site_moving_status') && <TableHead>Site Moving Status</TableHead>}
                 {col('final_site_id') && <TableHead>Final Site ID</TableHead>}
                 {col('site_sector_final') && <TableHead>Site Sector Final</TableHead>}
@@ -322,13 +347,13 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                 {col('ppid') && <TableHead>PPID</TableHead>}
                 {col('sow_id') && <TableHead>SOW ID</TableHead>}
                 {col('po_id') && <TableHead>PO ID</TableHead>}
-                {col('tiket_number') && <TableHead>Tiket Number</TableHead>}
                 {col('prio_capex_final') && <TableHead>Prio Capex Final</TableHead>}
                 {col('new_status_implementation') && <TableHead>New Status Implementation</TableHead>}
                 {col('prio') && <TableHead sortable onSort={() => handleSort('priority')} sortDirection={sortConfig?.key === 'priority' ? sortConfig.direction : undefined}>Prio</TableHead>}
                 {col('latitude') && <TableHead>Latitude</TableHead>}
                 {col('longitude') && <TableHead>Longitude</TableHead>}
                 {col('file_date') && <TableHead>File Date</TableHead>}
+                <TableHead sortable onSort={() => handleSort('latest_update')} sortDirection={sortConfig?.key === 'latest_update' ? sortConfig.direction : undefined}>Latest Update</TableHead>
                 {col('actions') && <TableHead className="text-right">Actions</TableHead>}
            </TableHeader>
            <TableBody>
@@ -399,6 +424,39 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                                        </Link>
                                    </TableCell>
                                )}
+                               {col('tiket_number') && (
+                                   <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                            {atpWorkOrders.filter(w => w.site_id === site.site_id).sort((a,b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime()).map((wo, i) => (
+                                                <div key={wo.id} className="flex items-center gap-1.5 min-w-0">
+                                                    <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', wo.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300')} />
+                                                    {wo.atp_number ? (
+                                                        <button
+                                                            onClick={() => {
+                                                                openTab({
+                                                                    id: `atp-${wo.id}`,
+                                                                    label: `ATP${wo.atp_number ? wo.atp_number.slice(-6) : ''}`,
+                                                                    path: `/atp/${wo.id}`,
+                                                                    icon: '📋',
+                                                                    closeable: true
+                                                                });
+                                                            }}
+                                                            className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors truncate max-w-[140px] text-left"
+                                                            title={`Buka detail ${wo.atp_number}`}
+                                                        >
+                                                            {wo.atp_number}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-slate-400 italic text-xs">Belum ada ATP</span>
+                                                    )}
+                                                    {i === 0 && wo.status === 'active' && (
+                                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1 py-0.5 rounded uppercase tracking-tight shrink-0">aktif</span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                   </TableCell>
+                               )}
                                {col('site_moving_status') && <TableCell className="text-xs text-slate-600">{site.project_type === 'RESCOPING' && site.is_relokasi ? 'Relokasi' : 'Fix'}</TableCell>}
                                {col('final_site_id') && <TableCell className="font-mono text-xs">{site.site_id}</TableCell>}
                                {col('site_sector_final') && <TableCell className="font-mono text-xs">{site.site_id}-S{site.sector || 1}</TableCell>}
@@ -429,7 +487,7 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                                {col('tp_name') && <TableCell className="text-slate-600 text-xs truncate max-w-[100px]">{site.tower_provider || site.raw_data?.['TP NAME'] || '—'}</TableCell>}
                                {col('ioms_registered') && (
                                     <TableCell>
-                                        {site.ioms_registered ? (
+                                        {String(site.ioms_registered || '').toLowerCase().includes('registered') && !String(site.ioms_registered || '').toLowerCase().includes('not') ? (
                                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap">
                                                 Registered
                                             </span>
@@ -444,22 +502,25 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                                    <TableCell>
                                        {activeWo ? (
                                            <div className="flex items-center gap-2">
-                                               <div className={clsx(
-                                                   "w-1.5 h-1.5 rounded-full shrink-0",
-                                                   (activeWo.permit_status?.includes('5') || activeWo.permit_status?.includes('7')) ? "bg-emerald-500" :
-                                                   (activeWo.permit_status?.includes('1') || activeWo.permit_status?.includes('3')) ? "bg-amber-500" :
-                                                   activeWo.permit_status?.includes('9') ? "bg-red-500" : "bg-slate-300"
-                                               )} />
-                                               <InlineSelectEdit 
-                                                   value={activeWo.permit_status || ''} 
-                                                   onSave={(val) => saveField(activeWo.id, 'workOrder', 'permit_status', val)}
-                                                   options={[
-                                                       {label: '1.Planning', value: '1.Planning'},
-                                                       {label: '3.Submission', value: '3.Submission'},
-                                                       {label: '5.Permit Released', value: '5.Permit Released'},
-                                                       {label: '7.Final Doc', value: '7.Final Doc'},
-                                                       {label: '9.Cancelled', value: '9.Cancelled'}
-                                                   ]}
+                                                <div className={clsx(
+                                                    "w-1.5 h-1.5 rounded-full shrink-0",
+                                                    (activeWo.permit_status?.includes('5.') || activeWo.permit_status?.includes('7.')) ? "bg-emerald-500" :
+                                                    (activeWo.permit_status?.includes('1.') || activeWo.permit_status?.includes('2.') || activeWo.permit_status?.includes('3.') || activeWo.permit_status?.includes('4.')) ? "bg-amber-500" :
+                                                    (activeWo.permit_status?.includes('6.') || activeWo.permit_status?.includes('9.') || activeWo.permit_status?.includes('10.')) ? "bg-red-500" : "bg-slate-300"
+                                                )} />
+                                                <InlineSelectEdit 
+                                                    value={activeWo.permit_status || ''} 
+                                                    onSave={(val) => saveField(activeWo.id, 'workOrder', 'permit_status', val)}
+                                                    options={[
+                                                        { label: '1. Planning', value: '1. Planning' },
+                                                        { label: '2. Waiting for TO Approval', value: '2. Waiting for TO Approval' },
+                                                        { label: '4. Tpass Released', value: '4. Tpass Released' },
+                                                        { label: '5. Permit Released', value: '5. Permit Released' },
+                                                        { label: '6. Expired Permit', value: '6. Expired Permit' },
+                                                        { label: '9. Cancelled', value: '9. Cancelled' },
+                                                        { label: '10. DROP OUT', value: '10. DROP OUT' },
+                                                        { label: '(Blanks)', value: '(Blanks)' },
+                                                    ]}
                                                    placeholder="Status"
                                                />
                                            </div>
@@ -472,10 +533,11 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                                {col('implementasi_status') && (
                                    <TableCell>
                                        {(() => {
-                                           const status = activeWo?.impl_status || (site.stage === 'rfs_done' ? 'RFS' : site.stage === 'implementasi' ? 'Awaiting' : null);
+                                           const status = activeWo?.impl_status || (site.stage === 'rfs_done' ? 'RFS' : site.stage === 'implementasi' ? 'Planning' : null);
                                            if (!status) return <span className="text-slate-300">—</span>;
                                            const color = status === 'RFS' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
-                                                         (status === 'Awaiting' || status === 'On Going') ? 'text-amber-600 bg-amber-50 border-amber-100' :
+                                                         (status === 'Planning' || status === 'On Going') ? 'text-amber-600 bg-amber-50 border-amber-100' :
+                                                         status === 'On Hold' ? 'text-purple-600 bg-purple-50 border-purple-100' :
                                                          status === 'Cancelled' ? 'text-red-600 bg-red-50 border-red-100' : 'text-slate-500 bg-slate-50';
                                            return (
                                                <span className={clsx("px-2 py-0.5 rounded text-[10px] font-bold border", color)}>
@@ -524,39 +586,6 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                                {col('ppid') && <TableCell className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">{activeWo?.ppid || ''}</TableCell>}
                                {col('sow_id') && <TableCell className="text-slate-600 text-[10px] truncate max-w-[80px] font-mono">{activeWo?.sow_id || '—'}</TableCell>}
                                {col('po_id') && <TableCell className="text-slate-600 text-[10px] font-mono">{activeWo?.po_number || '—'}</TableCell>}
-                               {col('tiket_number') && (
-                                   <TableCell>
-                                        <div className="flex flex-col gap-1">
-                                            {atpWorkOrders.filter(w => w.site_id === site.site_id).sort((a,b) => new Date(b.initiated_at).getTime() - new Date(a.initiated_at).getTime()).map((wo, i) => (
-                                                <div key={wo.id} className="flex items-center gap-1.5 min-w-0">
-                                                    <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', wo.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300')} />
-                                                    {wo.atp_number ? (
-                                                        <button
-                                                            onClick={() => {
-                                                                openTab({
-                                                                    id: `atp-${wo.id}`,
-                                                                    label: `ATP${wo.atp_number ? wo.atp_number.slice(-6) : ''}`,
-                                                                    path: `/atp/${wo.id}`,
-                                                                    icon: '📋',
-                                                                    closeable: true
-                                                                });
-                                                            }}
-                                                            className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors truncate max-w-[140px] text-left"
-                                                            title={`Buka detail ${wo.atp_number}`}
-                                                        >
-                                                            {wo.atp_number}
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-slate-400 italic text-xs">Belum ada ATP</span>
-                                                    )}
-                                                    {i === 0 && wo.status === 'active' && (
-                                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1 py-0.5 rounded uppercase tracking-tight shrink-0">aktif</span>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                   </TableCell>
-                               )}
                                {col('prio_capex_final') && <TableCell className="text-xs font-semibold text-slate-700">{activeWo?.prio_capex_final || site.batch_ref || ''}</TableCell>}
                                {col('new_status_implementation') && <TableCell className="text-[10px] text-slate-600 truncate max-w-[150px]">{activeWo?.new_status_implementation || ''}</TableCell>}
                                {col('prio') && (
@@ -570,6 +599,17 @@ const ProjectSitesTable = ({ sites,  }: ProjectSitesTableProps) => {
                                {col('latitude') && <TableCell className="text-[10px] font-mono text-slate-500">{site.latitude || '—'}</TableCell>}
                                {col('longitude') && <TableCell className="text-[10px] font-mono text-slate-500">{site.longitude || '—'}</TableCell>}
                                {col('file_date') && <TableCell className="text-xs tabular-nums text-slate-600">{site.imported_at ? new Date(site.imported_at).toISOString().split('T')[0] : '—'}</TableCell>}
+                               <TableCell className="text-xs tabular-nums whitespace-nowrap">
+                                 {(() => {
+                                   const ts = getWoLatestUpdate(site.site_id);
+                                   if (!ts) return <span className="text-slate-300">—</span>;
+                                   const rel = fmtRelative(ts);
+                                   const color = rel.includes('m lalu') || rel === 'Baru saja' ? 'text-emerald-600 font-semibold' :
+                                                 rel.includes('j lalu') ? 'text-blue-600 font-semibold' :
+                                                 rel.includes('h lalu') ? 'text-slate-700 font-medium' : 'text-slate-500';
+                                   return <span className={color} title={new Date(ts).toLocaleString('id-ID')}>{rel}</span>;
+                                 })()}
+                               </TableCell>
                                {col('actions') && (
                                     <TableCell className="text-right">
                                     <div className="flex justify-end items-center gap-2">

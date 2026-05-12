@@ -22,19 +22,24 @@ export interface WorkOrder {
 }
 
 export interface TerminPengajuan {
-  id: string; // auto
-  site_id: string; // -> site reference
+  id: string;
+  site_id: string;
   termin_key: 'T1' | 'T2a' | 'T2b' | 'T2c' | 'T3' | 'T4' | 'Biaya Perizinan' | 'Transportasi' | 'Material Tambahan' | 'Sewa Alat' | 'Lainnya';
   deskripsi?: string;
   nominal: number;
   status: 'draft' | 'submitted' | 'approved' | 'paid' | 'rejected';
   catatan?: string;
-  submitted_by: string; // -> users.id
-  submitted_at: string; // datetime
-  approved_by?: string; // -> users.id nullable
-  approved_at?: string; // datetime nullable
-  paid_at?: string; // datetime nullable
-  documents: string[]; // json array of file IDs
+  submitted_by: string;
+  submitted_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  paid_at?: string;
+  bank_name?: string;
+  account_number?: string;
+  account_holder?: string;
+  bukti_pembayaran_name?: string;
+  bukti_pembayaran_url?: string;
+  documents: string[];
   history?: { action: string; by: string; at: string }[];
 }
 
@@ -428,7 +433,7 @@ export const files: ProjectFile[] = [
     { id: 'f3', projectId: 'p2', title: 'Combat Drill Manual', originalName: 'manual_v1.pdf', size: '5.1 MB', type: 'PDF', uploadedAt: '2024-02-01', uploadedBy: 'u_lead' },
 ];
 
-export type UserRole = 'director' | 'operational' | 'admin' | 'finance' | 'field' | 'management' | 'backoffice' | 'backoffice_admin' | 'team_leader' | 'engineer';
+export type UserRole = 'director' | 'operational' | 'finance' | 'field_engineer' | 'field' | 'system_admin' | 'admin' | 'engineer' | 'team_leader' | 'management' | 'backoffice' | 'backoffice_admin';
 
 export const getVisibleProjects = (projects: Project[], currentUser: User) => {
     if (['director', 'admin', 'finance', 'operational', 'management', 'backoffice', 'backoffice_admin'].includes(currentUser.role)) {
@@ -448,14 +453,13 @@ export interface User {
 }
 
 export const USERS: User[] = [
-    { id: 'u_dipo',       name: 'Dipo SST',           email: 'dipo@smartelco.com',        password: 'diposst123',   role: 'director' },
-    { id: 'u_dir',       name: 'Direktur',            email: 'direktur@smartelco.com',    password: 'direktur123',  role: 'director' },
-    { id: 'u_mgmt',      name: 'Management',          email: 'management@smartelco.com',  password: 'mgmt123',      role: 'management' },
-    { id: 'u_fin',       name: 'Finance Staff',       email: 'finance@smartelco.com',     password: 'finance123',   role: 'finance' },
-    { id: 'u_test',      name: 'Test User',           email: 'test@smartelco.com',        password: 'test123',      role: 'field' },
-    { id: 'u_backoffice',name: 'Back Office',         email: 'backoffice@smartelco.com',  password: 'backoffice123',role: 'backoffice' },
-    { id: 'u_john',      name: 'John',                email: 'john@smartelco.com',        password: '123456',       role: 'operational' },
-    { id: 'u_adm',       name: 'Admin',               email: 'admin@smartelco.com',       password: 'admin123',     role: 'admin' },
+    { id: 'u_sysadmin',  name: 'System Administrator', email: 'sysadmin@smartelco.com',  password: 'sysadmin123',  role: 'system_admin' },
+    { id: 'u_dipo',      name: 'Dipo SST',             email: 'dipo@smartelco.com',       password: 'diposst123',   role: 'director' },
+    { id: 'u_dir',       name: 'Direktur',             email: 'direktur@smartelco.com',   password: 'direktur123',  role: 'director' },
+    { id: 'u_fin',       name: 'Finance Staff',        email: 'finance@smartelco.com',    password: 'finance123',   role: 'finance' },
+    { id: 'u_john',      name: 'John Operational',     email: 'john@smartelco.com',       password: '123456',       role: 'operational' },
+    { id: 'u_adm',       name: 'Admin Operasional',    email: 'admin@smartelco.com',      password: 'admin123',     role: 'operational' },
+    { id: 'u_test',      name: 'Field Engineer',       email: 'engineer@smartelco.com',   password: 'engineer123',  role: 'field_engineer' },
 ];
 
 export interface Certification {
@@ -502,7 +506,7 @@ export interface Team {
 export interface Person {
     id: string;
     name: string;
-    role: UserRole; // Keeping for system access role
+    role: string; // workforce role / jabatan context, not auth role
     
     // New Extended fields
     nik?: string;
@@ -894,18 +898,19 @@ export let materialTransactions: MaterialTransaction[] = [
 
 export interface ATPTask {
   id: string;
-  site_id: string; // references SiteMaster.id or SiteMaster.site_id depending on usage, we'll use site_id like "BKS598"
+  site_id: string;
   pdid: string | null;
   tiket_atp: string | null;
   tagging_status: 'pending' | 'done' | 'na';
   cell_capture_done: boolean;
   catatan: string | null;
+  catatan_atp: string | null;
   updated_by: string | null;
   updated_at: string;
 }
 
 export const atpTasks: ATPTask[] = [
-  { id: 'atp-1', site_id: 'JKT010', pdid: null, tiket_atp: 'ATP000000282692', tagging_status: 'pending', cell_capture_done: false, catatan: 'Need PDID', updated_by: 'u1', updated_at: '2024-03-01T10:00:00Z' }
+  { id: 'atp-1', site_id: 'JKT010', pdid: null, tiket_atp: 'ATP000000282692', tagging_status: 'pending', cell_capture_done: false, catatan: 'Need PDID', catatan_atp: null, updated_by: 'u1', updated_at: '2024-03-01T10:00:00Z' }
 ];
 
 export const materialMasterRecords: MaterialMaster[] = [
@@ -2163,10 +2168,12 @@ export interface SiteTechnicalDetail {
     bsc?: string;
     site_name?: string;
     provinsi?: string;
+    province?: string;
     address?: string;
     kecamatan?: string;
     kabupaten?: string;
     desa?: string;
+    city?: string;
     cluster?: string;
     branch?: string;
     region?: string;

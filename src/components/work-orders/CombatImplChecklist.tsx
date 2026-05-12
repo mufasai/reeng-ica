@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { CheckCircle2, Loader2, Circle, ChevronDown, ChevronUp, Upload, ImageIcon, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import {
@@ -18,6 +18,8 @@ interface Props {
   onMarkSelesai: () => void;
   currentStage: string;
   canEdit: boolean;
+  onToast?: (msg: string, type: 'success' | 'error') => void;
+  onFileUpload?: (category: 'document' | 'photo', files: FileList | null, tag?: string) => void;
 }
 
 const STATUS_OPTIONS: { value: CombatImplStepStatus; label: string }[] = [
@@ -40,9 +42,11 @@ const borderColor: Record<CombatImplStepStatus, string> = {
   pending:     'border-l-slate-200 bg-white',
 };
 
-export const CombatImplChecklist = ({ siteId, dbRecordId, steps, onUpdate, onMarkSelesai, currentStage, canEdit }: Props) => {
+export const CombatImplChecklist = ({ siteId, dbRecordId, steps, onUpdate, onMarkSelesai, currentStage, canEdit, onToast, onFileUpload }: Props) => {
   const [expanded, setExpanded] = useState<Set<CombatImplStepKey>>(new Set());
   const [saving, setSaving] = useState<CombatImplStepKey | null>(null);
+  const [uploading, setUploading] = useState<CombatImplStepKey | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const doneCount = countCombatDone(steps);
   const total = COMBAT_IMPL_STEPS.length;
@@ -65,19 +69,45 @@ export const CombatImplChecklist = ({ siteId, dbRecordId, steps, onUpdate, onMar
     onUpdate(updated);
     setSaving(key);
     try {
-      // Build SET clauses for each changed field
-      const setClauses = Object.entries(patch)
-        .map(([f]) => `combat_impl_steps.${key}.${f} = $${f}`)
-        .join(', ');
-      const params: Record<string, any> = { ...patch };
-      await db.query(
-        `UPDATE ${dbRecordId} SET ${setClauses}, updated_at = time::now()`,
-        params
-      );
+      await db.query(`UPDATE ${dbRecordId} MERGE $data`, { data: { combat_impl_steps: updated, updated_at: new Date().toISOString() } });
     } catch (e) {
       console.error('Failed to save combat step:', e);
     } finally {
       setSaving(null);
+    }
+  };
+
+  const handleFileUpload = async (key: CombatImplStepKey, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (onFileUpload) {
+      onFileUpload('photo', files, `impl_${key}`);
+      return;
+    }
+    setUploading(key);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        await db.query('CREATE site_files CONTENT $data', {
+          data: {
+            work_order_id: dbRecordId,
+            site_id: siteId,
+            name: file.name,
+            tag: `impl_${key}`,
+            category: 'photo',
+            size: `${(file.size / 1024).toFixed(0)} KB`,
+            file_size: file.size,
+            uploaded_at: new Date().toISOString(),
+          }
+        });
+      }
+      onToast?.(`${files.length} foto berhasil diunggah`, 'success');
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+      onToast?.('Gagal mengunggah foto', 'error');
+    } finally {
+      const input = fileInputRefs.current[key];
+      if (input) input.value = '';
+      setUploading(null);
     }
   };
 
@@ -210,34 +240,27 @@ export const CombatImplChecklist = ({ siteId, dbRecordId, steps, onUpdate, onMar
 
                   {/* Photo upload per step */}
                   {canEdit && (
-                    <label className="flex items-center gap-2 cursor-pointer text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors w-fit">
-                      <input type="file" accept="image/*" multiple className="hidden"
-                        onChange={async e => {
-                          const files = e.target.files;
-                          if (!files || files.length === 0) return;
-                          for (let i = 0; i < files.length; i++) {
-                            const file = files[i];
-                            try {
-                              await db.query('CREATE site_files CONTENT $data', {
-                                data: {
-                                  site_id: siteId,
-                                  name: file.name,
-                                  tag: `impl_${stepDef.key}`,
-                                  category: 'photo',
-                                  size: `${(file.size / 1024).toFixed(0)} KB`,
-                                  uploaded_at: new Date().toISOString(),
-                                }
-                              });
-                            } catch (err) {
-                              console.error('Photo upload failed:', err);
-                            }
-                          }
-                        }}
+                    <>
+                      <button
+                        onClick={() => fileInputRefs.current[stepDef.key]?.click()}
+                        disabled={uploading === stepDef.key}
+                        className="flex items-center gap-2 text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors disabled:text-slate-400"
+                      >
+                        {uploading === stepDef.key
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Upload className="w-3.5 h-3.5" />}
+                        {uploading === stepDef.key ? 'Mengunggah...' : '+ Upload Foto'}
+                        {uploading !== stepDef.key && <ImageIcon className="w-3.5 h-3.5 text-slate-400" />}
+                      </button>
+                      <input
+                        ref={el => { fileInputRefs.current[stepDef.key] = el; }}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={e => handleFileUpload(stepDef.key, e.target.files)}
                       />
-                      <Upload className="w-3.5 h-3.5" />
-                      Upload Foto
-                      <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
-                    </label>
+                    </>
                   )}
                 </div>
               )}

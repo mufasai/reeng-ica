@@ -149,11 +149,14 @@ const WorkOrderTabContent = ({ workOrderId, activeStep = 'permit', onStepChange 
       <KVGrid>
         <KVRow label="Permit Status">
           <InlineSelectEdit value={wo.permit_status || ''} options={[
-            { label: '1.Planning', value: '1.Planning' },
-            { label: '3.Submission', value: '3.Submission' },
-            { label: '5.Permit Released', value: '5.Permit Released' },
-            { label: '7.Final Doc', value: '7.Final Doc' },
-            { label: '9.Cancelled', value: '9.Cancelled' },
+            { label: '1. Planning', value: '1. Planning' },
+            { label: '2. Waiting for TO Approval', value: '2. Waiting for TO Approval' },
+            { label: '4. Tpass Released', value: '4. Tpass Released' },
+            { label: '5. Permit Released', value: '5. Permit Released' },
+            { label: '6. Expired Permit', value: '6. Expired Permit' },
+            { label: '9. Cancelled', value: '9. Cancelled' },
+            { label: '10. DROP OUT', value: '10. DROP OUT' },
+            { label: '(Blanks)', value: '(Blanks)' },
           ]} onSave={v => handleSave('permit_status', v)} placeholder="Select Status" />
         </KVRow>
         <KVRow label="Create Date">
@@ -234,10 +237,10 @@ const WorkOrderTabContent = ({ workOrderId, activeStep = 'permit', onStepChange 
           <InlineCheckbox value={!!wo.rfs_done} onSave={v => handleSave('rfs_done', v)} />
         </KVRow>
         <KVRow label="Implementasi Status">
-          <InlineSelectEdit value={(wo as any).impl_status || 'Awaiting'} options={[
-            { label: 'Awaiting', value: 'Awaiting' },
-            { label: 'Scheduled', value: 'Scheduled' },
+          <InlineSelectEdit value={(wo as any).impl_status || 'Planning'} options={[
+            { label: 'Planning', value: 'Planning' },
             { label: 'On Going', value: 'On Going' },
+            { label: 'On Hold', value: 'On Hold' },
             { label: 'RFS', value: 'RFS' },
             { label: 'Cancelled', value: 'Cancelled' },
           ]} onSave={v => handleSave('impl_status', v)} />

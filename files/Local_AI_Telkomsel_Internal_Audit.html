@@ -1,0 +1,1596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="light">
+<title>Local AI for Internal Audit · Smartelco × Telkomsel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter+Tight:ital,wght@0,400;0,500;0,600;1,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #f6f7f9;
+    --surface-2: #f1f2f5;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --red: #e11d26;
+    --red-dark: #9f1217;
+    --red-soft: #fee7e7;
+    --red-wash: #fdf2f2;
+    --ink: #0b1220;
+    --ink-2: #1f2937;
+    --body: #4b5563;
+    --muted: #8a93a2;
+    --green: #16a34a;
+    --amber: #d97706;
+    --display: "Manrope", system-ui, sans-serif;
+    --text: "Inter Tight", system-ui, sans-serif;
+    --max: 1180px;
+    --gutter: clamp(20px, 4vw, 56px);
+    --red-low: rgba(225, 29, 38, 0.1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; color-scheme: light !important; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--text);
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  ::selection { background: var(--red); color: #fff; }
+
+  /* ============ TOP NAV ============ */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 14px var(--gutter);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .brand-mark {
+    width: 14px; height: 14px;
+    background: var(--red);
+    border-radius: 2px;
+  }
+  .nav-meta {
+    font-family: var(--text);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .nav-meta strong { color: var(--ink); font-weight: 600; }
+  .progress-rail {
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: transparent;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--red);
+    width: 0%;
+    transition: width 120ms linear;
+  }
+
+  /* ============ LAYOUT PRIMITIVES ============ */
+  section {
+    position: relative;
+    padding: clamp(40px, 8vh, 60px) var(--gutter);
+    border-bottom: 1px solid var(--border);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+  @media screen and (min-width: 1200px) {
+    section {
+      min-height: clamp(600px, 8.5in, 850px);
+      max-height: 8.5in;
+      overflow: hidden;
+    }
+  }
+  @media print {
+    @page {
+      size: 11in 8.5in;
+      margin: 0;
+    }
+    html, body {
+      width: 11in; height: 8.5in;
+      background: #ffffff !important;
+      color: #0b1220 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    section {
+      min-height: 8.5in;
+      height: 8.5in;
+      padding: 40px 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border: none;
+      page-break-after: always;
+    }
+    .nav, footer { display: none !important; }
+    .reveal {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+    .bar-fill {
+      transition: none !important;
+      /* Ensure animated bar charts are fully drawn for printing */
+    }
+    .hero {
+      background: #ffffff !important;
+      background-image: none !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  }
+  .wrap {
+    width: 100%;
+    max-width: var(--max);
+    margin: 0 auto;
+  }
+  .graphic-img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
+    object-fit: cover;
+  }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: 22px;
+  }
+  .eyebrow::before {
+    content: ""; width: 8px; height: 8px;
+    background: var(--red);
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    color: var(--ink);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  h1 { font-weight: 800; font-size: clamp(40px, 6vw, 72px); }
+  h2 { font-weight: 700; font-size: clamp(30px, 4.4vw, 52px); }
+  h3 { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+
+  .lede {
+    font-family: var(--text);
+    font-size: clamp(15px, 1.4vw, 18px);
+    color: var(--body);
+    max-width: 64ch;
+    margin-top: 24px;
+    line-height: 1.6;
+  }
+
+  /* ============ HERO / COVER ============ */
+  .hero {
+    padding-top: clamp(90px, 14vh, 160px);
+    padding-bottom: clamp(80px, 12vh, 140px);
+    overflow: hidden;
+    background: #ffffff !important;
+    position: relative;
+  }
+  .hero-circle-1 {
+    position: absolute;
+    top: -8%; right: -5%;
+    width: clamp(300px, 35vw, 500px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: #e11d26;
+    opacity: 0.06;
+    z-index: 1;
+  }
+  .hero-circle-2 {
+    position: absolute;
+    bottom: -10%; right: 5%;
+    width: clamp(180px, 20vw, 300px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: #fee7e7;
+    opacity: 0.6;
+    z-index: 1;
+  }
+  .hero .wrap { 
+    max-width: var(--max); 
+    position: relative;
+    z-index: 10;
+  }
+  .hero h1 {
+    font-size: clamp(48px, 8.4vw, 116px);
+    line-height: 0.96;
+    max-width: 16ch;
+  }
+  .hero h1 em {
+    color: var(--red);
+    font-style: italic;
+    font-weight: 700;
+  }
+  .hero .lede {
+    font-size: clamp(17px, 1.6vw, 21px);
+    color: var(--ink-2);
+    margin-top: 32px;
+    max-width: 48ch;
+  }
+  .pill {
+    display: inline-flex; align-items: center;
+    background: var(--red-soft);
+    color: var(--red-dark);
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 10px 18px;
+    border-radius: 999px;
+    margin-bottom: 36px;
+  }
+  .meta-row {
+    margin-top: clamp(56px, 9vh, 96px);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 32px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+    max-width: 720px;
+  }
+  .meta-row .label {
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .meta-row .value {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--ink);
+  }
+
+  /* ============ SECTION HEADER ============ */
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 32px;
+    margin-bottom: clamp(48px, 6vw, 72px);
+    flex-wrap: wrap;
+  }
+  .section-head .left { max-width: 700px; }
+  .section-num {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .section-num span { color: var(--red); }
+
+  /* ============ STAT CARDS (Exec Summary) ============ */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .stat {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--red);
+    padding: 36px 32px 32px;
+    border-radius: 4px;
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .stat:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 40px -22px rgba(11,18,32,0.18);
+  }
+  .stat-icon {
+    width: 44px; height: 44px;
+    background: var(--red-wash);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--red);
+    margin-bottom: 28px;
+  }
+  .stat-icon svg { width: 22px; height: 22px; }
+  .stat-num {
+    font-family: var(--display);
+    font-weight: 800;
+    color: var(--red);
+    font-size: clamp(36px, 4.4vw, 52px);
+    letter-spacing: -0.025em;
+    line-height: 1;
+    margin-bottom: 14px;
+  }
+  .stat-label {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .stat-sub {
+    font-size: 13.5px;
+    color: var(--body);
+    line-height: 1.55;
+  }
+  .recommendation {
+    margin-top: 32px;
+    padding: 22px 28px;
+    background: var(--surface-2);
+    border-radius: 4px;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+  .recommendation strong {
+    font-family: var(--display);
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* ============ PILLAR CARDS ============ */
+  .pillar-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .pillar {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 36px 30px;
+    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+  }
+  .pillar:hover {
+    transform: translateY(-3px);
+    border-color: var(--red);
+    box-shadow: 0 18px 40px -22px rgba(225,29,38,0.22);
+  }
+  .pillar-ico {
+    width: 52px; height: 52px;
+    background: var(--red-wash);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--red);
+    margin-bottom: 28px;
+  }
+  .pillar-ico svg { width: 26px; height: 26px; }
+  .pillar h3 { margin-bottom: 12px; }
+  .pillar p {
+    font-size: 14.5px;
+    color: var(--body);
+    line-height: 1.6;
+    margin: 0 0 24px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--red-wash);
+    color: var(--red-dark);
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    border-radius: 999px;
+  }
+
+  /* ============ TWO COLUMN (sovereignty / fine-tune) ============ */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: clamp(32px, 5vw, 64px);
+    align-items: start;
+  }
+  .icon-list { display: flex; flex-direction: column; gap: 28px; }
+  .icon-list-item { display: flex; gap: 16px; align-items: flex-start; }
+  .icon-list-item .ico {
+    flex: 0 0 36px;
+    width: 36px; height: 36px;
+    color: var(--red);
+    display: flex; align-items: center; justify-content: center;
+    border-left: 3px solid var(--red);
+    padding-left: 12px;
+    margin-left: -3px;
+  }
+  .icon-list-item .ico svg { width: 22px; height: 22px; }
+  .icon-list-item h3 { font-size: 16.5px; margin-bottom: 4px; }
+  .icon-list-item p { font-size: 14px; color: var(--body); margin: 0; line-height: 1.55; }
+
+  .dark-card {
+    background: var(--ink);
+    color: #f7f8fa;
+    border-radius: 6px;
+    padding: 36px;
+  }
+  .dark-card .label {
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #9aa3b2;
+    margin-bottom: 22px;
+  }
+  .dark-card .root {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 18px;
+    margin-bottom: 22px;
+  }
+  .dark-card .node {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 4px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+  .dark-card .node h4 {
+    margin: 0 0 4px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 14.5px;
+    color: #fff;
+  }
+  .dark-card .node p {
+    margin: 0;
+    font-size: 12.5px;
+    color: #aab2c1;
+  }
+  .dark-card .footer-note {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-style: italic;
+    font-size: 12.5px;
+    color: #aab2c1;
+  }
+
+  /* Comparison cards (Generic vs Local) */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .compare {
+    border-radius: 4px;
+    padding: 32px;
+    background: var(--surface);
+  }
+  .compare.win {
+    background: var(--bg);
+    border: 2px solid var(--red);
+  }
+  .compare .label {
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .compare.win .label { color: var(--red); }
+  .compare h3 { font-size: 22px; margin-bottom: 20px; line-height: 1.2; }
+  .compare ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
+  .compare li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: var(--body); line-height: 1.55; }
+  .compare li b { color: var(--ink); font-weight: 700; }
+  .compare .mark {
+    flex: 0 0 22px; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    margin-top: 1px;
+  }
+  .compare .mark.x { background: rgba(225,29,38,0.1); color: var(--red); }
+  .compare .mark.v { background: rgba(22,163,74,0.1); color: var(--green); }
+
+  /* ============ COST: chart + callout ============ */
+  .cost-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 32px;
+    align-items: stretch;
+  }
+  .chart-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 36px;
+  }
+  .chart-row { margin: 30px 0; }
+  .chart-row .row-label {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .chart-row .row-label span:last-child {
+    font-family: var(--text);
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .bar-track {
+    width: 100%; height: 32px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--red);
+    width: 0%;
+    transition: width 1.1s cubic-bezier(.16,.84,.44,1);
+  }
+  .bar-fill.muted {
+    background: var(--red);
+    opacity: 0.35;
+  }
+  .chart-foot {
+    margin-top: 22px;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.55;
+    font-style: italic;
+  }
+  .red-card {
+    background: var(--red);
+    color: #fff;
+    border-radius: 4px;
+    padding: 40px 36px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .red-card .label {
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    margin-bottom: 20px;
+  }
+  .red-card .num {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(72px, 9vw, 120px);
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    color: #fff;
+  }
+  .red-card .sub {
+    font-size: 16px;
+    color: rgba(255,255,255,0.95);
+    margin-top: 18px;
+    line-height: 1.45;
+  }
+  .red-card .foot {
+    border-top: 1px solid rgba(255,255,255,0.18);
+    margin-top: 28px;
+    padding-top: 20px;
+    font-size: 13px;
+    font-style: italic;
+    color: rgba(255,255,255,0.82);
+  }
+
+  /* ============ SECTION DIVIDER (giant number) ============ */
+  .divider {
+    background: var(--surface);
+  }
+  .divider-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 56px;
+    align-items: center;
+  }
+  .big-num {
+    font-family: var(--display);
+    font-weight: 800;
+    color: var(--red-soft);
+    font-size: clamp(180px, 24vw, 320px);
+    line-height: 0.85;
+    letter-spacing: -0.06em;
+  }
+  .divider-content {
+    border-left: 5px solid var(--red);
+    padding-left: 32px;
+  }
+  .divider-content .case {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 18px;
+  }
+  .divider-content h2 { font-size: clamp(36px, 5vw, 64px); margin-bottom: 16px; }
+  .divider-content p {
+    font-size: 17px;
+    color: var(--body);
+    line-height: 1.55;
+    max-width: 40ch;
+    margin: 0;
+  }
+
+  /* ============ NARRATIVE WITH STAT ============ */
+  .narrative-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(32px, 5vw, 64px);
+    align-items: start;
+  }
+  .narrative p { font-size: 15.5px; color: var(--body); line-height: 1.65; }
+  .bullet-list {
+    margin-top: 28px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .bullet {
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .bullet .dot {
+    flex: 0 0 10px; width: 10px; height: 10px;
+    background: var(--red);
+    border-radius: 50%;
+    margin-top: 9px;
+  }
+  .bullet b { color: var(--ink); font-weight: 700; }
+  .bullet span { font-size: 14.5px; color: var(--body); line-height: 1.55; }
+
+  .alert-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 36px;
+  }
+  .alert-card .head {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 28px;
+  }
+  .alert-card .head .ico {
+    width: 38px; height: 38px;
+    background: var(--red-wash);
+    border-radius: 8px;
+    color: var(--red);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .alert-card .head .ico svg { width: 20px; height: 20px; }
+  .alert-card .head .label {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .alert-card .num {
+    font-family: var(--display);
+    font-weight: 800;
+    color: var(--red);
+    font-size: clamp(56px, 7vw, 88px);
+    letter-spacing: -0.035em;
+    line-height: 0.95;
+    margin-bottom: 22px;
+  }
+  .alert-card p { margin: 0 0 22px; font-size: 15px; color: var(--body); line-height: 1.6; }
+  .alert-card .source {
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+    font-size: 12.5px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ============ TABLE ============ */
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  table.users {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+  }
+  table.users thead {
+    background: var(--ink);
+    color: #fff;
+  }
+  table.users thead th {
+    text-align: left;
+    padding: 18px 22px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  table.users tbody td {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+    color: var(--body);
+  }
+  table.users tbody tr:last-child td { border-bottom: none; }
+  table.users tbody td:first-child {
+    font-family: var(--display);
+    font-weight: 700;
+    color: var(--ink);
+  }
+  table.users tbody td:last-child {
+    font-family: var(--display);
+    font-weight: 700;
+    color: var(--red);
+  }
+  .table-foot {
+    margin-top: 18px;
+    border-left: 3px solid var(--red);
+    padding-left: 14px;
+    font-size: 13px;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.55;
+  }
+
+  /* ============ STEPS ============ */
+  .steps-grid {
+    display: grid;
+    grid-template-columns: 1fr 32px 1fr 32px 1fr;
+    gap: 16px;
+    align-items: stretch;
+  }
+  .step {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 32px 28px;
+  }
+  .step .n {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 18px;
+    color: var(--red);
+    margin-bottom: 22px;
+  }
+  .step .ico {
+    width: 52px; height: 52px;
+    background: var(--red-wash);
+    border-radius: 8px;
+    color: var(--red);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 22px;
+  }
+  .step .ico svg { width: 26px; height: 26px; }
+  .step h3 { margin-bottom: 10px; font-size: 18px; }
+  .step p { font-size: 14px; color: var(--body); margin: 0; line-height: 1.55; }
+  .step-arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--red);
+  }
+  .step-arrow svg { width: 26px; height: 26px; }
+  .steps-output {
+    margin-top: 24px;
+    padding: 18px 22px;
+    background: var(--surface-2);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .steps-output b { color: var(--ink); font-weight: 700; }
+
+  /* ============ GAPS + REC ============ */
+  .gaps-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  .gap-list { display: flex; flex-direction: column; gap: 14px; }
+  .gap-row {
+    background: var(--surface);
+    border-left: 5px solid var(--red);
+    padding: 22px 24px;
+    border-radius: 0 4px 4px 0;
+  }
+  .gap-row h3 { font-size: 17px; margin-bottom: 6px; }
+  .gap-row p { font-size: 14px; color: var(--body); margin: 0; line-height: 1.55; }
+  .rec-card {
+    background: var(--ink);
+    color: #fff;
+    border-radius: 4px;
+    padding: 36px;
+    border-top: 5px solid var(--red);
+  }
+  .rec-card .head {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 26px;
+  }
+  .rec-card .head .flag {
+    width: 38px; height: 38px;
+    background: var(--red);
+    border-radius: 6px;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rec-card .head .flag svg { width: 20px; height: 20px; }
+  .rec-card .head .label {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .rec-card h3 {
+    color: #fff; font-size: 24px;
+    margin-bottom: 18px;
+  }
+  .rec-card p {
+    color: #c7cdd9; font-size: 15px; line-height: 1.6; margin: 0 0 22px;
+  }
+  .rec-card .foot {
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding-top: 18px;
+    font-size: 13px; color: #aab2c1;
+    font-style: italic;
+  }
+
+  /* ============ ROADMAP ============ */
+  .roadmap-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+  .phase {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-top: 5px solid var(--red);
+    border-radius: 4px;
+    padding: 28px 24px;
+  }
+  .phase .when {
+    display: inline-block;
+    background: var(--red-wash);
+    color: var(--red-dark);
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  .phase .ico {
+    color: var(--red); margin-bottom: 18px;
+  }
+  .phase .ico svg { width: 26px; height: 26px; }
+  .phase h3 { font-size: 17px; margin-bottom: 10px; }
+  .phase p { font-size: 13.5px; color: var(--body); margin: 0; line-height: 1.55; }
+
+  .cta-bar {
+    margin-top: 36px;
+    background: var(--ink);
+    color: #fff;
+    border-radius: 4px;
+    padding: 28px 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .cta-bar .text { font-size: 15px; }
+  .cta-bar .text b { font-family: var(--display); font-weight: 700; color: #fff; }
+  .cta-btn {
+    background: var(--red);
+    color: #fff;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 16px 30px;
+    border-radius: 999px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center; gap: 10px;
+    transition: background .2s ease;
+  }
+  .cta-btn:hover { background: var(--red-dark); }
+  .cta-btn svg { width: 14px; height: 14px; }
+
+  /* ============ FEEDBACK PANEL ============ */
+  .feedback {
+    background: var(--surface);
+    padding: clamp(72px, 10vw, 120px) var(--gutter);
+  }
+  .feedback h2 {
+    font-size: clamp(28px, 4vw, 42px);
+    margin-bottom: 20px;
+  }
+  .feedback .lede { max-width: 60ch; }
+  .feedback-grid {
+    margin-top: 48px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .feedback-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px;
+  }
+  .feedback-card .label {
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 14px;
+  }
+  .feedback-card h3 { margin-bottom: 10px; font-size: 17px; }
+  .feedback-card p { font-size: 14px; color: var(--body); margin: 0; line-height: 1.55; }
+  .feedback-card ul {
+    margin: 10px 0 0; padding-left: 18px;
+    font-size: 14px; color: var(--body); line-height: 1.65;
+  }
+  .feedback-card ul li { margin-bottom: 4px; }
+
+  /* ============ FOOTER ============ */
+  footer {
+    padding: 40px var(--gutter);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-family: var(--display);
+    flex-wrap: wrap;
+  }
+  footer .right span:not(:last-child)::after {
+    content: "·"; margin: 0 8px;
+  }
+
+  /* ============ REVEAL ON SCROLL ============ */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity .8s ease, transform .8s ease;
+  }
+  .reveal.in {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 920px) {
+    .stat-grid, .pillar-grid, .compare-grid, .gaps-grid, .feedback-grid { grid-template-columns: 1fr; }
+    .two-col, .cost-grid, .narrative-grid { grid-template-columns: 1fr; }
+    .divider-grid { grid-template-columns: 1fr; gap: 16px; }
+    .big-num { font-size: clamp(140px, 32vw, 220px); }
+    .steps-grid { grid-template-columns: 1fr; }
+    .step-arrow { transform: rotate(90deg); padding: 6px 0; }
+    .roadmap-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    .roadmap-grid { grid-template-columns: 1fr; }
+    .nav-meta { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="brand-mark"></span>Smartelco · Telkomsel Internal Audit</div>
+    <div class="nav-meta">Confidential · <strong>Q1 2026</strong></div>
+  </div>
+  <div class="progress-rail"><div class="progress-fill" id="progress"></div></div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="cover">
+  <div class="hero-circle-1"></div>
+  <div class="hero-circle-2"></div>
+  <div class="wrap">
+    <span class="pill">Executive Proposal</span>
+    <h1>Local AI<br><em>for Internal Audit.</em></h1>
+    <p class="lede">Secure, customisable, and cost-efficient forensics — powered by on-premise intelligence built around Telkomsel’s audit logic.</p>
+    <div class="meta-row">
+      <div><div class="label">Prepared for</div><div class="value">Telkomsel Team</div></div>
+      <div><div class="label">Date</div><div class="value">Q1 2026</div></div>
+      <div><div class="label">Programme</div><div class="value">Project Autonomous Auditor</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 01 · EXECUTIVE SUMMARY ============ -->
+<section id="summary">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom: 32px;">
+      <div class="left">
+        <div class="eyebrow">Executive Summary</div>
+        <h2>Proven on-premise AI outcomes.</h2>
+      </div>
+      <div class="section-num"><span>01</span> / 14</div>
+    </div>
+
+    <div class="two-col reveal" style="align-items: center;">
+      <div class="stat-grid" style="grid-template-columns: 1fr; gap: 16px;">
+        <div class="stat" style="padding: 24px; display: flex; align-items: center; gap: 20px;">
+          <div class="stat-icon" style="margin-bottom: 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M5 7h12a3 3 0 0 1 0 6H7a3 3 0 0 0 0 6h12"/></svg></div>
+          <div>
+            <div class="stat-num" style="font-size: 32px; margin:0;">73%</div>
+            <div class="stat-label" style="margin:0;">Lower quarterly OpEx.</div>
+          </div>
+        </div>
+        <div class="stat" style="padding: 24px; display: flex; align-items: center; gap: 20px;">
+          <div class="stat-icon" style="margin-bottom: 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+          <div>
+            <div class="stat-num" style="font-size: 32px; margin:0;">IDR 500B+</div>
+            <div class="stat-label" style="margin:0;">Flagged risk exposure.</div>
+          </div>
+        </div>
+        <div class="stat" style="padding: 24px; display: flex; align-items: center; gap: 20px;">
+          <div class="stat-icon" style="margin-bottom: 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <div>
+            <div class="stat-num" style="font-size: 32px; margin:0;">100%</div>
+            <div class="stat-label" style="margin:0;">Forensic coverage.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <img src="img/audit_dashboard.png" class="graphic-img" alt="AI Dashboard Mockup">
+      </div>
+    </div>
+
+    <div class="recommendation" style="margin-top: 24px;"><strong>Rec:</strong> Rollout Q2 2026.</div>
+  </div>
+</section>
+
+<!-- ============ 02 · STRATEGIC PILLARS ============ -->
+<section id="pillars">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">Strategic Positioning</div>
+        <h2>Three pillars that make Local AI defensible.</h2>
+        <p class="lede">Each pillar addresses a specific risk that off-the-shelf cloud AI cannot resolve for a regulated telco.</p>
+      </div>
+      <div class="section-num"><span>02</span> / 14</div>
+    </div>
+
+    <div class="pillar-grid reveal">
+      <div class="pillar">
+        <div class="pillar-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3>Absolute Privacy</h3>
+        <p>Sensitive ERP records, contracts, and customer data never leave the Telkomsel network. No vendor sees the prompt or the output.</p>
+        <span class="chip">Data Sovereignty</span>
+      </div>
+      <div class="pillar">
+        <div class="pillar-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg></div>
+        <h3>Custom Intelligence</h3>
+        <p>Models are fine-tuned on Telkomsel’s chart of accounts, accounting standards, and historical audit patterns — not generic finance data.</p>
+        <span class="chip">Domain Tuned</span>
+      </div>
+      <div class="pillar">
+        <div class="pillar-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg></div>
+        <h3>Predictable OpEx</h3>
+        <p>On-premise GPU capacity removes per-token billing. Forensic scans run at full volume without budget surprises each quarter.</p>
+        <span class="chip">Fixed Cost</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · PRIVACY & SOVEREIGNTY ============ -->
+<section id="privacy">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">01.A · Privacy &amp; Sovereignty</div>
+        <h2>Proprietary data never crosses the firewall.</h2>
+        <p class="lede">By running inference on Telkomsel-owned hardware, every prompt, embedding, and model response stays inside the corporate network. Internal Audit retains full custody of the evidence chain.</p>
+      </div>
+      <div class="section-num"><span>03</span> / 14</div>
+    </div>
+
+    <div class="two-col reveal">
+      <div class="icon-list">
+        <div class="icon-list-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+          <div><h3>Compliance by design</h3><p>Aligned to internal security policy and BSSN guidance for sensitive data processing.</p></div>
+        </div>
+        <div class="icon-list-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="6" rx="1"/><rect x="2" y="14" width="20" height="6" rx="1"/><path d="M6 7h.01M6 17h.01"/></svg></div>
+          <div><h3>No third-party platform risk</h3><p>Removes exposure to external outages, model-vendor changes, or jurisdictional disputes.</p></div>
+        </div>
+        <div class="icon-list-item">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg></div>
+          <div><h3>Direct, controlled ERP access</h3><p>Read-only connectors to internal databases with full logging and role-based scopes.</p></div>
+        </div>
+      </div>
+
+      <div>
+        <img src="img/data_sovereignty.png" class="graphic-img" alt="Data Sovereignty Graphic" style="max-height: 420px; object-fit: contain; background: #111; border-color: #333;">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · CUSTOM INTELLIGENCE ============ -->
+<section id="custom" style="background: var(--surface);">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">01.B · Custom Intelligence</div>
+        <h2>A model that speaks your accounting language.</h2>
+        <p class="lede">Generic AI doesn’t know your chart of accounts. Ours does — because we train it on yours.</p>
+      </div>
+      <div class="section-num"><span>04</span> / 14</div>
+    </div>
+
+    <div class="compare-grid reveal">
+      <div class="compare">
+        <div class="label">Generic Cloud AI</div>
+        <h3>Off-the-shelf, not audit-ready.</h3>
+        <ul>
+          <li><span class="mark x"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span><span>Trained on general internet text — no telco GL knowledge.</span></li>
+          <li><span class="mark x"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span><span>Cannot reliably interpret PSAK / IFRS-15 mappings as applied internally.</span></li>
+          <li><span class="mark x"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span><span>Outputs vary between runs — weak audit reproducibility.</span></li>
+        </ul>
+      </div>
+      <div class="compare win">
+        <div class="label">Local Fine-Tuned Model</div>
+        <h3>Built around your audit logic.</h3>
+        <ul>
+          <li><span class="mark v"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>Domain specificity</b> — trained on Telkomsel historical audit patterns and accounting standards.</span></li>
+          <li><span class="mark v"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>Compute on premise</b> — local GPU clusters enable rapid model iteration with no cloud overhead.</span></li>
+          <li><span class="mark v"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>Reproducible output</b> — deterministic configurations and full evidence logs for every finding.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · COST PROFILE ============ -->
+<section id="cost">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">01.C · Cost Profile</div>
+        <h2>Predictable on-prem economics, by design.</h2>
+        <p class="lede">Modelled at Telkomsel’s projected forensic-scan volume of ~12M ERP entries per quarter.</p>
+      </div>
+      <div class="section-num"><span>05</span> / 14</div>
+    </div>
+
+    <div class="cost-grid reveal">
+      <div class="chart-card">
+        <div class="chart-row">
+          <div class="row-label"><span>Local AI · Fixed Compute</span><span>1,130 Mn</span></div>
+          <div class="bar-track"><div class="bar-fill" data-w="27"></div></div>
+        </div>
+        <div class="chart-row">
+          <div class="row-label"><span>Cloud AI · Token Fees</span><span>4,200 Mn</span></div>
+          <div class="bar-track"><div class="bar-fill muted" data-w="100"></div></div>
+        </div>
+        <div class="chart-foot">Figures in IDR million per quarter. Cloud AI scenario uses public token pricing at projected scan volume; local scenario assumes amortised hardware and operations.</div>
+      </div>
+
+      <div class="red-card">
+        <div class="label">Savings</div>
+        <div class="num">73%</div>
+        <div class="sub">reduction in quarterly operating cost</div>
+        <div class="foot">Capital absorbed by existing infrastructure; no recurring API exposure.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · DIVIDER FRAUD FORENSICS ============ -->
+<section class="divider" id="case01">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom: 56px;">
+      <div class="left"><div class="eyebrow">Section 02</div></div>
+      <div class="section-num"><span>06</span> / 14</div>
+    </div>
+    <div class="divider-grid">
+      <div class="big-num">02</div>
+      <div class="divider-content">
+        <div class="case">Case Study · 01</div>
+        <h2>Fraud Forensics</h2>
+        <p>Surfacing self-approval risk inside the Telkomsel ERP ecosystem.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · SELF-APPROVAL RISK ============ -->
+<section id="self-approval">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">02.A · Self-Approval Risk</div>
+        <h2>Segregation-of-duties failure, flagged at scale.</h2>
+      </div>
+      <div class="section-num"><span>07</span> / 14</div>
+    </div>
+
+    <div class="narrative-grid reveal">
+      <div class="narrative">
+        <p>Our local AI identified a high-risk cluster of users in the ERP database who routinely bypass segregation of duties (SoD). Through heuristic and pattern analysis, the system flagged transactions that were created and approved by the same User ID within the same session.</p>
+
+        <div class="bullet-list">
+          <div class="bullet"><span class="dot"></span><span><b>Behavioural clustering.</b> Groups users whose approval patterns deviate from peer baselines.</span></div>
+          <div class="bullet"><span class="dot"></span><span><b>Session-level tracing.</b> Links create-approve actions to the same authenticated session.</span></div>
+          <div class="bullet"><span class="dot"></span><span><b>Threshold tuning.</b> Audit-team adjustable to surface only material exposure.</span></div>
+        </div>
+      </div>
+
+      <div class="alert-card">
+        <div class="head">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+          <div class="label">Flagged Exposure</div>
+        </div>
+        <div class="num">IDR 500B+</div>
+        <p>in transactions self-created and self-approved by the same User ID within the same session.</p>
+        <div class="source">Source: ERP audit run · pilot dataset · pre-redaction.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · HIGH-RISK USER PROFILE ============ -->
+<section id="users" style="background: var(--surface);">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">02.B · High-Risk User Profile</div>
+        <h2>Concentrated risk, named and quantified.</h2>
+        <p class="lede">Top users surfaced by the model when scanning the live ERP entries log.</p>
+      </div>
+      <div class="section-num"><span>08</span> / 14</div>
+    </div>
+
+    <div class="table-wrap reveal">
+      <table class="users">
+        <thead>
+          <tr><th>User Name</th><th>Total ERP Entries</th><th>High-Value Risk Transactions</th><th>Risk Share</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Saepul Asmar</td><td>31,750</td><td>8,939 entries &gt; IDR 100M</td><td>28.2%</td></tr>
+          <tr><td>Ahmad Noval</td><td>11,312</td><td>2,118 entries &gt; IDR 100M</td><td>18.7%</td></tr>
+          <tr><td>Mey</td><td>30,407</td><td>2,224 entries &gt; IDR 100M</td><td>7.3%</td></tr>
+          <tr><td>Dwi Rahayu</td><td>384</td><td>303 entries &gt; IDR 100M</td><td>78.9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-foot">Self-approval violation rate exceeds 75% for the targeted high-risk accounts. Names shown from pilot dataset; case opened with HR Audit.</div>
+  </div>
+</section>
+
+<!-- ============ 09 · DIVIDER COMMERCIAL DOC ============ -->
+<section class="divider" id="case02">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom: 56px;">
+      <div class="left"><div class="eyebrow">Section 03</div></div>
+      <div class="section-num"><span>09</span> / 14</div>
+    </div>
+    <div class="divider-grid">
+      <div class="big-num">03</div>
+      <div class="divider-content">
+        <div class="case">Case Study · 02</div>
+        <h2>Commercial Doc Intelligence</h2>
+        <p>Automated compliance and mathematical verification across Master Service Agreements.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · PROCESS ============ -->
+<section id="process">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">03.A · The Process</div>
+        <h2>From contract PDF to audit-ready finding.</h2>
+      </div>
+      <div class="section-num"><span>10</span> / 14</div>
+    </div>
+
+    <div class="two-col reveal" style="align-items: center;">
+      <div class="steps-grid" style="grid-template-columns: 1fr; gap: 12px;">
+        <div class="step" style="padding: 20px; display: flex; align-items: center; gap: 16px;">
+          <div class="n" style="margin-bottom: 0;">01</div>
+          <div class="ico" style="width: 40px; height: 40px; margin: 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+          <div><h3 style="font-size:15px; margin:0;">Scan &amp; Extract</h3></div>
+        </div>
+        <div class="step" style="padding: 20px; display: flex; align-items: center; gap: 16px;">
+          <div class="n" style="margin-bottom: 0;">02</div>
+          <div class="ico" style="width: 40px; height: 40px; margin: 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/></svg></div>
+          <div><h3 style="font-size:15px; margin:0;">Math Validation</h3></div>
+        </div>
+        <div class="step" style="padding: 20px; display: flex; align-items: center; gap: 16px;">
+          <div class="n" style="margin-bottom: 0;">03</div>
+          <div class="ico" style="width: 40px; height: 40px; margin: 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+          <div><h3 style="font-size:15px; margin:0;">Compliance Audit</h3></div>
+        </div>
+        <div class="steps-output" style="margin-top: 0;">Traceable, automated finding generation.</div>
+      </div>
+      <div>
+        <img src="img/document_ai.png" class="graphic-img" alt="Document AI Inspection Visualization" style="max-height: 440px; object-fit: contain; background: #000;">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · MATHEMATICAL PRECISION ============ -->
+<section id="math" style="background: var(--surface);">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">03.B · Mathematical Precision</div>
+        <h2>An SSP error humans missed — caught.</h2>
+        <p class="lede">Our custom RAG pipeline detected a stand-alone selling price (SSP) allocation error inside the MSA document. The original calculation used an incorrect denominator, materially overstating contract assets.</p>
+      </div>
+      <div class="section-num"><span>11</span> / 14</div>
+    </div>
+
+    <div class="narrative-grid reveal">
+      <div class="alert-card" style="border: 1px solid var(--border); background: var(--red-wash);">
+        <div class="head">
+          <div class="label" style="color: var(--red-dark);">Financial Impact</div>
+        </div>
+        <div class="num">~40%</div>
+        <p style="color: var(--ink-2);">overstatement of contract assets prevented — by a single line of correction.</p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="alert-card" style="background: var(--bg);">
+          <div class="head"><div class="label" style="color: var(--muted);">Human Error</div></div>
+          <h3 style="font-size: 22px; margin-bottom: 12px;">Used CU 1,600 as denominator</h3>
+          <p style="margin: 0;">Treated the smartphone-only price as the total — allocating 50% of the contract value to the device.</p>
+        </div>
+        <div class="alert-card" style="border: 2px solid var(--red);">
+          <div class="head"><div class="label" style="color: var(--red);">AI Correction</div></div>
+          <h3 style="font-size: 22px; margin-bottom: 12px;">Total SSP = CU 2,720</h3>
+          <p style="margin: 0;">Correct smartphone allocation is 29.41%, not 50%. Contract-asset booking restated to a defensible IFRS-15 basis.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · COMPLIANCE GAPS ============ -->
+<section id="gaps">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">03.C · Compliance Gaps</div>
+        <h2>Three gaps. One ready-to-action recommendation.</h2>
+      </div>
+      <div class="section-num"><span>12</span> / 14</div>
+    </div>
+
+    <div class="gaps-grid reveal">
+      <div class="gap-list">
+        <div class="eyebrow" style="margin: 4px 0 4px;">Identified Gaps</div>
+        <div class="gap-row">
+          <h3>Variable Consideration</h3>
+          <p>Mentioned but not quantified in Section 3 of the MSA.</p>
+        </div>
+        <div class="gap-row">
+          <h3>Incremental Costs</h3>
+          <p>No sales-commission analysis under IFRS 15.91–94.</p>
+        </div>
+        <div class="gap-row">
+          <h3>Warranty Treatment</h3>
+          <p>Missing distinction between assurance and service-type warranties.</p>
+        </div>
+      </div>
+
+      <div class="rec-card">
+        <div class="head">
+          <div class="flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></div>
+          <div class="label">Audit Recommendation</div>
+        </div>
+        <h3>The agreement is not yet fully compliant.</h3>
+        <p>Internal Audit recommends immediate recalculation of contract assets and a structured update to the variable-consideration clause before next contract cycle.</p>
+        <div class="foot">Owner: Internal Audit · ETA: 30 days</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · ROADMAP ============ -->
+<section id="roadmap" style="background: var(--surface);">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="left">
+        <div class="eyebrow">04 · Roadmap &amp; Next Steps</div>
+        <h2>Ready for Phase-1 deployment.</h2>
+        <p class="lede">A staged rollout that proves value quarterly, with go/no-go gates at each phase.</p>
+      </div>
+      <div class="section-num"><span>13</span> / 14</div>
+    </div>
+
+    <div class="roadmap-grid reveal">
+      <div class="phase">
+        <span class="when">Q2 2026</span>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></div>
+        <h3>Phase 1 · Pilot</h3>
+        <p>ERP fraud forensics on Telkomsel sandbox + MSA compliance.</p>
+      </div>
+      <div class="phase">
+        <span class="when">Q3 2026</span>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
+        <h3>Phase 2 · Expand</h3>
+        <p>Production access to live ERP, role-based audit workbench.</p>
+      </div>
+      <div class="phase">
+        <span class="when">Q4 2026</span>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        <h3>Phase 3 · Industrialise</h3>
+        <p>Fine-tuning loop, additional audit domains, KPI dashboards.</p>
+      </div>
+      <div class="phase">
+        <span class="when">Q1 2027</span>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="14" x2="22" y2="14"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="14" x2="4" y2="14"/></svg></div>
+        <h3>Phase 4 · Scale</h3>
+        <p>Cross-subsidiary rollout. Continuous-audit operating model.</p>
+      </div>
+    </div>
+
+    <div class="cta-bar reveal">
+      <div class="text"><b>Next step:</b> schedule a live demonstration of the ERP forensic agent and MSA validator.</div>
+      <a href="#cover" class="cta-btn">Request Demo <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEEDBACK SECTION ============ -->
+<section class="feedback" id="feedback">
+  <div class="wrap">
+    <div class="eyebrow">Reviewer Notes</div>
+    <h2>Feedback &amp; design rationale.</h2>
+    <div class="feedback-grid">
+      <div class="feedback-card">
+        <div class="label">Works</div>
+        <h3>Executive-ready</h3>
+        <p>Anchors the core triad — Safe, Accurate, Cost-Efficient.</p>
+      </div>
+      <div class="feedback-card">
+        <div class="label">Works</div>
+        <h3>Case Proofs</h3>
+        <p>Evidence from pilot names and calculations.</p>
+      </div>
+      <div class="feedback-card">
+        <div class="label">Works</div>
+        <h3>Restrained Visuals</h3>
+        <p>Strategic use of color and space.</p>
+      </div>
+
+      <div class="feedback-card">
+        <div class="label">Action</div>
+        <h3>Validate Numbers</h3>
+        <p>Ensure IDR 500B+ sourcing is ironclad.</p>
+      </div>
+      <div class="feedback-card">
+        <div class="label">Action</div>
+        <h3>Cost Model</h3>
+        <p>Verify hardware assumptions.</p>
+      </div>
+      <div class="feedback-card">
+        <div class="label">Action</div>
+        <h3>Redaction</h3>
+        <p>Confirm real user name removal.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="left">Local AI · Project Autonomous Auditor</div>
+  <div class="right"><span>Smartelco</span><span>Telkomsel Internal Audit</span><span>Confidential · 2026</span></div>
+</footer>
+
+<script>
+  // Reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+
+        // animate bar fills when their parent reveal triggers
+        e.target.querySelectorAll('.bar-fill').forEach(bar => {
+          const w = bar.getAttribute('data-w');
+          if (w) requestAnimationFrame(() => bar.style.width = w + '%');
+        });
+
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // Scroll progress
+  const progress = document.getElementById('progress');
+  function updateProgress() {
+    const h = document.documentElement;
+    const scrolled = (h.scrollTop || document.body.scrollTop);
+    const total = h.scrollHeight - h.clientHeight;
+    const pct = total > 0 ? (scrolled / total) * 100 : 0;
+    progress.style.width = pct + '%';
+  }
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  updateProgress();
+  // Trigger all animations instantly before printing
+  window.addEventListener('beforeprint', () => {
+    document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+    document.querySelectorAll('.bar-fill').forEach(bar => {
+      const w = bar.getAttribute('data-w');
+      if (w) bar.style.width = w + '%';
+    });
+  });
+</script>
+
+</body>
+</html>

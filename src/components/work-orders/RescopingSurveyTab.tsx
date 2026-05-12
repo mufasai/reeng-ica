@@ -9,6 +9,7 @@ export const RescopingSurveyTab = ({ localWo, onUpdateStage, onFieldsSaved }: an
   const [surveyDate, setSurveyDate] = useState(localWo.survey_date || '');
   const [surveyResult, setSurveyResult] = useState<'ok' | 'nok' | null>(localWo.survey_result || null);
   const [nokReason, setNokReason] = useState(localWo.survey_nok_reason || '');
+  const [isSaving, setIsSaving] = useState(false);
 
   const isHistorical = localWo.stage && ['permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed'].includes(localWo.stage) && !localWo.survey_date && !localWo.survey_result;
 
@@ -18,26 +19,47 @@ export const RescopingSurveyTab = ({ localWo, onUpdateStage, onFieldsSaved }: an
 
   const handleLanjutErfin = async () => {
     if (!surveyDate || surveyResult !== 'ok') return;
-    const fields = { stage: 'erfin_process', survey_date: surveyDate, survey_result: 'ok' };
-    await db.query(`UPDATE ${localWo.id} SET stage = 'erfin_process', survey_date = $date, survey_result = 'ok', updated_at = time::now()`, { date: surveyDate });
-    onFieldsSaved?.(fields);
-    onUpdateStage('erfin_process');
+    setIsSaving(true);
+    try {
+      const fields = { stage: 'erfin_process', survey_date: surveyDate, survey_result: 'ok' };
+      await db.query(`UPDATE ${localWo.id} MERGE $data`, { data: { stage: 'erfin_process', survey_date: surveyDate, survey_result: 'ok', updated_at: new Date().toISOString() } });
+      onFieldsSaved?.(fields);
+      onUpdateStage('erfin_process');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleTandaiNok = async () => {
     if (!nokReason) return;
-    const fields = { stage: 'survey_nok', survey_result: 'nok', survey_nok_reason: nokReason };
-    await db.query(`UPDATE ${localWo.id} SET stage = 'survey_nok', survey_result = 'nok', survey_nok_reason = $reason, updated_at = time::now()`, { reason: nokReason });
-    onFieldsSaved?.(fields);
-    onUpdateStage('survey_nok');
+    setIsSaving(true);
+    try {
+      const fields = { stage: 'survey_nok', survey_result: 'nok', survey_nok_reason: nokReason };
+      await db.query(`UPDATE ${localWo.id} MERGE $data`, { data: { stage: 'survey_nok', survey_result: 'nok', survey_nok_reason: nokReason, updated_at: new Date().toISOString() } });
+      onFieldsSaved?.(fields);
+      onUpdateStage('survey_nok');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = async () => {
     if (confirm('Yakin ingin reset status survey?')) {
-      const fields = { stage: 'survey', survey_result: null, survey_nok_reason: null };
-      await db.query(`UPDATE ${localWo.id} SET stage = 'survey', survey_result = null, survey_nok_reason = null, updated_at = time::now()`);
-      onFieldsSaved?.(fields);
-      onUpdateStage('survey');
+      setIsSaving(true);
+      try {
+        const fields = { stage: 'survey', survey_result: null, survey_nok_reason: null };
+        await db.query(`UPDATE ${localWo.id} MERGE $data`, { data: { stage: 'survey', survey_result: null, survey_nok_reason: null, updated_at: new Date().toISOString() } });
+        onFieldsSaved?.(fields);
+        onUpdateStage('survey');
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -141,8 +163,8 @@ export const RescopingSurveyTab = ({ localWo, onUpdateStage, onFieldsSaved }: an
               <p className="text-xs text-slate-400 mt-1">Maksimal 10 file</p>
             </label>
             
-            <button onClick={handleLanjutErfin} disabled={!surveyDate} className="w-full px-5 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-              Lanjut ke ERFIN <ChevronRight className="w-4 h-4" />
+            <button onClick={handleLanjutErfin} disabled={!surveyDate || isSaving} className="w-full px-5 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              {isSaving ? 'Menyimpan...' : 'Lanjut ke ERFIN'} <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -150,10 +172,10 @@ export const RescopingSurveyTab = ({ localWo, onUpdateStage, onFieldsSaved }: an
         {surveyResult === 'nok' && (
           <div className="animate-in slide-in-from-top-2">
             <label className="block text-sm font-bold text-slate-700 mb-1.5">Alasan NOK *</label>
-            <textarea value={nokReason} onChange={e => setNokReason(e.target.value)} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 mb-6" placeholder="Jelaskan alasan survey NOK..." />
+            <textarea disabled={isSaving} value={nokReason} onChange={e => setNokReason(e.target.value)} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 mb-6" placeholder="Jelaskan alasan survey NOK..." />
             
-            <button onClick={handleTandaiNok} disabled={!nokReason} className="w-full px-5 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-              Tandai NOK
+            <button onClick={handleTandaiNok} disabled={!nokReason || isSaving} className="w-full px-5 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              {isSaving ? 'Menyimpan...' : 'Tandai NOK'}
             </button>
           </div>
         )}

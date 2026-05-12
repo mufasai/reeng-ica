@@ -17,7 +17,6 @@ import {
     terminPengajuanRecords
 } from '../data/mockData';
 import EngineerHome from './EngineerHome';
-import { db } from '../db';
 
 // Helper to format currency
 const formatRupiah = (amount: number) => {
@@ -32,139 +31,22 @@ const Dashboard = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
 
-    const [liveRequests, setLiveRequests] = useState<any[]>(terminPengajuanRecords);
+    const [liveRequests, setLiveRequests] = useState<any[]>(() => [...terminPengajuanRecords]);
     const [selectedPayment, setSelectedPayment] = useState<any | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
         show: false,
         message: '',
         type: 'success'
     });
 
-    const showToastMsg = (msg: string, type: 'success' | 'error' = 'success') => {
-        setToast({ show: true, message: msg, type });
-        setTimeout(() => setToast(t => ({ ...t, show: false })), 4000);
-    };
-
-    const reloadDashboardPayments = async () => {
-        try {
-            const res = await db.query('SELECT * FROM payment_requests ORDER BY submitted_at DESC');
-            if (res && res[0] && Array.isArray(res[0]) && res[0].length > 0) {
-                setLiveRequests(res[0]);
-            } else {
-                setLiveRequests(terminPengajuanRecords);
-            }
-        } catch (err) {
-            console.error('Failed to load dashboard payments from DB:', err);
-            setLiveRequests(terminPengajuanRecords);
-        }
-    };
-
-    const createDashboardStageLog = async (siteId: string, actionText: string) => {
-        try {
-            let workOrderId = '';
-            try {
-                const woRes = await db.query('SELECT id FROM atp_work_orders WHERE site_id = $site LIMIT 1', { site: siteId });
-                if (woRes?.[0] && Array.isArray(woRes[0]) && woRes[0].length > 0) {
-                    workOrderId = woRes[0][0].id;
-                }
-            } catch (e) {
-                console.error('Failed to lookup active work order for dashboard log:', e);
-            }
-
-            const logData = {
-                site_id: siteId,
-                work_order_id: workOrderId || 'system',
-                action: actionText,
-                user_id: currentUser?.name || currentUser?.id || 'system',
-                timestamp: new Date().toISOString()
-            };
-            await db.query('CREATE site_stage_logs CONTENT $data', { data: logData });
-        } catch (err) {
-            console.error('Failed to write dashboard stage log:', err);
-        }
-    };
-
-    const handleApproveRequest = async (id: string) => {
-        const req = liveRequests.find(r => r.id === id);
-        try {
-            await db.query('UPDATE payment_requests SET status = "approved", approved_by = $user, approved_at = $time WHERE id = $id', {
-                user: currentUser?.name || currentUser?.id || 'system',
-                time: new Date().toISOString(),
-                id
-            });
-            if (req) {
-                await createDashboardStageLog(req.site_id, `Menyetujui pengajuan pembayaran Termin ${req.termin_key} (Rp ${req.nominal.toLocaleString('id-ID')})`);
-            }
-            showToastMsg('Sukses: Pengajuan disetujui!');
-            reloadDashboardPayments();
-        } catch (err) {
-            console.error(err);
-            const r = terminPengajuanRecords.find(t => t.id === id);
-            if (r) {
-                r.status = 'approved';
-                setLiveRequests([...terminPengajuanRecords]);
-            }
-            showToastMsg('Sukses: Pengajuan disetujui (offline mode)!');
-        }
-    };
-
-    const handleRejectRequest = async (id: string) => {
-        const req = liveRequests.find(r => r.id === id);
-        try {
-            await db.query('UPDATE payment_requests SET status = "rejected" WHERE id = $id', { id });
-            if (req) {
-                await createDashboardStageLog(req.site_id, `Menolak pengajuan pembayaran Termin ${req.termin_key} (Rp ${req.nominal.toLocaleString('id-ID')})`);
-            }
-            showToastMsg('Pengajuan ditolak.', 'error');
-            reloadDashboardPayments();
-        } catch (err) {
-            console.error(err);
-            const r = terminPengajuanRecords.find(t => t.id === id);
-            if (r) {
-                r.status = 'rejected';
-                setLiveRequests([...terminPengajuanRecords]);
-            }
-            showToastMsg('Pengajuan ditolak (offline mode).', 'error');
-        }
-    };
-
-    const handleMarkPaidWithFile = async (id: string, files: FileList | null) => {
-        if (!files || files.length === 0) {
-            showToastMsg('Gagal mengunggah bukti pembayaran!', 'error');
-            return;
-        }
-        const file = files[0];
-        const req = liveRequests.find(r => r.id === id);
-        try {
-            await db.query('UPDATE payment_requests SET status = "paid", bukti_pembayaran_name = $file, paid_at = $time WHERE id = $id', {
-                file: file.name,
-                time: new Date().toISOString(),
-                id
-            });
-            if (req) {
-                await createDashboardStageLog(req.site_id, `Menyelesaikan pembayaran Termin ${req.termin_key} (Rp ${req.nominal.toLocaleString('id-ID')}) dengan bukti transfer: "${file.name}"`);
-            }
-            showToastMsg(`Sukses: Bukti "${file.name}" berhasil diunggah & lunas!`);
-            reloadDashboardPayments();
-        } catch (err) {
-            console.error(err);
-            const r = terminPengajuanRecords.find(t => t.id === id);
-            if (r) {
-                r.status = 'paid';
-                (r as any).bukti_pembayaran_name = file.name;
-                setLiveRequests([...terminPengajuanRecords]);
-            }
-            showToastMsg(`Sukses: Bukti "${file.name}" berhasil diunggah & lunas (offline mode)!`);
-        }
-    };
-
-    // Route field engineers to their simplified view
-    if (currentUser?.role === 'field') {
-        return <EngineerHome />;
-    }
-
-    const initialTab = searchParams.get('tab') === 'map' ? 'map' : searchParams.get('tab') === 'payments' ? 'payments' : 'overview';
-    const [activeTab, setActiveTab] = useState<'overview' | 'map' | 'payments'>(initialTab as any);
+    // activeTab MUST be declared before any conditional return (Rules of Hooks)
+    const [activeTab, setActiveTab] = useState<'overview' | 'map' | 'payments'>(() => {
+        const tab = searchParams.get('tab');
+        if (tab === 'map') return 'map';
+        if (tab === 'payments') return 'payments';
+        return 'overview';
+    });
 
     useEffect(() => {
         const tab = searchParams.get('tab');
@@ -173,11 +55,75 @@ const Dashboard = () => {
         else setActiveTab('overview');
     }, [searchParams]);
 
+    const showToastMsg = (msg: string, type: 'success' | 'error' = 'success') => {
+        setToast({ show: true, message: msg, type });
+        setTimeout(() => setToast(t => ({ ...t, show: false })), 4000);
+    };
+
+    const syncRecords = () => {
+        const updated = [...terminPengajuanRecords];
+        setLiveRequests(updated);
+        // Keep selectedPayment in sync if it was updated
+        setSelectedPayment((prev: any) => prev ? (updated.find(r => r.id === prev.id) ?? prev) : null);
+    };
+
+    const handleApproveRequest = (id: string) => {
+        setIsSaving(true);
+        const rec = terminPengajuanRecords.find(r => r.id === id);
+        if (rec) {
+            rec.status = 'approved';
+            rec.approved_by = currentUser?.name || 'Director';
+            rec.approved_at = new Date().toISOString();
+            rec.history = [...(rec.history || []), { action: 'approved', by: currentUser?.name || 'Director', at: new Date().toISOString() }];
+        }
+        syncRecords();
+        showToastMsg('Pengajuan disetujui.');
+        setIsSaving(false);
+    };
+
+    const handleRejectRequest = (id: string) => {
+        setIsSaving(true);
+        const rec = terminPengajuanRecords.find(r => r.id === id);
+        if (rec) {
+            rec.status = 'rejected';
+            rec.history = [...(rec.history || []), { action: 'rejected', by: currentUser?.name || 'Director', at: new Date().toISOString() }];
+        }
+        syncRecords();
+        showToastMsg('Pengajuan ditolak.');
+        setIsSaving(false);
+    };
+
+    const handleMarkPaidWithFile = (id: string, files: FileList | null) => {
+        if (!files || files.length === 0) {
+            showToastMsg('Pilih file bukti pembayaran terlebih dahulu!', 'error');
+            return;
+        }
+        const file = files[0];
+        setIsSaving(true);
+        const objectUrl = URL.createObjectURL(file);
+        const rec = terminPengajuanRecords.find(r => r.id === id);
+        if (rec) {
+            rec.status = 'paid';
+            rec.paid_at = new Date().toISOString();
+            rec.bukti_pembayaran_name = file.name;
+            rec.bukti_pembayaran_url = objectUrl;
+            rec.history = [...(rec.history || []), { action: 'paid', by: currentUser?.name || 'Finance', at: new Date().toISOString() }];
+        }
+        syncRecords();
+        showToastMsg(`Bukti bayar "${file.name}" berhasil diupload. Pembayaran selesai.`);
+        setIsSaving(false);
+    };
+
+    // Route field engineers to their simplified view — AFTER all hooks
+    if (currentUser?.role === 'field_engineer') {
+        return <EngineerHome />;
+    }
+
     // ----------------------------------------------------------------------
     // 1. VISIBLE SITES
     // ----------------------------------------------------------------------
     const visibleSites = useMemo(() => {
-        const isRestricted = ['engineer', 'team_leader'].includes(currentUser?.role ?? '');
+        const isRestricted = currentUser?.role === 'field_engineer';
         if (!isRestricted) return sites;
 
         const userTeamIds = teamMembersRecords
@@ -277,9 +223,7 @@ const Dashboard = () => {
         // Match against atpWorkOrders which come directly from DB
         const dbType = type === 'FILTER' ? ['FILTERING', 'FILTER'] : [type];
         const wos = atpWorkOrders.filter(w => dbType.includes((w.project_type || '').toUpperCase()));
-        // De-dup by site_id for unique site count
-        const uniqueSiteIds = new Set(wos.map(w => w.site_id));
-        const importedCount = uniqueSiteIds.size;
+        const importedCount = wos.length;
 
         let permit = 0, impl = 0, selesai = 0, awaiting = 0;
         wos.forEach(w => {
@@ -565,7 +509,7 @@ const Dashboard = () => {
                         {/* CHART 1: Pipeline Distribution */}
                         <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
                             <h3 className="font-bold text-[14px] text-[#111827] mb-4">Distribusi Implementasi Status</h3>
-                            <div className="h-[250px] w-full min-h-[250px]">
+                            <div className="h-[250px] w-full min-h-[250px] min-w-0">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -600,7 +544,7 @@ const Dashboard = () => {
                         {/* CHART 2: Project Type Breakdown */}
                         <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
                             <h3 className="font-bold text-[14px] text-[#111827] mb-4">Progress per Tipe Pekerjaan</h3>
-                            <div className="h-[250px] w-full min-h-[250px]">
+                            <div className="h-[250px] w-full min-h-[250px] min-w-0">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
                                         data={projectTypes.map(t => {
@@ -850,8 +794,8 @@ const Dashboard = () => {
                             <h2 className="text-lg font-black text-slate-800">Antrean Pengajuan &amp; Pembayaran</h2>
                             <p className="text-xs text-slate-500 mt-0.5">Daftar pengajuan termin real-time dari database. Direktur menyetujui, Finance membayar.</p>
                         </div>
-                        <button 
-                            onClick={reloadDashboardPayments}
+                        <button
+                            onClick={syncRecords}
                             className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
                         >
                             Refresh Data
@@ -940,23 +884,25 @@ const Dashboard = () => {
                                                             {can('financial.approve_pengajuan') && item.status === 'submitted' && (
                                                                 <>
                                                                     <button 
+                                                                        disabled={isSaving}
                                                                         onClick={() => handleRejectRequest(item.id)}
-                                                                        className="px-3 py-1.5 border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                                                                        className="px-3 py-1.5 border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
                                                                     >
-                                                                        <XCircle className="w-3.5 h-3.5" /> Tolak
+                                                                        <XCircle className="w-3.5 h-3.5" /> {isSaving ? 'Menyimpan...' : 'Tolak'}
                                                                     </button>
                                                                     <button 
+                                                                        disabled={isSaving}
                                                                         onClick={() => handleApproveRequest(item.id)}
-                                                                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1"
+                                                                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1 disabled:opacity-50"
                                                                     >
-                                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Setuju
+                                                                        <CheckCircle2 className="w-3.5 h-3.5" /> {isSaving ? 'Menyimpan...' : 'Setuju'}
                                                                     </button>
                                                                 </>
                                                             )}
                                                             {can('financial.mark_paid') && item.status === 'approved' && (
-                                                                <label className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer transition-colors flex items-center gap-1.5">
-                                                                    <input type="file" className="hidden" onChange={e => handleMarkPaidWithFile(item.id, e.target.files)} />
-                                                                    <Upload className="w-3.5 h-3.5" /> Upload Bukti &amp; Bayar Lunas
+                                                                <label className={clsx("px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer transition-colors flex items-center gap-1.5", isSaving && "opacity-50 pointer-events-none")}>
+                                                                    <input disabled={isSaving} type="file" className="hidden" onChange={e => handleMarkPaidWithFile(item.id, e.target.files)} />
+                                                                    <Upload className="w-3.5 h-3.5" /> {isSaving ? 'Menyimpan...' : 'Upload Bukti & Bayar Lunas'}
                                                                 </label>
                                                             )}
                                                         </div>
@@ -1018,9 +964,16 @@ const Dashboard = () => {
                                                         {formatRupiah(item.nominal)}
                                                     </p>
                                                     {item.bukti_pembayaran_name && (
-                                                        <p className="text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-2 py-1 flex items-center gap-1 font-medium">
-                                                            <Upload className="w-3 h-3" /> Bukti: "{item.bukti_pembayaran_name}"
-                                                        </p>
+                                                        <div className="flex items-center gap-2 text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-2 py-1 font-medium">
+                                                            <Upload className="w-3 h-3 shrink-0" />
+                                                            <span className="truncate max-w-[120px]">"{item.bukti_pembayaran_name}"</span>
+                                                            {item.bukti_pembayaran_url && (
+                                                                <a href={item.bukti_pembayaran_url} target="_blank" rel="noopener noreferrer"
+                                                                    className="ml-auto text-[10px] font-bold text-purple-600 hover:underline shrink-0">
+                                                                    Lihat
+                                                                </a>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             );
@@ -1118,12 +1071,18 @@ const Dashboard = () => {
                                                                 <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                                                 <span className="text-xs font-bold text-emerald-800 truncate">{selectedPayment.bukti_pembayaran_name}</span>
                                                             </div>
-                                                            <button 
-                                                                onClick={() => alert(`Membuka lampiran bukti transfer: ${selectedPayment.bukti_pembayaran_name}`)}
-                                                                className="px-2 py-1 bg-white border border-emerald-200 text-emerald-700 text-[9px] font-bold rounded hover:bg-emerald-50 transition-colors shrink-0"
-                                                            >
-                                                                Buka File
-                                                            </button>
+                                                            {selectedPayment.bukti_pembayaran_url ? (
+                                                                <a
+                                                                    href={selectedPayment.bukti_pembayaran_url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="px-2 py-1 bg-white border border-emerald-200 text-emerald-700 text-[9px] font-bold rounded hover:bg-emerald-50 transition-colors shrink-0"
+                                                                >
+                                                                    Buka File
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-[9px] text-slate-400 italic px-1">Tersimpan</span>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

@@ -74,9 +74,9 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
           )}
           <AutoSaveInput label="Impl Status" value={localWo.implementasi_status || localWo.impl_status} field="impl_status" type="select" onSave={handleFieldSave} locked={locked}
             options={[
-              { label: 'Awaiting', value: 'Awaiting' },
-              { label: 'Scheduled', value: 'Scheduled' },
+              { label: 'Planning', value: 'Planning' },
               { label: 'On Going', value: 'On Going' },
+              { label: 'On Hold', value: 'On Hold' },
               { label: 'RFS', value: 'RFS' },
               { label: 'Cancelled', value: 'Cancelled' },
             ]} />
@@ -136,29 +136,21 @@ export const ImplSection = ({ localWo, handleFieldSave, handleUpdateStage, saveS
               Cancel
             </button>
             <button
+              disabled={saveStatus === 'saving'}
               onClick={() => {
                 handleUpdateStage(isRescoping ? 'dokumen_done' : 'atp');
                 setEditing(false);
               }}
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isRescoping ? 'Selesai Implementasi' : 'Update Implementasi Stage'} <ChevronRight className="w-4 h-4" />
+              {saveStatus === 'saving' ? 'Menyimpan...' : (isRescoping ? 'Selesai Implementasi' : 'Update Implementasi Stage')} <ChevronRight className="w-4 h-4" />
             </button>
           </>
-        ) : (
-          isPastImpl ? (
-            <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in">
-              ✓ Stage Implementasi Selesai
-            </div>
-          ) : (
-            <button
-              onClick={() => handleUpdateStage(isRescoping ? 'dokumen_done' : 'atp')}
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
-            >
-              {isRescoping ? 'Selesai Implementasi' : 'Update Implementasi Stage'} <ChevronRight className="w-4 h-4" />
-            </button>
-          )
-        )}
+        ) : isPastImpl ? (
+          <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in">
+            ✓ Stage Implementasi Selesai
+          </div>
+        ) : null}
       </div>
     </div>
   );
