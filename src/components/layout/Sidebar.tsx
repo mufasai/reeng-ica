@@ -1,9 +1,10 @@
 
-import { NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Settings, 
+import { NavLink, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import {
+  LayoutDashboard,
+  Users,
+  Settings,
   Menu,
   Database,
   ChevronRight,
@@ -11,26 +12,27 @@ import {
   Package,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { USERS, type UserRole, getActiveSiteCountsByType, projects, type ProjectType, siteMasterRecords } from '../../data/mockData';
+import { USERS, type UserRole, type ProjectType, siteTechnicalDetails, siteMasterRecords } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 
 const Sidebar = () => {
   const { currentUser, switchRole } = useAuth();
-  const { collapsed, toggle } = useSidebar();
+  const { collapsed, toggle, counts: typeCounts, workOrderCount, triggerCountRefresh } = useSidebar();
+  const location = useLocation();
+
+  // Re-fetch counts on every navigation so badges stay current
+  useEffect(() => {
+    triggerCountRefresh();
+  }, [location.pathname]);
 
   // Navigation config per confirmed RBAC matrix
-    const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
-    director:         ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    operational:      ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    admin:            ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    finance:          ['dashboard', 'sites', 'pembayaran'],
-    field:            [], 
-    management:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    backoffice:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    backoffice_admin: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    team_leader:      [],
-    engineer:         [],
+  const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
+    system_admin:   ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    director:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    operational:    ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    finance:        ['dashboard', 'sites', 'pembayaran'],
+    field_engineer: ['sites'],
   };
 
   if (!currentUser) return null;
@@ -55,7 +57,7 @@ const Sidebar = () => {
   const showDataMaster = dataMasterItems.length > 0;
   const showSystem = allowedSidebarItems.includes('options');
   const showPembayaran = allowedSidebarItems.includes('pembayaran');
-  const isFieldRole = currentUser.role === 'field';
+  const isFieldRole = currentUser.role === 'field_engineer';
   const isFinanceRole = currentUser.role === 'finance';
 
   const sidebarW = collapsed ? 'w-[56px]' : 'w-64';
@@ -110,11 +112,10 @@ const Sidebar = () => {
     { id: 'L2H', label: 'L2H', colorClass: 'bg-purple-500' },
     { id: 'RESCOPING', label: 'Rescoping', colorClass: 'bg-cyan-600' },
   ];
-  const typeCounts = getActiveSiteCountsByType(currentUser, projects, siteMasterRecords);
   const isRestricted = isFieldRole;
 
   if (isFieldRole) {
-    // Field role: show minimal "Site Saya" view instead of full sidebar
+    const fieldRoleLabel = 'Field Engineer';
     return (
       <aside className={clsx(
         'fixed left-0 top-0 h-screen bg-[var(--navy-900)] text-white flex flex-col z-50',
@@ -145,13 +146,13 @@ const Sidebar = () => {
                 </div>
                 <div className="overflow-hidden min-w-0">
                   <p className="text-sm font-medium truncate text-white">{currentUser.name}</p>
-                  <p className="text-xs text-emerald-400 uppercase tracking-wide">Field</p>
+                  <p className="text-xs text-emerald-400 uppercase tracking-wide">{fieldRoleLabel}</p>
                 </div>
               </div>
               <p className="text-xs text-slate-500 mt-3 px-1">Akses terbatas ke site tim Anda.</p>
             </div>
           )}
-          {renderNavLink('/', LayoutDashboard, 'Dashboard', undefined, true)}
+          {renderNavLink('/sites', Database, 'Site Saya', undefined, false)}
           {/* Dev Role Switcher */}
           {!collapsed && (
             <div className="mt-4 pt-3 border-t border-[var(--navy-700)] opacity-70 hover:opacity-100 transition-opacity">
@@ -285,18 +286,33 @@ const Sidebar = () => {
                     <>
                       <span className="flex-1 mx-3 truncate">Sites</span>
                       <span className="text-[11px] px-1.5 py-0.5 rounded border bg-[var(--navy-700)] text-white border-[var(--navy-600)]">
-                        [{siteMasterRecords.length}]
+                        [{siteTechnicalDetails.length}]
                       </span>
                     </>
                   )}
                   {collapsed && (
                     <span className="absolute left-full ml-3 px-2 py-1 bg-[var(--navy-700)] text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                      Sites [{siteMasterRecords.length}]
+                      Sites [{siteTechnicalDetails.length}]
                     </span>
                   )}
                 </>
               )}
             </NavLink>
+          </div>
+        )}
+
+        {/* Pekerjaan Aktif — work order count (one per site-sector) */}
+        {allowedSidebarItems.includes('sites') && !collapsed && (
+          <div className="px-1 mb-1">
+            <div className="flex items-center justify-between px-4 py-2 text-[13px] mx-0 text-slate-500 font-medium">
+              <span className="flex items-center gap-3">
+                <span className="w-4 h-4 shrink-0" />
+                <span className="flex-1 mx-3 truncate">Pekerjaan Aktif</span>
+              </span>
+              <span className="text-[11px] px-1.5 py-0.5 rounded border bg-[var(--navy-700)] text-slate-400 border-[var(--navy-600)]">
+                [{workOrderCount}]
+              </span>
+            </div>
           </div>
         )}
 

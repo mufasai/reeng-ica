@@ -11,7 +11,7 @@
  *  - materials              → materialTransactions
  */
 
-import { db, connectDB } from './db';
+import { db, connectDB, cleanRecordId } from './db';
 import {
   siteMasterRecords,
   materialTransactions,
@@ -28,21 +28,29 @@ function toStatus(v: unknown): SiteMasterStatusType {
 }
 function toProjectType(v: unknown): ProjectTypeType {
   const s = String(v || '').toUpperCase();
-  if (s.includes('FILTER')) return 'FILTER' as ProjectTypeType;
+  if (s.includes('FILTER')) return 'FILTER' as ProjectTypeType;  // FILTERING → FILTER
   return s as ProjectTypeType;
 }
+
+
 function toStage(v: unknown): StageType {
   return (String(v || 'imported') || 'imported') as StageType;
 }
 
 export async function initAppDB() {
   await connectDB();
+
+  // Snapshot mock data so we can restore if DB is empty/down
+  const backupAtp = [...atpWorkOrders];
+  const backupSiteMaster = [...siteMasterRecords];
+  const backupTechDetails = [...siteTechnicalDetails];
+
   try {
     // ── 1. BASE DATA: site_technical_details ──────────────────────────────
     const detailsResult = await db.query('SELECT * FROM site_technical_details');
     if (detailsResult?.[0] && Array.isArray(detailsResult[0])) {
       const techRecords = detailsResult[0].map((d: Record<string, unknown>, i: number) => ({
-        id:            String(d.id          || `tech-${i}`),
+        id:            cleanRecordId(d.id, `tech-${i}`),
         site_id:       String(d.site_id     || ''),
         ne_id:         String(d.ne_id       || ''),
         layer:         String(d.layer       || ''),
@@ -80,9 +88,25 @@ export async function initAppDB() {
     if (sitesResult?.[0] && Array.isArray(sitesResult[0])) {
       const rawSites = sitesResult[0] as Record<string, unknown>[];
 
+      // Sort rawSites so that active, latest, and most advanced work orders are processed first
+      rawSites.sort((a: any, b: any) => {
+        const statusA = a.status === 'active' ? 1 : 0;
+        const statusB = b.status === 'active' ? 1 : 0;
+        if (statusA !== statusB) return statusB - statusA;
+
+        const stageOrder = ['completed', 'invoice', 'bast', 'dokumen_done', 'rfs_done', 'rfi_done', 'implementasi', 'permit_ready', 'permit_process', 'permit', 'erfin_ready', 'erfin_process', 'survey_nok', 'survey', 'assigned', 'imported'];
+        const idxA = stageOrder.indexOf(a.stage || 'imported');
+        const idxB = stageOrder.indexOf(b.stage || 'imported');
+        if (idxA !== idxB) return idxA - idxB;
+
+        const timeA = new Date(a.updated_at || a.initiated_at || 0).getTime();
+        const timeB = new Date(b.updated_at || b.initiated_at || 0).getTime();
+        return timeB - timeA;
+      });
+
       // Build atpWorkOrders — one per row (site-sector)
       const atpRecords = rawSites.map((s, i) => ({
-        id:               String(s.id || `atp-${i}`),
+        id:               cleanRecordId(s.id, `atp-${i}`),
         site_id:          String(s.site_id || ''),
         atp_number:       String(s.atp_number || ''),     // ← TIKET NUMBER
         sow_id:           String(s.sow_id || ''),
@@ -94,7 +118,7 @@ export async function initAppDB() {
         team_id:          String(s.team || ''),
         field_leader_id:  String(s.field_leader_id || ''),
         initiated_by:     'system',
-        initiated_at:     new Date().toISOString(),
+        initiated_at:     String(s.initiated_at || s.created_at || ''),
         status:           'active' as const,
         // Permit fields
         permit_status:    String(s.permit_status || ''),
@@ -150,6 +174,12 @@ export async function initAppDB() {
         prio:             String(s.prio || ''),
         prio_capex_final: String(s.prio_capex_final || ''),
         new_status_implementation: String(s.new_status_implementation || ''),
+        updated_at:       String(s.updated_at || s.initiated_at || ''),
+        // ATP / SOW / Capex fields (editable in pekerjaan tab)
+        sow_project:      String(s.sow_project || ''),
+        asset_element:    String(s.asset_element || ''),
+        capex_project:    String(s.capex_project || ''),
+        sow_type:         String(s.sow_type || ''),
         latitude:            Number(s.latitude) || 0,
         longitude:           Number(s.longitude) || 0,
         ne_id:               String(s.ne_id || ''),
@@ -179,69 +209,54 @@ export async function initAppDB() {
       atpWorkOrders.push(...(atpRecords as unknown as typeof atpWorkOrders));
       console.log('[initDB] ATP work orders loaded:', atpWorkOrders.length);
 
-      // Build siteMasterRecords — de-duped by site_id, take first/best row per site
-      const masterMap = new Map<string, typeof siteMasterRecords[0]>();
-      for (const s of rawSites) {
+      // Build siteMasterRecords — one-to-one mapping per raw site row (no deduplication)
+      const masterRecords = rawSites.map((s, i) => {
         const sid = String(s.site_id || '');
-        if (!sid) continue;
-        if (!masterMap.has(sid)) {
-          masterMap.set(sid, {
-            id:           String(s.id || sid),
-            unique_key:   sid,
-            site_id:      sid,
-            ne_id:        String(s.ne_id || ''),
-            site_name:    String(s.site_name || ''),
-            plan_capex:   '',
-            area:         '',
-            region:       String(s.region || ''),
-            nop:          '',
-            sow_eqp:      String(s.sow_id || ''),
-            quantity:     1,
-            sow_pekerjaan: '',
-            po_tsel:      String(s.po_id || ''),
-            mitra:        String(s.tp_name || ''),
-            project_type: toProjectType(s.project_type),
-            status:       toStatus(s.permit_status),
-            stage:        toStage(s.stage),
-            ineom_registered: Boolean(s.ineom_registered),
-            ioms_registered:  Boolean(s.ineom_registered),
-            batch_ref:    '',
-            imported_by:  'system',
-            imported_at:  new Date().toISOString(),
-            team_id:      String(s.team || ''),
-            geom:         (s.latitude && s.longitude)
-                            ? `${s.latitude}, ${s.longitude}`
-                            : '',
-            combat_impl_steps: (s.combat_impl_steps as any) || null,
-          } as any);
-        }
-      }
+        const atp = atpRecords[i]; // Directly correlated, identical order
+
+        return {
+          id:           cleanRecordId(s.id, `sm-${i}`),
+          unique_key:   cleanRecordId(s.id, `sm-${i}`),
+          site_id:      sid,
+          ne_id:        String(s.ne_id || ''),
+          site_name:    String(s.site_name || ''),
+          plan_capex:   '',
+          area:         '',
+          region:       String(s.region || ''),
+          nop:          '',
+          sow_eqp:      String(s.sow_id || ''),
+          quantity:     1,
+          sow_pekerjaan: '',
+          po_tsel:      atp.po_number || String(s.po_id || ''),
+          mitra:        String(s.tp_name || ''),
+          project_type: toProjectType(s.project_type),
+          status:       toStatus(s.permit_status),
+          stage:        toStage(s.stage),
+          ineom_registered: Boolean(s.ineom_registered),
+          ioms_registered:  Boolean(s.ineom_registered),
+          batch_ref:    '',
+          imported_by:  'system',
+          imported_at:  new Date().toISOString(),
+          team_id:      String(s.team || ''),
+          geom:         (s.latitude && s.longitude)
+                          ? `${s.latitude}, ${s.longitude}`
+                          : '',
+          combat_impl_steps: (s.combat_impl_steps as any) || null,
+
+          // Flatten backfill attributes directly from corresponding atp record
+          latitude:      atp.latitude,
+          longitude:     atp.longitude,
+          permit_status: atp.permit_status,
+          impl_status:   atp.implementasi_status,
+          team_assigned: atp.team_id,
+          status_atp:    atp.status_atp,
+          tower_provider: atp.tp_name,
+          priority:      atp.prio,
+        } as any;
+      });
 
       siteMasterRecords.length = 0;
-      siteMasterRecords.push(...masterMap.values());
-
-      // Backfill lat/lon from atpRecords into master records (map uses siteMasterRecords)
-      for (const master of siteMasterRecords) {
-        const atp = atpRecords.find(a => a.site_id === master.site_id && a.latitude && a.longitude);
-        if (atp) {
-          (master as any).latitude  = atp.latitude;
-          (master as any).longitude = atp.longitude;
-        }
-        // Also copy permit_status, impl_status, team for map tooltip/table
-        const firstAtp = atpRecords.find(a => a.site_id === master.site_id);
-        if (firstAtp) {
-          (master as any).permit_status    = firstAtp.permit_status;
-          (master as any).impl_status      = firstAtp.implementasi_status;
-          (master as any).team_assigned    = firstAtp.team_id;
-          (master as any).status_atp       = firstAtp.status_atp;
-          (master as any).tower_provider   = firstAtp.tp_name;
-          (master as any).ioms_registered  = firstAtp.ineom_registered;
-          (master as any).ineom_registered = firstAtp.ineom_registered;
-          // Carry across ATP-level fields the table reads
-          (master as any).po_tsel          = firstAtp.po_number || (master as any).po_tsel;
-          (master as any).priority         = firstAtp.prio || (master as any).priority;
-        }
-      }
+      siteMasterRecords.push(...masterRecords);
       console.log('[initDB] Site master records loaded:', siteMasterRecords.length);
     }
 
@@ -273,5 +288,19 @@ export async function initAppDB() {
 
   } catch (e) {
     console.error('[initDB] Failed to init app data:', e);
+  } finally {
+    // If DB was empty or unreachable, restore the original mock data so the app isn't blank
+    if (siteTechnicalDetails.length === 0 && backupTechDetails.length > 0) {
+      siteTechnicalDetails.push(...backupTechDetails);
+      console.warn('[initDB] Restored mock siteTechnicalDetails (DB returned empty)');
+    }
+    if (atpWorkOrders.length === 0 && backupAtp.length > 0) {
+      atpWorkOrders.push(...backupAtp);
+      console.warn('[initDB] Restored mock atpWorkOrders (DB returned empty)');
+    }
+    if (siteMasterRecords.length === 0 && backupSiteMaster.length > 0) {
+      siteMasterRecords.push(...backupSiteMaster);
+      console.warn('[initDB] Restored mock siteMasterRecords (DB returned empty)');
+    }
   }
 }

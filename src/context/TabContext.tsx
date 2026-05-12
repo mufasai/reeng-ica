@@ -38,38 +38,24 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
   // Sync activeTabId with current URL on location change
   useEffect(() => {
     const pathname = location.pathname;
-
-    // Check if any existing tab path matches the current pathname
-    setTabs(prev => {
-      const match = prev.find(t => {
-        // Exact match or prefix match for site detail pages
-        if (t.path === pathname) return true;
-        if (pathname.startsWith(t.path + '/') && t.path !== '/') return true;
-        return false;
-      });
-
-      if (match) {
-        setActiveTabId(match.id);
-      }
-
-      return prev; // No state change to tabs array
+    const match = tabs.find(t => {
+      if (t.path === pathname) return true;
+      if (pathname.startsWith(t.path + '/') && t.path !== '/') return true;
+      return false;
     });
-  }, [location.pathname]);
+    if (match) {
+      setActiveTabId(match.id);
+    }
+  }, [location.pathname, tabs]);
 
   const openTab = useCallback((tab: AppTab) => {
     setTabs(prev => {
-      const exists = prev.find(t => t.id === tab.id);
-      if (exists) {
-        // Tab already open — just activate it
-        setActiveTabId(tab.id);
-        navigate(tab.path);
-        return prev;
-      }
-      // Add new tab
-      setActiveTabId(tab.id);
-      navigate(tab.path);
+      const exists = prev.some(t => t.id === tab.id);
+      if (exists) return prev;
       return [...prev, tab];
     });
+    setActiveTabId(tab.id);
+    navigate(tab.path);
   }, [navigate]);
 
   const closeTab = useCallback((id: string) => {
@@ -79,21 +65,19 @@ export const TabProvider = ({ children }: { children: ReactNode }) => {
 
       const newTabs = prev.filter(t => t.id !== id);
 
-      // If closing the active tab, activate the previous (or next) tab
-      setActiveTabId(currentActive => {
-        if (currentActive !== id) return currentActive;
-        // Prefer the tab to the left, otherwise the one to the right
+      if (activeTabId === id) {
         const fallback = newTabs[idx - 1] ?? newTabs[idx] ?? newTabs[0];
         if (fallback) {
-          navigate(fallback.path);
-          return fallback.id;
+          setTimeout(() => {
+            setActiveTabId(fallback.id);
+            navigate(fallback.path);
+          }, 0);
         }
-        return currentActive;
-      });
+      }
 
       return newTabs;
     });
-  }, [navigate]);
+  }, [activeTabId, navigate]);
 
   const activateTab = useCallback((id: string) => {
     setActiveTabId(id);

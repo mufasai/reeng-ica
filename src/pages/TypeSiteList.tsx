@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useParams, Navigate, useSearchParams } from 'react-router-dom';
+import { useParams, Navigate, useSearchParams, Link } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   FolderKanban,
@@ -8,7 +8,10 @@ import {
   List,
   FileSpreadsheet,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Search,
+  ArrowRight,
+  Download,
 } from 'lucide-react';
 import ModernKPICard from '../components/stats/ModernKPICard';
 import MapWidget from '../components/MapWidget';
@@ -16,19 +19,15 @@ import MultiSheetExcelModal from '../components/modals/MultiSheetExcelModal';
 import ImportSiteModal from '../components/modals/ImportSiteModal';
 import ImportSummaryModal, { type ImportSummaryData } from '../components/modals/ImportSummaryModal';
 import {
-  filterTerms,
-  combatTerms,
   terminPengajuanRecords,
   type ProjectType,
-  type SiteMaster,
   siteMasterRecords,
-  workOrders,
   teamMembersRecords,
   atpWorkOrders,
-  STAGE_ORDER
+  STAGE_ORDER,
 } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
-import ProjectSitesTable from '../components/tables/ProjectSitesTable';
+import { exportWorkTypeToExcel } from '../utils/exportUtils';
 
 // ── Compact pipeline strip group definitions ─────────────────────────────────
 const COMPACT_GROUPS_GENERIC = [
@@ -54,7 +53,7 @@ const COMPACT_GROUPS_RESCOPING = [
 
 const TypeSiteList = () => {
   const { type } = useParams<{ type: string }>();
-  const { currentUser } = useAuth();
+  const { currentUser, can } = useAuth();
   const [, setSearchParams] = useSearchParams();
   const [stageFilter, setStageFilter] = useState<string | null>(() => new URLSearchParams(window.location.search).get('stage'));
   const [isMultiSheetOpen, setIsMultiSheetOpen] = useState(false);
@@ -82,99 +81,59 @@ const TypeSiteList = () => {
   const upperType = type?.toUpperCase() as ProjectType;
   const validTypes: ProjectType[] = ['FILTER', 'COMBAT', 'BLACKSITE', 'L2H', 'RESCOPING'];
 
-  // 2. Fetch Relevant Sites
-  const matchedSites = useMemo(() => {
-    let baseSites = siteMasterRecords.filter(s => s.project_type === upperType);
+  // 2. Fetch Relevant Tickets (one row per ATP work order / ticket)
+  const matchedTickets = useMemo(() => {
+    let base = atpWorkOrders.filter(wo => wo.project_type === upperType);
 
-    // Role-based filtering — field role only sees their team's sites
+    // Role-based filtering — field role only sees their team's work orders
     if (currentUser && currentUser.role === 'field') {
       const userTeamIds = teamMembersRecords
         .filter(tm => tm.person_id === currentUser.id)
         .map(tm => tm.team_id);
-
-      // Filter based on assigned team via work order
-      baseSites = baseSites.filter(s => {
-        if (!s.work_order_id) return false;
-        const wo = workOrders.find(w => w.id === s.work_order_id);
-        return wo && wo.assignedTeamId && userTeamIds.includes(wo.assignedTeamId);
-      });
+      base = base.filter(wo => wo.team_id && userTeamIds.includes(wo.team_id));
     }
-    return baseSites;
+    return base;
   }, [upperType, currentUser]);
+
+  // Keep matchedSites alias for KPI/financial helpers that still need SiteMaster shape
+  const matchedSites = useMemo(() =>
+    siteMasterRecords.filter(s => s.project_type === upperType),
+    [upperType]
+  );
 
 
   // 3. Dynamic Stats Calculation based on Type
   const calculateStats = () => {
-    // 1. Total Sites
-    const activeSitesCount = matchedSites.length;
-    const completedSitesCount = matchedSites.filter(s => {
-      if (upperType === 'FILTER' || upperType === 'RESCOPING') {
-        const terms = filterTerms.filter(t => t.siteId === s.id);
-        return terms.length > 0 && terms.every(t => t.status === 'paid');
-      }
-      if (upperType === 'COMBAT') {
-        const terms = combatTerms.filter(t => t.siteId === s.id);
-        return terms.length > 0 && terms.every(t => t.status === 'completed');
-      }
-      return false;
-    }).length;
+    const totalTickets = matchedTickets.length;
+    const uniqueSitesCount = new Set(matchedTickets.map(wo => wo.site_id)).size;
 
-    // 2. Total Teams
-    const uniqueTeamIds = new Set<string>();
-    matchedSites.forEach(s => {
-      if (s.work_order_id) {
-        const wo = workOrders.find(w => w.id === s.work_order_id);
-        if (wo && wo.assignedTeamId) uniqueTeamIds.add(wo.assignedTeamId);
-      }
-    });
+    const completedTicketsCount = matchedTickets.filter(wo => wo.stage === 'completed').length;
+
+    // Teams from work orders
+    const uniqueTeamIds = new Set<string>(
+      matchedTickets.map(wo => wo.team_id).filter(Boolean) as string[]
+    );
     const totalTeams = uniqueTeamIds.size;
 
-    // 3. Total People
     const uniquePeopleIds = new Set<string>();
     uniqueTeamIds.forEach(tId => {
-      teamMembersRecords
-        .filter(tm => tm.team_id === tId)
-        .forEach(tm => uniquePeopleIds.add(tm.person_id));
+      teamMembersRecords.filter(tm => tm.team_id === tId).forEach(tm => uniquePeopleIds.add(tm.person_id));
     });
     const totalPeople = uniquePeopleIds.size;
 
-    // 4. Menunggu Aksi
     let actionNeededCount = 0;
     let mostUrgentAction = '';
-
-    // Need to adjust action calculation as matchedSites is now SiteMaster[]
-    // For now, looking for notes with issue or permit_process older than 14 days
-    matchedSites.forEach(site => {
-      let hasUrgentAction = false;
-      let urgentText = '';
-
-      if (site.stage_notes?.toLowerCase().includes('issue')) {
-        hasUrgentAction = true;
-        urgentText = `${site.site_name} · Terdapat issue: ${site.stage_notes}`;
-      } else if (site.stage === 'permit_process' && site.stage_updated_at) {
-        const updatedDate = new Date(site.stage_updated_at);
-        const now = new Date();
-        const diffDays = Math.floor((now.getTime() - updatedDate.getTime()) / (1000 * 3600 * 24));
+    matchedTickets.forEach(wo => {
+      if (wo.stage === 'permit_process' && (wo as any).stage_updated_at) {
+        const diffDays = Math.floor((Date.now() - new Date((wo as any).stage_updated_at).getTime()) / 86400000);
         if (diffDays > 14) {
-          hasUrgentAction = true;
-          urgentText = `${site.site_name} · Permit process pending > 14 days`;
+          actionNeededCount++;
+          if (!mostUrgentAction) mostUrgentAction = `${wo.site_id} · Permit > 14 hari`;
         }
-      }
-
-      if (hasUrgentAction) {
-        actionNeededCount++;
-        if (!mostUrgentAction) mostUrgentAction = urgentText;
       }
     });
 
-    return {
-      totalSites: activeSitesCount,
-      completedSites: completedSitesCount,
-      totalTeams,
-      totalPeople,
-      actionNeededCount,
-      mostUrgentAction
-    };
+    return { totalTickets, uniqueSitesCount, completedTicketsCount, totalTeams, totalPeople, actionNeededCount, mostUrgentAction };
   };
 
   const statCards = calculateStats();
@@ -239,51 +198,83 @@ const TypeSiteList = () => {
 
   const fin = calculateFinancials();
 
-  // Summary helper
+  // Summary helper (ticket-based)
   const summaryInfo = useMemo(() => {
-    const rfsDone = matchedSites.filter(s => s.stage === 'rfs_done').length;
-    const permitReleased = matchedSites.filter(s => {
-      const stageIdx = STAGE_ORDER.indexOf(s.stage || 'imported');
-      const targetIdx = STAGE_ORDER.indexOf('permit_ready');
-      return stageIdx >= targetIdx;
+    const rfsDone        = matchedTickets.filter(wo => wo.stage === 'rfs_done').length;
+    const permitReleased = matchedTickets.filter(wo => {
+      const idx = STAGE_ORDER.indexOf(wo.stage || 'imported');
+      return idx >= STAGE_ORDER.indexOf('permit_ready');
     }).length;
+    const requestPdid  = matchedTickets.filter(wo => (wo as any).issue_status === 'REQUEST PDID').length;
+    const taggingDone  = matchedTickets.filter(wo => (wo as any).issue_status === 'UPLOAD TAGGING DONE').length;
+    return { total: matchedTickets.length, rfsDone, permitReleased, requestPdid, taggingDone };
+  }, [matchedTickets]);
 
-    const requestPdid = matchedSites.filter(s => {
-      const wo = atpWorkOrders.find((w: any) => w.site_id === s.site_id);
-      return wo?.issue_status === 'REQUEST PDID';
-    }).length;
-
-    const taggingDone = matchedSites.filter(s => {
-      const wo = atpWorkOrders.find((w: any) => w.site_id === s.site_id);
-      return wo?.issue_status === 'UPLOAD TAGGING DONE';
-    }).length;
-
-    return {
-      total: matchedSites.length,
-      rfsDone,
-      permitReleased,
-      requestPdid,
-      taggingDone
-    };
-  }, [matchedSites]);
-
-  // 7. Apply Stage Filter to Table Sites
-  // Compact strip per-stage counts
+  // Pipeline strip — counts from tickets
   const compactGroups = upperType === 'RESCOPING' ? COMPACT_GROUPS_RESCOPING : COMPACT_GROUPS_GENERIC;
   const compactStrip = useMemo(() =>
-    compactGroups.map(g => ({ ...g, count: matchedSites.filter(s => g.stages.includes(s.stage as string)).length })),
-    [matchedSites, upperType] // eslint-disable-line react-hooks/exhaustive-deps
+    compactGroups.map(g => ({ ...g, count: matchedTickets.filter(wo => g.stages.includes(wo.stage)).length })),
+    [matchedTickets, upperType] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const finalFilteredSites = useMemo(() => {
-    if (!stageFilter) return matchedSites;
+  // Final filtered tickets (by pipeline stage click)
+  const finalFilteredTickets = useMemo(() => {
+    if (!stageFilter) return matchedTickets;
     const group = compactGroups.find(g => g.key === stageFilter);
-    if (!group) return matchedSites;
-    return matchedSites.filter(site => group.stages.includes(site.stage as string));
-  }, [matchedSites, stageFilter, upperType]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!group) return matchedTickets;
+    return matchedTickets.filter(wo => group.stages.includes(wo.stage));
+  }, [matchedTickets, stageFilter, upperType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleEditSite = (site: SiteMaster) => { console.log('Edit site', site); };
-  const handleDeleteSite = (siteId: string) => { console.log('Delete site', siteId); };
+  // Search within filtered tickets
+  const [ticketSearch, setTicketSearch] = useState('');
+  const displayTickets = useMemo(() => {
+    if (!ticketSearch) return finalFilteredTickets;
+    const q = ticketSearch.toLowerCase();
+    return finalFilteredTickets.filter(wo => {
+      const site = siteMasterRecords.find(s => s.site_id === wo.site_id);
+      return wo.site_id.toLowerCase().includes(q) ||
+        (wo.atp_number || '').toLowerCase().includes(q) ||
+        (site?.site_name || '').toLowerCase().includes(q);
+    });
+  }, [finalFilteredTickets, ticketSearch]);
+
+  // Ticket row helpers
+  const fmtRelative = (ts: string | undefined): string => {
+    if (!ts) return '—';
+    const ms = Date.now() - new Date(ts).getTime();
+    if (isNaN(ms)) return '—';
+    const mins = Math.floor(ms / 60000);
+    const hours = Math.floor(ms / 3600000);
+    const days = Math.floor(ms / 86400000);
+    if (mins < 1) return 'Baru saja';
+    if (mins < 60) return `${mins}m lalu`;
+    if (hours < 24) return `${hours}j lalu`;
+    if (days <= 3) return `${days}h lalu`;
+    return new Date(ts).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' });
+  };
+
+  const getStageProps = (stage: string) => {
+    const map: Record<string, { color: string; label: string }> = {
+      imported:       { color: 'bg-slate-100 text-slate-600 border-slate-200',       label: 'Imported' },
+      assigned:       { color: 'bg-blue-100 text-blue-700 border-blue-200',          label: 'Assigned' },
+      survey:         { color: 'bg-cyan-100 text-cyan-700 border-cyan-200',          label: 'Survey' },
+      survey_nok:     { color: 'bg-red-100 text-red-700 border-red-200',             label: 'Survey NOK' },
+      erfin_process:  { color: 'bg-teal-100 text-teal-700 border-teal-200',          label: 'ERFIN Process' },
+      erfin_ready:    { color: 'bg-teal-100 text-teal-700 border-teal-200',          label: 'ERFIN Ready' },
+      permit_process: { color: 'bg-amber-100 text-amber-700 border-amber-200',       label: 'Permit' },
+      permit_ready:   { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Permit Ready' },
+      akses_process:  { color: 'bg-amber-100 text-amber-700 border-amber-200',       label: 'Akses' },
+      akses_ready:    { color: 'bg-blue-100 text-blue-700 border-blue-200',          label: 'Akses Ready' },
+      implementasi:   { color: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200', label: 'Implementasi' },
+      rfi_done:       { color: 'bg-teal-100 text-teal-700 border-teal-200',          label: 'RFI Done' },
+      rfs_done:       { color: 'bg-teal-100 text-teal-700 border-teal-200',          label: 'RFS Done' },
+      dokumen_done:   { color: 'bg-teal-100 text-teal-700 border-teal-200',          label: 'Docs Done' },
+      bast:           { color: 'bg-orange-100 text-orange-700 border-orange-200',    label: 'BAST' },
+      invoice:        { color: 'bg-orange-100 text-orange-700 border-orange-200',    label: 'Invoice' },
+      completed:      { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: '✓ Selesai' },
+    };
+    return map[stage] ?? { color: 'bg-slate-100 text-slate-600 border-slate-200', label: stage };
+  };
 
   if (!upperType || !validTypes.includes(upperType)) {
     return <Navigate to="/projects" replace />;
@@ -363,11 +354,22 @@ const TypeSiteList = () => {
             >
               {/* ── Operational Cards (4) ── */}
               <ModernKPICard
-                title="Total Sites"
-                value={statCards.totalSites}
-                icon={MapPin}
+                title="Total Pekerjaan"
+                value={statCards.totalTickets}
+                icon={FolderKanban}
                 iconClass="bg-blue-600 text-white"
-                subtitle={`${statCards.completedSites} completed`}
+                subtitle={`${statCards.uniqueSitesCount} unique sites`}
+                titleTooltip={`Total: ${statCards.totalTickets} work items across ${statCards.uniqueSitesCount} different physical site locations`}
+                minWidth={185}
+                compact
+              />
+
+              <ModernKPICard
+                title="Penyelesaian"
+                value={statCards.completedTicketsCount}
+                icon={CheckCircle2}
+                iconClass="bg-emerald-600 text-white"
+                subtitle={`${((statCards.completedTicketsCount / (statCards.totalTickets || 1)) * 100).toFixed(0)}% dari target`}
                 minWidth={185}
                 compact
               />
@@ -510,16 +512,20 @@ const TypeSiteList = () => {
             );
           })}
           <div className="ml-auto pl-4 flex-shrink-0 border-l border-slate-100 text-[11px] text-slate-400 font-medium whitespace-nowrap">
-            {matchedSites.length} sites total
+            {matchedTickets.length} tiket
           </div>
         </div>
 
-        {/* SECONDARY EXCEL-STYLE SUMMARY LINE */}
         <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 text-xs font-medium text-slate-600 flex items-center gap-2">
           <Layers className="w-3.5 h-3.5 text-slate-400" />
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5"><span className="font-black text-slate-900">{summaryInfo.total}</span> sites</span>
-            <span className="w-1 h-1 rounded-full bg-slate-300" />
+            <span className="flex items-center gap-1.5">
+              <span className="font-black text-slate-900">{statCards.uniqueSitesCount}</span> sites
+            </span>
+            <span className="flex items-center gap-1.5 border-l border-slate-200 pl-4">
+              <span className="font-black text-blue-700">{statCards.totalTickets}</span> tickets / work orders
+            </span>
+            <span className="w-1 h-1 rounded-full bg-slate-300 ml-2" />
             <span className="flex items-center gap-1.5"><span className="font-black text-emerald-600">{summaryInfo.rfsDone}</span> RFS Done</span>
             <span className="w-1 h-1 rounded-full bg-slate-300" />
             <span className="flex items-center gap-1.5"><span className="font-black text-blue-600">{summaryInfo.permitReleased}</span> Permit Released</span>
@@ -534,15 +540,36 @@ const TypeSiteList = () => {
       {/* CONTENT AREA (TABLE OR MAP) */}
       {viewMode === 'list' ? (
         <div className="table-wrapper relative z-10">
-          <div className="p-5 border-b border-[var(--glass-border)] flex items-center justify-between bg-[var(--glass-bg)]">
-            <h2 className="section-header section-header-accent !mb-0 !text-[14px]">
+          {/* Table header row */}
+          <div className="p-4 border-b border-[var(--glass-border)] flex flex-wrap items-center gap-3 bg-[var(--glass-bg)]">
+            <h2 className="section-header section-header-accent !mb-0 !text-[14px] flex-shrink-0">
               <MapPin className="w-4 h-4 text-[var(--text-muted)]" />
-              Site Registry
+              Daftar Tiket — {upperType}
             </h2>
-            <div className="flex items-center gap-3">
-              <div className="bg-[var(--glass-bg)] text-[var(--text-secondary)] px-3 py-1 rounded-full text-sm font-medium border border-[var(--glass-border)]">
-                Showing: {finalFilteredSites.length} of {matchedSites.length}
+            <div className="flex items-center gap-2 ml-auto flex-wrap">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Cari site / tiket / nama…"
+                  value={ticketSearch}
+                  onChange={e => setTicketSearch(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 text-xs w-52 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 placeholder:text-slate-400"
+                />
               </div>
+              <div className="bg-[var(--glass-bg)] text-[var(--text-secondary)] px-3 py-1 rounded-full text-xs font-medium border border-[var(--glass-border)] whitespace-nowrap">
+                {displayTickets.length} / {matchedTickets.length} tiket
+              </div>
+              {can('export_data') && (
+                <button
+                  onClick={() => exportWorkTypeToExcel(displayTickets, upperType, `${upperType.toLowerCase()}-export-${new Date().toISOString().slice(0,10)}.xlsx`)}
+                  className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 font-medium rounded-lg text-xs transition-colors shadow-sm flex items-center gap-2"
+                  title="Export ke Excel"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600" /> Export Excel
+                </button>
+              )}
               {hasImportAccess && (
                 <button onClick={() => setIsMultiSheetOpen(true)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-lg text-xs transition-colors shadow-sm flex items-center gap-2">
                   <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
@@ -552,23 +579,77 @@ const TypeSiteList = () => {
             </div>
           </div>
 
-          <div className="p-5">
-            {finalFilteredSites.length === 0 ? (
+          {/* Ticket table */}
+          <div className="overflow-x-auto">
+            {displayTickets.length === 0 ? (
               <div className="text-center py-16 px-4">
                 <div className="w-16 h-16 bg-[var(--glass-bg)] rounded-full flex items-center justify-center mx-auto mb-4 border border-[var(--glass-border)] shadow-sm">
                   <Layers className="w-8 h-8 text-[var(--text-muted)]" />
                 </div>
-                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Belum ada site aktif yang sesuai.</h3>
-                <p className="text-[var(--text-muted)] text-sm max-w-md mx-auto mb-6">
-                  There are currently no sites matching the selected filters based on your access level.
+                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Belum ada tiket yang sesuai.</h3>
+                <p className="text-[var(--text-muted)] text-sm max-w-md mx-auto">
+                  Tidak ada tiket yang cocok dengan filter atau pencarian yang dipilih.
                 </p>
               </div>
             ) : (
-              <ProjectSitesTable
-                sites={finalFilteredSites}
-                onEdit={handleEditSite}
-                onDelete={handleDeleteSite}
-              />
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    <th className="py-3 px-4 text-left w-10">#</th>
+                    <th className="py-3 px-4 text-left">Tiket / ATP</th>
+                    <th className="py-3 px-4 text-left">Site</th>
+                    <th className="py-3 px-4 text-left">Sektor</th>
+                    <th className="py-3 px-4 text-left">Stage</th>
+                    <th className="py-3 px-4 text-left">Tim</th>
+                    <th className="py-3 px-4 text-left">Update Terakhir</th>
+                    <th className="py-3 px-4 text-center w-16">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayTickets.map((wo, idx) => {
+                    const sp = getStageProps(wo.stage);
+                    return (
+                      <tr
+                        key={wo.id}
+                        className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors group"
+                      >
+                        <td className="py-3 px-4 text-slate-400 font-mono text-xs tabular-nums">{idx + 1}</td>
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded">
+                            {wo.atp_number || '—'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-mono text-xs font-bold text-slate-800">{wo.site_id}</div>
+                          {wo.site_name && (
+                            <div className="text-xs text-slate-400 mt-0.5 truncate max-w-[180px]">{wo.site_name}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600 text-xs tabular-nums">S{wo.sector ?? '—'}</td>
+                        <td className="py-3 px-4">
+                          <span className={clsx('px-2 py-0.5 rounded-full text-[11px] font-semibold border', sp.color)}>
+                            {sp.label}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 text-xs">
+                          {wo.team_id || <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 text-xs tabular-nums whitespace-nowrap">
+                          {fmtRelative((wo as any).updated_at)}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Link
+                            to={`/sites/${wo.site_id}`}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors group-hover:shadow-sm"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

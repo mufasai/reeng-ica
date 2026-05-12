@@ -57,11 +57,13 @@ export const PermitSection = ({ localWo, handleFieldSave, handleUpdateStage, sav
           <AutoSaveInput label="Permit Status" value={localWo.permit_status} field="permit_status" type="select" onSave={handleFieldSave} locked={locked}
             options={[
               { label: '1. Planning', value: '1. Planning' },
-              { label: '2. Waiting TO', value: '2. Waiting TO' },
-              { label: '4. Tpass', value: '4. Tpass' },
+              { label: '2. Waiting for TO Approval', value: '2. Waiting for TO Approval' },
+              { label: '4. Tpass Released', value: '4. Tpass Released' },
               { label: '5. Permit Released', value: '5. Permit Released' },
-              { label: '6. Expired', value: '6. Expired' },
+              { label: '6. Expired Permit', value: '6. Expired Permit' },
               { label: '9. Cancelled', value: '9. Cancelled' },
+              { label: '10. DROP OUT', value: '10. DROP OUT' },
+              { label: '(Blanks)', value: '(Blanks)' },
             ]} />
           <AutoSaveInput label="Tower Provider" value={localWo.tower_provider || localWo.tp_name} field="tower_provider" onSave={handleFieldSave} locked={locked} />
           <AutoSaveInput label="Create Date" value={localWo.permit_create_date} field="permit_create_date" type="date" onSave={handleFieldSave} locked={locked} />
@@ -76,6 +78,8 @@ export const PermitSection = ({ localWo, handleFieldSave, handleUpdateStage, sav
           <AutoSaveInput label="TPAS Nomor" value={localWo.tpas_no} field="tpas_no" onSave={handleFieldSave} locked={locked} />
           <AutoSaveInput label="TP Nomor" value={localWo.tp_no} field="tp_no" onSave={handleFieldSave} locked={locked} />
           <AutoSaveInput label="CAF Nomor" value={localWo.caf_no} field="caf_no" onSave={handleFieldSave} locked={locked} />
+          <AutoSaveInput label="IOMS Registered" value={localWo.ioms_registered} field="ioms_registered" type="select" onSave={handleFieldSave} locked={locked}
+            options={[{ label: 'Registered', value: 'Registered' }, { label: 'Not Registered', value: 'Not Registered' }]} />
         </div>
       </div>
 
@@ -109,26 +113,22 @@ export const PermitSection = ({ localWo, handleFieldSave, handleUpdateStage, sav
               Cancel
             </button>
             <button
-              onClick={() => { handleUpdateStage('implementasi'); setEditing(false); }}
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+              disabled={saveStatus === 'saving'}
+              onClick={() => { 
+                const isReleased = /^[57]/.test(localWo.permit_status || '');
+                handleUpdateStage(isReleased ? 'implementasi' : 'permit');
+                setEditing(false); 
+              }}
+              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Update Permit Stage <ChevronRight className="w-4 h-4" />
+              {saveStatus === 'saving' ? 'Menyimpan...' : 'Simpan & Lanjutkan'} <ChevronRight className="w-4 h-4" />
             </button>
           </>
-        ) : (
-          isPastPermit ? (
-            <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in">
-              ✓ Stage Permit Selesai
-            </div>
-          ) : (
-            <button
-              onClick={() => handleUpdateStage('implementasi')}
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
-            >
-              Update Permit Stage <ChevronRight className="w-4 h-4" />
-            </button>
-          )
-        )}
+        ) : isPastPermit ? (
+          <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in">
+            ✓ Stage Permit Selesai
+          </div>
+        ) : null}
       </div>
     </div>
   );

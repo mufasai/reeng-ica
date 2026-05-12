@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, FileSpreadsheet, CheckCircle2, ChevronDown, ListPlus, Loader2, Play } from 'lucide-react';
+import { X, FileSpreadsheet, CheckCircle2, ChevronDown, ListPlus, Loader2, Play, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import * as XLSX from 'xlsx';
 import { siteMasterRecords, atpTasks, people, teamMembersRecords, materialTransactions, materialMasterRecords, savedExcelTemplates, siteTechnicalDetails, atpWorkOrders } from '../../data/mockData';
+import { db, cleanRecordId, connectDB } from '../../db';
+import { useSidebar } from '../../context/SidebarContext';
 
 interface MultiSheetExcelModalProps {
     isOpen: boolean;
@@ -44,10 +46,11 @@ const detectSheetType = (headers: string[]): SheetType => {
     if (hasQty && hasDir && hasMat && hasDate) return 'inventory_movement';
     
     // 2. Data Teknis Site / site_technical
-    if (has('SITE_ID') && hasAny(['LAYER', 'FREQ_BAND', 'FREQ BAND', 'CELL_NAME', 'CELL NAME', 'ENODEB'])) return 'site_technical';
+    const hasSiteIdAlias = has('SITE_ID') || has('SITE ID') || has('FINAL_SITE_ID') || has('FINAL SITE ID');
+    if (hasSiteIdAlias && hasAny(['LAYER', 'FREQ_BAND', 'FREQ BAND', 'CELL_NAME', 'CELL NAME', 'ENODEB'])) return 'site_technical';
     
     // 3. Stage Update / stage_update
-    if (has('SITE_ID') && hasAny(['PERMIT_STATUS', 'PERMIT STATUS', 'IMPLEMENTASI_STATUS', 'IMPLEMENTASI STATUS', 'STATUS_ATP', 'STATUS ATP'])) return 'stage_update';
+    if (hasSiteIdAlias && hasAny(['PERMIT_STATUS', 'PERMIT STATUS', 'IMPLEMENTASI_STATUS', 'IMPLEMENTASI STATUS', 'STATUS_ATP', 'STATUS ATP'])) return 'stage_update';
     
     // 4. Workforce / workforce
     if ((has('NAMA_KARYAWAN') || has('NAMA KARYAWAN') || has('NAMA')) && hasAny(['NO_HP', 'HP', 'NO_KTP', 'KTP', 'JABATAN'])) return 'workforce';
@@ -75,6 +78,7 @@ const PAGE_CONTEXT_LABELS: Record<string, { title: string; desc: string; color: 
 };
 
 const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onClose, onImportComplete, pageContext }) => {
+    const { triggerCountRefresh } = useSidebar();
     const [step, setStep] = useState<1 | 2 | 2.5 | 3 | 4 | 5>(1);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -91,6 +95,7 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
     // Format: { [sheetIdx]: { [system_column_key]: [excel_header_string] } }
     const [columnMappings, setColumnMappings] = useState<Record<number, Record<string, string>>>({});
     const [unmappedCount, setUnmappedCount] = useState(0);
+    const [syncStrategy, setSyncStrategy] = useState<'merge' | 'replace'>('merge');
     
     useEffect(() => {
         if (!isOpen) {
@@ -103,6 +108,7 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                 setImplStatuses([]);
                 setColumnMappings({});
                 setUnmappedCount(0);
+                setSyncStrategy('merge');
             }, 300);
         }
     }, [isOpen]);
@@ -173,18 +179,21 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
 
         const v = String(val).toLowerCase();
         if (type === 'permit') {
-            if (v.includes('planning') || v.includes('pending') || v.includes('submitted') || v.includes('tpass')) return 'permit_process';
-            if (v.includes('released')) return 'permit_ready';
-            if (v.includes('expired')) return 'issue';
-            if (v.includes('hold')) return 'hold';
-            if (v.includes('cancelled')) return 'survey_nok';
-            return 'permit_process';
+            if (v.includes('planning')) return '1. Planning';
+            if (v.includes('waiting') || v.includes('to approval') || v.includes('pending')) return '2. Waiting for TO Approval';
+            if (v.includes('tpass')) return '4. Tpass Released';
+            if (v.includes('released') || v.includes('permit released')) return '5. Permit Released';
+            if (v.includes('expired')) return '6. Expired Permit';
+            if (v.includes('cancelled') || v.includes('batal')) return '9. Cancelled';
+            if (v.includes('drop')) return '10. DROP OUT';
+            return '1. Planning';
         } else {
-            if (v.includes('awaiting') || v.includes('scheduled') || v.includes('on going')) return 'implementasi';
-            if (v.includes('rfs')) return 'rfs_done';
-            if (v.includes('hold')) return 'hold';
-            if (v.includes('cancelled')) return 'cancelled';
-            return 'implementasi';
+            if (v.includes('planning') || v.includes('submit') || v.includes('awaiting') || v.includes('scheduled')) return 'Planning';
+            if (v.includes('on going') || v.includes('ongoing') || v.includes('process')) return 'On Going';
+            if (v.includes('hold') || v.includes('pending')) return 'On Hold';
+            if (v.includes('rfs') || v.includes('done') || v.includes('complete')) return 'RFS';
+            if (v.includes('cancelled') || v.includes('drop') || v.includes('batal')) return 'Cancelled';
+            return 'Planning';
         }
     };
 
@@ -196,7 +205,8 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
              { key: 'team', label: 'Team / PIC' },
              { key: 'atp_status', label: 'Status ATP' },
              { key: 'atp_tiket', label: 'Tiket Number' },
-             { key: 'atp_note', label: 'Catatan ATP' }
+             { key: 'atp_note', label: 'Catatan ATP' },
+             { key: 'project_type', label: 'Project Type' }
         ],
         'inventory_movement': [
              { key: 'material', label: 'Material Name (*)', required: true },
@@ -280,12 +290,13 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                   if (!matchedHeader) {
                       matchedHeader = headers.find(h => {
                            const hl = h.toLowerCase();
-                           if (f.key === 'site_id' && hl.includes('site_id')) return true;
+                           if (f.key === 'site_id' && (hl.includes('site_id') || hl.includes('site id') || hl.includes('final site'))) return true;
                            if (f.key === 'permit' && hl.includes('permit status')) return true;
                            if (f.key === 'impl' && (hl.includes('implementasi status') || hl.includes('new status'))) return true;
                            if (f.key === 'team' && hl === 'team') return true;
                            if (f.key === 'atp_status' && hl.includes('status atp')) return true;
                            if (f.key === 'atp_tiket' && (hl.includes('tiket') || hl.includes('number'))) return true;
+                            if (f.key === 'project_type' && (hl.includes('project') || hl.includes('type'))) return true;
                            
                            if (f.key === 'material' && (hl.includes('material') || hl.includes('type') || hl.includes('nama'))) return true;
                            if (f.key === 'material_type' && (hl === 'type' || hl.includes('kategori'))) return true;
@@ -384,13 +395,36 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
     const handleProcessSequentially = async () => {
         setStep(4);
         setIsProcessing(true);
+        await connectDB(); // re-authenticate before bulk DB operations
         
         let summary: any = {
-            stage_update: { total: 0, processed: 0, error: 0, skipped: 0 },
-            site_technical: { total: 0, processed: 0 },
+            stage_update: { total: 0, processed: 0, error: 0, skipped: 0, errorDetails: [] },
+            site_technical: { total: 0, processed: 0, errorDetails: [] },
             inventory_movement: { total: 0, processed: 0 },
             workforce: { total: 0, processed: 0 }
         };
+
+        // SYNC STRATEGY: REPLACE MODE HANDLING
+        if (syncStrategy === 'replace') {
+             const types = sheetsInfo.map((s) => sheetTypes[s.name] || s.type);
+             const clearSites = types.includes('stage_update');
+             const clearTech = types.includes('site_technical');
+
+             try {
+                 if (clearSites) {
+                     console.warn('[SYNC] REPLACE MODE: Clearing all records from "sites" table.');
+                     await db.query('DELETE sites');
+                     siteMasterRecords.length = 0; // Reset local store
+                 }
+                 if (clearTech) {
+                     console.warn('[SYNC] REPLACE MODE: Clearing all records from "site_technical_details" table.');
+                     await db.query('DELETE site_technical_details');
+                     siteTechnicalDetails.length = 0; // Reset local store
+                 }
+             } catch (err) {
+                 console.error('[SYNC] Failed to perform full replacement pre-clear:', err);
+             }
+        }
 
         // SAVE TEMPLATES IMPLICITLY
         sheetsInfo.forEach((sheet, idx) => {
@@ -420,12 +454,14 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
         // Set up mapping registers based on user's selected normalize modes
         const getPermitStatusMap = (rawVal: string) => {
             const match = permitStatuses.find(p => p.val === rawVal);
-            return match ? match.mapTo : null;
+            if (!match) return null;
+            return match.mapTo || null; // empty string = "jangan ubah stage" → return null
         };
 
         const getImplStatusMap = (rawVal: string) => {
             const match = implStatuses.find(p => p.val === rawVal);
-            return match ? match.mapTo : null;
+            if (!match) return null;
+            return match.mapTo || null;
         };
 
         // Simulate sequential processing delay and apply mappings
@@ -440,13 +476,46 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
             // Actually process data mapping
             if (effectiveType === 'stage_update') {
                 const mapDict = columnMappings[i] || {};
-                let successCount = 0;
+                let updatedCount = 0;
+                let newCount = 0;
+                let skippedCount = 0;
                 let errorCount = 0;
-                
-                sheet.data.forEach(row => {
-                    const rawSiteId = row[mapDict['site_id']];
-                    if (!rawSiteId) { errorCount++; return; }
+                const errorLogs: any[] = [];
 
+                // Sync sites from DB so dedup works correctly across sessions
+                try {
+                    const dbSites = await db.query<any[][]>('SELECT * FROM sites');
+                    if (dbSites?.[0]?.length) {
+                        dbSites[0].forEach(r => {
+                            const rId = cleanRecordId(r.id);
+                            const idx = siteMasterRecords.findIndex(s => cleanRecordId(s.id) === rId);
+                            if (idx >= 0) siteMasterRecords[idx] = r;
+                            else siteMasterRecords.push(r);
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to sync sites from DB:', err);
+                }
+
+                for (const row of sheet.data) {
+                    let rawSiteId = row[mapDict['site_id']];
+                    
+                    // Handcrafted fallback if column map is missing or yields undefined
+                    if (!rawSiteId) {
+                        const finalSiteKey = Object.keys(row).find(k => {
+                            const cleanKey = String(k).toLowerCase().replace(/[\s_-]/g, '');
+                            return cleanKey === 'finalsiteid' || cleanKey === 'finalsite_id';
+                        });
+                        if (finalSiteKey) rawSiteId = row[finalSiteKey];
+                    }
+
+                    if (!rawSiteId) { 
+                        errorCount++; 
+                        errorLogs.push({ site: 'Row ' + (sheet.data.indexOf(row) + 2), reason: 'Kolom Site ID & Final Site ID kosong.', context: 'Validasi Baris' });
+                        continue; 
+                    }
+
+                    console.log(`[MultiSheetExcelModal] >>> Processing row for raw Site ID: ${rawSiteId}`);
                     let searchSiteId = String(rawSiteId).trim();
                     let priority: string | null = null;
                     const priorityMatch = searchSiteId.match(/\s*\((P[1-3])\)$/i);
@@ -460,33 +529,93 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                         searchSiteId = parts[0];
                     }
 
-                    const existingSite = siteMasterRecords.find(s => 
-                        String(s.site_id).toLowerCase() === searchSiteId.toLowerCase() || 
-                        String(s.unique_key).toLowerCase() === searchSiteId.toLowerCase() || 
+                    const existingSite = siteMasterRecords.find(s =>
+                        String(s.site_id).toLowerCase() === searchSiteId.toLowerCase() ||
+                        String(s.unique_key).toLowerCase() === searchSiteId.toLowerCase() ||
                         String(s.site_id).toLowerCase() === String(rawSiteId).toLowerCase()
                     );
-                    
+
                     if (existingSite) {
+                        console.log(`[MultiSheetExcelModal] MATCH FOUND: ${existingSite.site_id} (${existingSite.id}) Current Stage: ${existingSite.stage}`);
+                        const dbUpdates: any = {};
+
                         if (existingSite.project_type === 'COMBAT' && String(rawSiteId).includes('_')) {
                             existingSite.site_name = String(rawSiteId);
                         }
                         if (existingSite.project_type === 'RESCOPING' && priority) {
-                            existingSite.priority = priority as any;
-                        }
-                        // Apply normalizations
-                        const rawPermit = row[mapDict['permit']];
-                        if (rawPermit) {
-                            const newStage = getPermitStatusMap(rawPermit);
-                            if (newStage) existingSite.stage = newStage as any;
+                            (existingSite as any).priority = priority;
                         }
 
+                        // Standardized project type import / updates
+                        const rawProjType = row[mapDict['project_type']];
+                        if (rawProjType) {
+                            const cleaned = String(rawProjType).toUpperCase().trim();
+                            const normalized = cleaned.includes('FILTER') ? 'FILTER' : cleaned;
+                            if (normalized && existingSite.project_type !== normalized) {
+                                existingSite.project_type = normalized as any;
+                                dbUpdates.project_type = normalized;
+                            }
+                        }
+
+                        // Apply permit mapping
+                        const rawPermit = row[mapDict['permit']];
+                        if (rawPermit) {
+                            const chosenStatus = getPermitStatusMap(rawPermit); // Maps to user picked normalized value "1. Planning", "5. Permit Released"
+                            if (chosenStatus) {
+                                dbUpdates.permit_status = chosenStatus;
+                                (existingSite as any).permit_status = chosenStatus;
+
+                                // Derive stage based on valid permit statuses
+                                let nextStage: string | null = null;
+                                if (chosenStatus.includes('1.') || chosenStatus.includes('2.') || chosenStatus.includes('4.')) {
+                                    nextStage = 'permit_process';
+                                } else if (chosenStatus.includes('5.')) {
+                                    nextStage = 'permit_ready';
+                                } else if (chosenStatus.includes('6.')) {
+                                    nextStage = 'issue';
+                                } else if (chosenStatus.includes('9.') || chosenStatus.includes('10.')) {
+                                    nextStage = 'survey_nok';
+                                }
+
+                                console.log(`[MultiSheetExcelModal] Derived Permit Logic: raw='${rawPermit}' -> status='${chosenStatus}' -> stage='${nextStage}'`);
+
+                                if (nextStage && nextStage !== existingSite.stage) {
+                                    existingSite.stage = nextStage as any;
+                                    dbUpdates.stage = nextStage;
+                                }
+                            }
+                        }
+
+                        // Apply impl mapping
                         const rawImpl = row[mapDict['impl']];
                         if (rawImpl) {
-                            if (existingSite.project_type === 'COMBAT') {
-                                const implStr = String(rawImpl).toUpperCase();
-                                if (implStr.includes('RFS')) {
-                                    existingSite.stage = 'dokumen_done';
-                                    (existingSite as any).combat_impl_steps = {
+                            const mappedStatus = getImplStatusMap(rawImpl); // Maps to "Planning", "RFS", etc.
+                            if (mappedStatus) {
+                                dbUpdates.implementasi_status = mappedStatus;
+                                (existingSite as any).implementasi_status = mappedStatus;
+
+                                // Automatically translate status into matching system workflow stage
+                                let nextStage: string | null = null;
+                                if (mappedStatus === 'RFS') {
+                                    nextStage = existingSite.project_type === 'COMBAT' ? 'dokumen_done' :
+                                                existingSite.project_type === 'RESCOPING' ? 'rfi_done' : 'rfs_done';
+                                } else if (mappedStatus === 'Cancelled') {
+                                    nextStage = 'cancelled';
+                                } else {
+                                    // Planning, On Going, On Hold
+                                    nextStage = 'implementasi';
+                                }
+
+                                console.log(`[MultiSheetExcelModal] Derived Impl Logic: raw='${rawImpl}' -> status='${mappedStatus}' -> stage='${nextStage}'`);
+
+                                if (nextStage && nextStage !== existingSite.stage) {
+                                    existingSite.stage = nextStage as any;
+                                    dbUpdates.stage = nextStage;
+                                }
+
+                                // Automate COMBAT substeps completion when hitting RFS
+                                if (existingSite.project_type === 'COMBAT' && mappedStatus === 'RFS') {
+                                    const implSteps = {
                                         sitac: { status: 'done', date: new Date().toISOString() },
                                         cme: { status: 'done', date: new Date().toISOString() },
                                         power: { status: 'done', date: new Date().toISOString() },
@@ -494,29 +623,13 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                         integration: { status: 'done', date: new Date().toISOString() },
                                         rfs: { status: 'done', date: new Date().toISOString() }
                                     };
-                                } else if (implStr.includes('ON GOING') || implStr.includes('AWAITING')) {
-                                    existingSite.stage = 'implementasi';
-                                } else if (implStr.includes('CANCELLED')) {
-                                    existingSite.stage = 'cancelled' as any;
+                                    (existingSite as any).combat_impl_steps = implSteps;
+                                    dbUpdates.combat_impl_steps = implSteps;
                                 }
-                            } else if (existingSite.project_type === 'RESCOPING') {
-                                const implStr = String(rawImpl).toUpperCase();
-                                if (implStr.includes('RFS')) {
-                                    existingSite.stage = 'rfi_done';
-                                } else if (implStr.includes('ON GOING')) {
-                                    existingSite.stage = 'implementasi';
-                                } else if (implStr.includes('AWAITING')) {
-                                    existingSite.stage = 'permit_process';
-                                } else if (implStr.includes('CANCELLED')) {
-                                    existingSite.stage = 'cancelled' as any;
-                                }
-                            } else {
-                                const newStage = getImplStatusMap(rawImpl);
-                                if (newStage) existingSite.stage = newStage as any;
                             }
                         }
 
-                        // TEAM Lookup
+                        // Team lookup
                         const teamName = row[mapDict['team']];
                         if (teamName) {
                             const foundPerson = people.find(p => p.name.toLowerCase().includes(String(teamName).toLowerCase()));
@@ -525,40 +638,39 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                 if (teamMemberRecord) {
                                     existingSite.team_id = teamMemberRecord.team_id;
                                     existingSite.field_leader_id = foundPerson.id;
+                                    dbUpdates.team = teamMemberRecord.team_id;
+                                    dbUpdates.field_leader_id = foundPerson.id;
                                 }
                             } else {
                                 existingSite.raw_data = existingSite.raw_data || {};
-                                existingSite.raw_data.team_lookup_warning = `Person '${teamName}' tidak ditemukan di sistem.`;
+                                existingSite.raw_data.team_lookup_warning = `Person '${teamName}' tidak ditemukan.`;
                             }
                         }
 
-                        // STATUS ATP Workflow
+                        // Status ATP / tiket / note
                         const rawStatusatp = row[mapDict['atp_status']];
                         const rawAtpTicket = row[mapDict['atp_tiket']];
                         const rawAtpNote = row[mapDict['atp_note']];
 
-                        // DYNAMIC NoSQL RETENTION
-                        // Keep all columns that aren't mapped
+                        // Dynamic raw_data retention (unmapped columns)
                         const mappedExcelHeaders = Object.values(mapDict).filter(Boolean);
                         const dynamicData: Record<string, any> = {};
                         Object.keys(row).forEach(header => {
                             if (String(header).toUpperCase().includes('IOMS')) {
-                                const val = String(row[header]).toUpperCase();
-                                if (val.includes('NOT REGISTERED')) {
-                                    existingSite.ioms_registered = false;
+                                const val = String(row[header] ?? '').toUpperCase().trim();
+                                if (val && val !== 'UNDEFINED' && val !== 'NULL') {
+                                    const isRegistered = !val.includes('NOT') && (val.includes('REGISTERED') || val.includes('YA') || val === '1' || val === 'TRUE');
+                                    existingSite.ioms_registered = isRegistered;
+                                    (existingSite as any).ineom_registered = isRegistered;
+                                    dbUpdates.ineom_registered = isRegistered;
                                 }
                             }
-
                             if (!mappedExcelHeaders.includes(header) && !header.startsWith('__EMPTY')) {
                                 dynamicData[header] = row[header];
                             }
                         });
-                        
-                        existingSite.raw_data = {
-                            ...(existingSite.raw_data || {}),
-                            ...dynamicData
-                        };
-                        
+                        existingSite.raw_data = { ...(existingSite.raw_data || {}), ...dynamicData };
+
                         if (rawStatusatp || rawAtpTicket || rawAtpNote) {
                             let atpTask = atpTasks.find(a => a.site_id === searchSiteId || a.site_id === existingSite.site_id);
                             if (!atpTask) {
@@ -570,11 +682,13 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                     tagging_status: 'pending',
                                     cell_capture_done: false,
                                     catatan: null,
+                                    catatan_atp: null,
                                     updated_by: 'system',
                                     updated_at: new Date().toISOString()
                                 };
                                 atpTasks.push(atpTask);
                             }
+                            if (!atpTask) continue;
 
                             if (rawStatusatp) {
                                 const s = String(rawStatusatp).toUpperCase();
@@ -587,22 +701,65 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                         if (wo) wo.issue_status = 'TAGGING N/A';
                                     }
                                 }
-                                else if (s.includes('HOLD')) atpTask.catatan = atpTask.catatan ? atpTask.catatan + ' | HOLD' : 'HOLD';
+                                else if (s.includes('HOLD')) atpTask.catatan_atp = atpTask.catatan_atp ? atpTask.catatan_atp + ' | HOLD' : 'HOLD';
                             }
 
                             if (rawAtpTicket) atpTask.tiket_atp = String(rawAtpTicket);
-                            if (rawAtpNote) atpTask.catatan = String(rawAtpNote);
+                            if (rawAtpNote) atpTask.catatan_atp = String(rawAtpNote);
                         }
 
-                        successCount++;
+                        // Write changes to DB if anything changed
+                        if (Object.keys(dbUpdates).length > 0) {
+                            console.log(`[MultiSheetExcelModal] DB COMMIT UPDATE for ${existingSite.site_id}:`, dbUpdates);
+                            try {
+                                const dbRecordId = cleanRecordId(existingSite.id);
+                                await db.query(`UPDATE ${dbRecordId} MERGE $data`, { data: { ...dbUpdates, updated_at: new Date().toISOString() } });
+                                updatedCount++;
+                            } catch (err: any) {
+                                console.error('Failed to update site:', err);
+                                errorCount++;
+                                errorLogs.push({ site: existingSite.site_id, reason: err?.message || String(err), context: 'Database UPDATE' });
+                            }
+                        } else {
+                            console.log(`[MultiSheetExcelModal] SKIPPED UPDATE for ${existingSite.site_id} - No fields changed.`);
+                            skippedCount++;
+                        }
                     } else {
-                        errorCount++;
+                        console.log(`[MultiSheetExcelModal] NO MATCH FOUND. Initiating INSERT for site_id: ${searchSiteId}`);
+                        // New site not in records — INSERT into DB
+                        try {
+                            const newSite: any = {
+                                site_id: searchSiteId,
+                                project_type: (() => { const pt = String(row[mapDict['project_type']] || '').toUpperCase(); return pt.includes('FILTER') ? 'FILTER' : pt || null; })(),
+                                sector: row[mapDict['sector']] || null,
+                                region: row[mapDict['region']] || null,
+                                site_name: row[mapDict['site_name']] || String(rawSiteId),
+                                stage: 'assigned',
+                                status: 'active',
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString(),
+                                imported_from: 'Excel Import',
+                            };
+                            const insertResult = await db.query('INSERT INTO sites $record', { record: newSite });
+                            const firstRow = Array.isArray(insertResult?.[0]) ? insertResult[0][0] : insertResult?.[0];
+                            if (firstRow?.id) newSite.id = cleanRecordId(firstRow.id);
+                            siteMasterRecords.push(newSite);
+                            atpWorkOrders.push(newSite);
+                            newCount++;
+                        } catch (err: any) {
+                            console.error('Failed to insert new site:', err);
+                            errorCount++;
+                            errorLogs.push({ site: searchSiteId, reason: err?.message || String(err), context: 'Database INSERT (New Site)' });
+                        }
                     }
-                });
-                
+                }
+
                 summary.stage_update.total += sheet.rowCount;
-                summary.stage_update.processed += successCount;
+                summary.stage_update.processed += updatedCount;
+                summary.stage_update.new = (summary.stage_update.new || 0) + newCount;
+                summary.stage_update.skipped = (summary.stage_update.skipped || 0) + skippedCount;
                 summary.stage_update.error += errorCount;
+                summary.stage_update.errorDetails = [...(summary.stage_update.errorDetails || []), ...errorLogs];
             } else if (effectiveType === 'inventory_movement') {
                 const mapDict = columnMappings[i] || {};
                 
@@ -682,25 +839,37 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
             } else if (effectiveType === 'site_technical') {
                 const mapDict = columnMappings[i] || {};
                 let coordUpdates = 0;
-                let siteNotFoundWarnings: string[] = [];
-                let processedCount = 0;
+                let updatedCount = 0;
+                let newCount = 0;
+                let skippedCount = 0;
                 const pendingCoordUpdates: { site: any, lat: number, long: number }[] = [];
                 const sourceFile = sheet.name;
                 const importedAt = new Date().toISOString();
-                
-                sheet.data.forEach(row => {
-                    const siteId = String(row[mapDict['site_id']] || '').trim();
-                    if (!siteId) return;
 
-                    // 1. Validate site exists in site_master
+                // Sync in-memory array from DB so dedup works correctly across sessions
+                try {
+                    const dbRecords = await db.query<any[][]>('SELECT * FROM site_technical_details');
+                    if (dbRecords?.[0]?.length) {
+                        dbRecords[0].forEach(r => {
+                            const rId = cleanRecordId(r.id);
+                            const idx = siteTechnicalDetails.findIndex(t => cleanRecordId(t.id) === rId);
+                            if (idx >= 0) siteTechnicalDetails[idx] = r;
+                            else siteTechnicalDetails.push(r);
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to sync site_technical_details from DB:', err);
+                }
+
+                for (const row of sheet.data) {
+                    const siteId = String(row[mapDict['site_id']] || '').trim();
+                    if (!siteId) continue;
+
                     const masterSite = siteMasterRecords.find(s =>
                         String(s.site_id).toLowerCase() === siteId.toLowerCase() ||
                         String(s.unique_key || '').toLowerCase() === siteId.toLowerCase()
                     );
-                    if (!masterSite) {
-                        siteNotFoundWarnings.push(`Site ID tidak ditemukan: ${siteId}`);
-                        return;
-                    }
+                    const canonicalSiteId = masterSite ? masterSite.site_id : siteId;
 
                     const longitude = Number(row[mapDict['long']]) || undefined;
                     const latitude = Number(row[mapDict['lat']]) || undefined;
@@ -708,7 +877,6 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                     const layer = String(row[mapDict['layer']] || '');
                     const sector = row[mapDict['sector']];
 
-                    // Collect unmapped columns as raw_data
                     const mappedExcelHeaders = new Set(Object.values(mapDict).filter(Boolean));
                     const dynamicData: Record<string, any> = {};
                     Object.keys(row).forEach(header => {
@@ -717,17 +885,15 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                         }
                     });
 
-                    // 2. Upsert: match on site_id + ne_id + layer + sector
                     const existingIdx = siteTechnicalDetails.findIndex(t =>
-                        t.site_id === masterSite.site_id &&
+                        String(t.site_id).toLowerCase() === canonicalSiteId.toLowerCase() &&
                         t.ne_id === neId &&
                         String(t.layer) === layer &&
                         String(t.sector) === String(sector)
                     );
 
-                    const record = {
-                        id: existingIdx >= 0 ? siteTechnicalDetails[existingIdx].id : `tech-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                        site_id: masterSite.site_id,
+                    const incoming: any = {
+                        site_id: canonicalSiteId,
                         ne_id: neId || undefined,
                         layer: layer || undefined,
                         sector: sector !== undefined ? sector : undefined,
@@ -761,14 +927,36 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                     };
 
                     if (existingIdx >= 0) {
-                        siteTechnicalDetails[existingIdx] = record;
-                    } else {
-                        siteTechnicalDetails.push(record);
-                    }
-                    processedCount++;
+                        const existing = siteTechnicalDetails[existingIdx];
+                        const keyFields: string[] = ['freq_band', 'longitude', 'latitude', 'ant_type', 'tp_name', 'cluster', 'region'];
+                        const hasChanges = keyFields.some(f => incoming[f] !== undefined && incoming[f] !== (existing as any)[f]);
 
-                    // 3. Update site_master coordinates if they differ by more than 0.0001
-                    if (latitude && longitude) {
+                        if (!hasChanges) {
+                            skippedCount++;
+                        } else {
+                            siteTechnicalDetails[existingIdx] = { ...existing, ...incoming };
+                            try {
+                                const dbRecordId = cleanRecordId(existing.id);
+                                await db.query(`UPDATE ${dbRecordId} MERGE $data`, { data: { ...incoming, updated_at: new Date().toISOString() } });
+                            } catch (err) {
+                                console.error('Failed to update site_technical_details:', err);
+                            }
+                            updatedCount++;
+                        }
+                    } else {
+                        const record = { ...incoming, id: `tech-${Date.now()}-${Math.random().toString(36).slice(2)}` };
+                        siteTechnicalDetails.push(record);
+                        try {
+                            const insertResult = await db.query('INSERT INTO site_technical_details $record', { record: incoming });
+                            const firstRow = Array.isArray(insertResult?.[0]) ? insertResult[0][0] : insertResult?.[0];
+                            if (firstRow?.id) record.id = cleanRecordId(firstRow.id);
+                        } catch (err) {
+                            console.error('Failed to insert site_technical_details:', err);
+                        }
+                        newCount++;
+                    }
+
+                    if (masterSite && latitude && longitude) {
                         const latDiff = Math.abs((masterSite.latitude || 0) - latitude);
                         const lngDiff = Math.abs((masterSite.longitude || 0) - longitude);
                         if (latDiff > 0.0001 || lngDiff > 0.0001) {
@@ -776,21 +964,20 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                             coordUpdates++;
                         }
                     }
-                });
-                
-                // Apply coord updates automatically (no confirm dialog — non-destructive)
+                }
+
                 pendingCoordUpdates.forEach(update => {
                     update.site.latitude = update.lat;
                     update.site.longitude = update.long;
                 });
-                
-                if (!summary.site_technical) summary.site_technical = { total: 0, processed: 0, coordUpdates: 0, warnings: [] };
+
+                if (!summary.site_technical) summary.site_technical = { total: 0, processed: 0, new: 0, updated: 0, skipped: 0, coordUpdates: 0 };
                 summary.site_technical.total += sheet.rowCount;
-                summary.site_technical.processed += processedCount;
+                summary.site_technical.processed += updatedCount + newCount;
+                summary.site_technical.new = (summary.site_technical.new || 0) + newCount;
+                summary.site_technical.updated = (summary.site_technical.updated || 0) + updatedCount;
+                summary.site_technical.skipped = (summary.site_technical.skipped || 0) + skippedCount;
                 summary.site_technical.coordUpdates = (summary.site_technical.coordUpdates || 0) + coordUpdates;
-                if (siteNotFoundWarnings.length > 0) {
-                    summary.site_technical.warnings = [...(summary.site_technical.warnings || []), ...siteNotFoundWarnings];
-                }
             } else {
                 if (summary[effectiveType]) {
                     summary[effectiveType].total += sheet.rowCount;
@@ -806,6 +993,7 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
         setProcessedSummary(summary);
         setIsProcessing(false);
         setStep(5);
+        triggerCountRefresh();
     };
 
     if (!isOpen) return null;
@@ -1008,30 +1196,34 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                 <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                     <div className="bg-slate-50 p-3 border-b border-slate-200">
                                         <h4 className="font-bold text-slate-700 text-sm">PERMIT STATUS — {permitStatuses.length} nilai unik</h4>
+                                        <p className="text-xs text-slate-400 mt-0.5">Nilai asli disimpan apa adanya. Pilih stage operasional yang sesuai (atau biarkan kosong untuk skip pembaruan stage).</p>
                                     </div>
                                     <div className="divide-y divide-slate-100">
                                         {permitStatuses.map((ps, idx) => (
-                                            <div key={idx} className="p-3 flex items-center gap-4">
-                                                <div className="flex-1 text-sm font-medium text-slate-700">{ps.val}</div>
-                                                <div className="text-slate-400">→</div>
-                                                <div className="relative w-48">
-                                                    <select 
+                                            <div key={idx} className="p-3 flex items-center gap-3">
+                                                <div className="flex-1 text-sm font-medium text-slate-700 font-mono bg-slate-50 px-2 py-1 rounded">{ps.val}</div>
+                                                <div className="text-slate-400 text-xs">→ status</div>
+                                                <div className="relative w-52">
+                                                    <select
                                                         value={ps.mapTo}
                                                         onChange={e => {
                                                             const n = [...permitStatuses];
                                                             n[idx].mapTo = e.target.value;
                                                             setPermitStatuses(n);
                                                         }}
-                                                        className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white outline-none focus:border-blue-500"
+                                                        className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm bg-white outline-none focus:border-blue-500"
                                                     >
-                                                        <option value="permit_process">Permit Process</option>
-                                                        <option value="permit_ready">Permit Ready</option>
-                                                        <option value="issue">Issue/Expired</option>
-                                                        <option value="hold">Hold</option>
-                                                        <option value="survey_nok">Cancelled / Survey NOK</option>
+                                                        <option value="">— jangan ubah status —</option>
+                                                        <option value="1. Planning">1. Planning</option>
+                                                        <option value="2. Waiting for TO Approval">2. Waiting for TO Approval</option>
+                                                        <option value="4. Tpass Released">4. Tpass Released</option>
+                                                        <option value="5. Permit Released">5. Permit Released</option>
+                                                        <option value="6. Expired Permit">6. Expired Permit</option>
+                                                        <option value="9. Cancelled">9. Cancelled</option>
+                                                        <option value="10. DROP OUT">10. DROP OUT</option>
                                                     </select>
                                                 </div>
-                                                <div className="w-20 text-right text-xs text-slate-500">{ps.count} baris</div>
+                                                <div className="w-16 text-right text-xs text-slate-400">{ps.count} baris</div>
                                             </div>
                                         ))}
                                     </div>
@@ -1042,34 +1234,82 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                 <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                     <div className="bg-slate-50 p-3 border-b border-slate-200">
                                         <h4 className="font-bold text-slate-700 text-sm">IMPLEMENTASI STATUS — {implStatuses.length} nilai unik</h4>
+                                        <p className="text-xs text-slate-400 mt-0.5">Nilai asli disimpan apa adanya. Pilih stage operasional yang sesuai.</p>
                                     </div>
                                     <div className="divide-y divide-slate-100">
                                         {implStatuses.map((is, idx) => (
-                                            <div key={idx} className="p-3 flex items-center gap-4">
-                                                <div className="flex-1 text-sm font-medium text-slate-700">{is.val}</div>
-                                                <div className="text-slate-400">→</div>
-                                                <div className="relative w-48">
-                                                    <select 
+                                            <div key={idx} className="p-3 flex items-center gap-3">
+                                                <div className="flex-1 text-sm font-medium text-slate-700 font-mono bg-slate-50 px-2 py-1 rounded">{is.val}</div>
+                                                <div className="text-slate-400 text-xs">→ status</div>
+                                                <div className="relative w-52">
+                                                    <select
                                                         value={is.mapTo}
                                                         onChange={e => {
                                                             const n = [...implStatuses];
                                                             n[idx].mapTo = e.target.value;
                                                             setImplStatuses(n);
                                                         }}
-                                                        className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white outline-none focus:border-blue-500"
+                                                        className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm bg-white outline-none focus:border-blue-500"
                                                     >
-                                                        <option value="implementasi">Implementasi (On Going)</option>
-                                                        <option value="rfs_done">RFS Done</option>
-                                                        <option value="hold">Hold</option>
-                                                        <option value="cancelled">Cancelled</option>
+                                                        <option value="">— jangan ubah status —</option>
+                                                        <option value="Planning">Planning</option>
+                                                        <option value="On Going">On Going</option>
+                                                        <option value="On Hold">On Hold</option>
+                                                        <option value="RFS">RFS</option>
+                                                        <option value="Cancelled">Cancelled</option>
                                                     </select>
                                                 </div>
-                                                <div className="w-20 text-right text-xs text-slate-500">{is.count} baris</div>
+                                                <div className="w-16 text-right text-xs text-slate-400">{is.count} baris</div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
+
+                            {/* SYNC STRATEGY SELECTION */}
+                            <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-5 shadow-sm space-y-3">
+                                <div>
+                                    <h4 className="font-bold text-amber-900 text-sm">⚡ Strategi Sinkronisasi Database</h4>
+                                    <p className="text-xs text-amber-700 mt-0.5">Tentukan bagaimana sistem menyikapi data yang sudah ada saat ini di database.</p>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <label className={clsx(
+                                        "relative flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200",
+                                        syncStrategy === 'merge' ? "bg-white border-blue-500 ring-1 ring-blue-500 shadow-sm" : "bg-white/50 border-slate-200 hover:border-slate-300"
+                                    )}>
+                                        <input 
+                                            type="radio" 
+                                            name="syncStrategy" 
+                                            value="merge" 
+                                            checked={syncStrategy === 'merge'} 
+                                            onChange={() => setSyncStrategy('merge')}
+                                            className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-slate-800 text-xs">Mode Update & Merge</div>
+                                            <div className="text-[10px] text-slate-500 mt-0.5">Hanya update yang cocok, sisanya diabaikan. Menumpuk data historis.</div>
+                                        </div>
+                                    </label>
+
+                                    <label className={clsx(
+                                        "relative flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200",
+                                        syncStrategy === 'replace' ? "bg-red-50 border-red-500 ring-1 ring-red-500 shadow-sm" : "bg-white/50 border-slate-200 hover:border-red-200"
+                                    )}>
+                                        <input 
+                                            type="radio" 
+                                            name="syncStrategy" 
+                                            value="replace" 
+                                            checked={syncStrategy === 'replace'} 
+                                            onChange={() => setSyncStrategy('replace')}
+                                            className="mt-0.5 text-red-600 focus:ring-red-500"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-red-800 text-xs">Mode Overwrite (Full Sync)</div>
+                                            <div className="text-[10px] text-red-600 font-medium mt-0.5">⚠️ Hapus isi tabel & ganti total dengan Excel agar angka pivot 100% sama.</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
 
                             <div className="flex justify-between items-center pt-4 border-t border-slate-200">
                                 <span className="text-xs text-slate-500 italic">* Sistem akan mengingat mapping ini untuk import berikutnya.</span>
@@ -1113,7 +1353,7 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                     <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                                         <div className="font-semibold text-slate-700">ReEngineering Progress</div>
                                         <div className="text-sm text-slate-600">
-                                            <span className="font-bold text-blue-600">{processedSummary.stage_update.processed}</span> stage updates diproses · <span className="font-bold text-red-500">{processedSummary.stage_update.error}</span> error · {processedSummary.stage_update.skipped} lewati
+                                            <span className="font-bold text-blue-600">{processedSummary.stage_update.processed}</span> diupdate · <span className="font-bold text-emerald-600">{processedSummary.stage_update.new || 0}</span> baru · {processedSummary.stage_update.skipped || 0} lewati · <span className="font-bold text-red-500">{processedSummary.stage_update.error}</span> error
                                         </div>
                                     </div>
                                 )}
@@ -1121,7 +1361,7 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                     <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                                         <div className="font-semibold text-slate-700">Detail Site-ID</div>
                                         <div className="text-sm text-slate-600">
-                                            <span className="font-bold text-emerald-600">{processedSummary.site_technical.processed}</span> baris teknis tersimpan
+                                            <span className="font-bold text-emerald-600">{processedSummary.site_technical.new || 0}</span> baru · <span className="font-bold text-blue-600">{processedSummary.site_technical.updated || 0}</span> diupdate · {processedSummary.site_technical.skipped || 0} lewati
                                         </div>
                                     </div>
                                 )}
@@ -1146,6 +1386,35 @@ const MultiSheetExcelModal: React.FC<MultiSheetExcelModalProps> = ({ isOpen, onC
                                     <div className="text-center text-slate-500 italic py-4">Tidak ada data yang diproses.</div>
                                 )}
                             </div>
+
+                            {processedSummary.stage_update?.errorDetails?.length > 0 && (
+                                <div className="bg-red-50/50 border border-red-100 rounded-xl p-5 space-y-3 animate-in slide-in-from-bottom-4 duration-300">
+                                    <div className="flex items-center gap-2 text-red-700 font-bold">
+                                        <AlertCircle className="w-5 h-5" />
+                                        <span>Rincian Error Pada Eksekusi ({processedSummary.stage_update.errorDetails.length})</span>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto border border-red-200 bg-white rounded-lg shadow-inner">
+                                        <table className="w-full text-xs text-left border-collapse">
+                                            <thead className="bg-red-50 border-b border-red-100 text-red-800 sticky top-0 shadow-sm">
+                                                <tr>
+                                                    <th className="px-3 py-2 font-black">Identitas</th>
+                                                    <th className="px-3 py-2 font-black">Konteks Alur</th>
+                                                    <th className="px-3 py-2 font-black">Penyebab Kegagalan</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-red-50">
+                                                {processedSummary.stage_update.errorDetails.map((err: any, i: number) => (
+                                                    <tr key={i} className="hover:bg-red-50/40 transition-colors">
+                                                        <td className="px-3 py-2 font-bold text-slate-700 font-mono">{err.site}</td>
+                                                        <td className="px-3 py-2 text-slate-500 font-medium"><span className="px-1.5 py-0.5 bg-slate-100 rounded border">{err.context}</span></td>
+                                                        <td className="px-3 py-2 text-red-600 font-medium">{err.reason}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
 
                             <button 
                                 onClick={() => {

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { X, AlertTriangle, ArrowRight } from 'lucide-react';
 import { type AtpWorkOrder, atpWorkOrders } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
-import { db } from '../../db';
+import { useSidebar } from '../../context/SidebarContext';
+import { db, cleanRecordId } from '../../db';
 
 interface InitiationModalProps {
   siteId: string;
@@ -13,6 +14,7 @@ interface InitiationModalProps {
 
 const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: InitiationModalProps) => {
   const { currentUser } = useAuth();
+  const { triggerCountRefresh } = useSidebar();
   if (!currentUser) return null;
 
   const [projectType, setProjectType] = useState('');
@@ -20,6 +22,8 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
   const [atpNumber, setAtpNumber] = useState('');
   const [sowId, setSowId] = useState('');
   const [poNumber, setPoNumber] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   // Check for conflicts
   const activeConflict = sector ? existingWorks.find(wo => wo.sector === Number(sector) && wo.status === 'active') : undefined;
@@ -32,6 +36,9 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
       const confirm = window.confirm(`Peringatan: Terdapat pekerjaan aktif (ATP: ${activeConflict.atp_number}) di Sektor ${sector}. Anda yakin ingin memulai pekerjaan baru di sektor ini?`);
       if (!confirm) return;
     }
+
+    setIsSubmitting(true);
+    setSubmitError('');
 
     const newId = `atp-wo-${Date.now()}`;
     const newWork: AtpWorkOrder = {
@@ -82,15 +89,20 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
       const res = await db.query<[any]>('INSERT INTO sites $record', { record: dbRecord });
       console.log('Created sites record in SurrealDB:', res);
       const inserted = res?.[0]?.[0];
-      if (inserted && inserted.id) {
-        newWork.id = String(inserted.id);
+      if (inserted?.id) {
+        newWork.id = cleanRecordId(inserted.id, newWork.id);
       }
     } catch (err) {
       console.error('Failed to create sites record in SurrealDB:', err);
+      setIsSubmitting(false);
+      setSubmitError('Gagal menyimpan ke database. Silakan coba lagi.');
+      return;
     }
 
     // Update local mock data
     atpWorkOrders.push(newWork);
+    triggerCountRefresh();
+    setIsSubmitting(false);
 
     if (onSuccess) {
       onSuccess(newWork.id);
@@ -192,21 +204,28 @@ const InitiationModal = ({ siteId, existingWorks, onClose, onSuccess }: Initiati
           </form>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
-          >
-            Batal
-          </button>
-          <button
-            type="submit"
-            form="initiation-form"
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
-          >
-            Mulai Pekerjaan <ArrowRight className="w-4 h-4" />
-          </button>
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+          {submitError ? (
+            <p className="text-sm text-red-600 font-medium">{submitError}</p>
+          ) : <span />}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              form="initiation-form"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Menyimpan...' : 'Mulai Pekerjaan'} <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
       </div>

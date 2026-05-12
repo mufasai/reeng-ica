@@ -9,16 +9,24 @@ export const RescopingErfinTab = ({ localWo, stageIdx, onUpdateStage, onFieldsSa
   const [erfinReadyDate, setErfinReadyDate] = useState(localWo.erfin_ready_date || '');
   const [erfinNote, setErfinNote] = useState(localWo.erfin_note || '');
   const [hasFile, setHasFile] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const isHistorical = localWo.stage && ['permit_process', 'permit_ready', 'akses_process', 'akses_ready', 'implementasi', 'rfi_done', 'dokumen_done', 'bast', 'invoice', 'completed'].includes(localWo.stage) && !localWo.erfin_number;
 
 
 
   const handleLanjutPermit = async () => {
-    const fields = { stage: 'permit_process', erfin_number: erfinNo, erfin_date: erfinDate, erfin_ready_date: erfinReadyDate, erfin_note: erfinNote };
-    await db.query(`UPDATE ${localWo.id} SET stage = 'permit_process', erfin_number = $num, erfin_date = $date, erfin_ready_date = $ready, erfin_note = $note, updated_at = time::now()`, { num: erfinNo, date: erfinDate, ready: erfinReadyDate, note: erfinNote });
-    onFieldsSaved?.(fields);
-    onUpdateStage('permit_process');
+    setIsSaving(true);
+    try {
+      const fields = { stage: 'permit_process', erfin_number: erfinNo, erfin_date: erfinDate, erfin_ready_date: erfinReadyDate, erfin_note: erfinNote };
+      await db.query(`UPDATE ${localWo.id} MERGE $data`, { data: { stage: 'permit_process', erfin_number: erfinNo, erfin_date: erfinDate, erfin_ready_date: erfinReadyDate, erfin_note: erfinNote, updated_at: new Date().toISOString() } });
+      onFieldsSaved?.(fields);
+      onUpdateStage('permit_process');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (stageIdx < 2 && localWo.stage !== 'erfin_process' && localWo.stage !== 'erfin_ready') {
@@ -105,8 +113,8 @@ export const RescopingErfinTab = ({ localWo, stageIdx, onUpdateStage, onFieldsSa
         </div>
 
         <div className="flex items-center justify-end mt-8 pt-6 border-t border-slate-100">
-          <button onClick={handleLanjutPermit} disabled={!erfinNo || !hasFile} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-            Update ERFIN Stage <ChevronRight className="w-4 h-4" />
+          <button onClick={handleLanjutPermit} disabled={!erfinNo || !hasFile || isSaving} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+            {isSaving ? 'Menyimpan...' : 'Update ERFIN Stage'} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>

@@ -1,8 +1,9 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { atpWorkOrders, siteMasterRecords, workOrderLogs, teams, people, teamMembersRecords } from '../data/mockData';
-import { CheckCircle2, ChevronRight, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react';
+import { atpWorkOrders, siteMasterRecords, workOrderLogs, teams, people, teamMembersRecords, terminPengajuanRecords, mockSiteFiles } from '../data/mockData';
+import { exportAtpToExcel } from '../utils/exportUtils';
+import { CheckCircle2, ChevronRight, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle, RefreshCw, Pencil, Lock } from 'lucide-react';
 import clsx from 'clsx';
 import { SaveIndicator, AutoSaveInput } from '../components/work-orders/AtpShared';
 import { PermitSection } from '../components/work-orders/PermitSection';
@@ -11,7 +12,7 @@ import { CombatImplChecklist } from '../components/work-orders/CombatImplCheckli
 import { PengajuanPembayaran } from '../components/work-orders/PengajuanPembayaran';
 import { RescopingSurveyTab } from '../components/work-orders/RescopingSurveyTab';
 import { RescopingErfinTab } from '../components/work-orders/RescopingErfinTab';
-import { db } from '../db';
+import { db, cleanRecordId, connectDB } from '../db';
 import { FileUploadZone } from '../components/work-orders/FileUploadZone';
 import {
   COMBAT_STEPPER_NODES,
@@ -58,23 +59,27 @@ const InlineMetaField = ({ label, value, field, onSave }: any) => {
 };
 
 const AtpWorkPage = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id: rawId } = useParams<{ id: string }>();
+  // Strip any ':N' sector suffix that can appear due to SurrealDB SDK serialization
+  const id = rawId ? cleanRecordId(rawId, rawId) : undefined;
   const navigate = useNavigate();
   const { currentUser, can } = useAuth();
   const [searchParams] = useSearchParams();
   const [localWo, setLocalWo] = useState<any>(null);
+  const [fetchDone, setFetchDone] = useState(false);
   const isRescopingParam = localWo?.project_type === 'RE-SCOPING' || localWo?.project_type === 'RESCOPING';
   const initialTab = searchParams.get('tab') === 'penagihan' ? 'penagihan' : 'permit';
   const [activeTab, setActiveTab] = useState<WorkStep>(initialTab as any);
-  
+
   // Update initial tab for rescoping if not explicitly set to something else
   useEffect(() => {
     if (isRescopingParam && activeTab === 'permit' && !searchParams.get('tab')) {
       setActiveTab('survey');
     }
   }, [isRescopingParam, searchParams]);
-  
+
   const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle');
+  const [atpEditing, setAtpEditing] = useState(false);
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [dbFiles, setDbFiles] = useState<any[]>([]);
   const [combatSteps, setCombatSteps] = useState<CombatImplSteps>(DEFAULT_COMBAT_IMPL_STEPS);
@@ -91,7 +96,7 @@ const AtpWorkPage = () => {
   };
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) { setFetchDone(true); return; }
 
     // Instant render from in-memory cache
     const cached = atpWorkOrders.find(w => w.id === id);
@@ -103,11 +108,11 @@ const AtpWorkPage = () => {
     }
 
     // Authoritative fetch — overwrites cache with DB truth so refresh never loses data
-    db.query(`SELECT * FROM ${id}`)
+    db.query('SELECT * FROM $id', { id })
       .then((res: any) => {
         const fresh = res?.[0]?.[0];
-        if (!fresh) return;
-        const freshId = String(fresh.id ?? id);
+        if (!fresh) { setFetchDone(true); return; }
+        const freshId = cleanRecordId(fresh.id, id);
         setLocalWo((prev: any) => ({
           ...prev,
           ...fresh,
@@ -122,8 +127,12 @@ const AtpWorkPage = () => {
         if (String(fresh.project_type || '').toUpperCase() === 'COMBAT' && fresh.combat_impl_steps) {
           setCombatSteps({ ...DEFAULT_COMBAT_IMPL_STEPS, ...fresh.combat_impl_steps });
         }
+        setFetchDone(true);
       })
-      .catch((e) => console.warn('[AtpWorkPage] DB refresh failed, using cache:', e));
+      .catch((e) => {
+        console.warn('[AtpWorkPage] DB refresh failed, using cache:', e);
+        setFetchDone(true);
+      });
   }, [id]);
 
   // Logs and files are independent of localWo — only re-fetch when id changes
@@ -182,15 +191,31 @@ const AtpWorkPage = () => {
   }, [isRescoping, currentStageIdx, localWo?.stage]);
 
   if (!localWo || !site) {
+    if (!fetchDone) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+        </div>
+      );
+    }
     return (
-      <div className="flex flex-col items-center justify-center h-64">
-        <p className="text-slate-500 mb-4">Work Order tidak ditemukan.</p>
-        <button onClick={() => navigate('/sites')} className="text-blue-600 hover:underline">Kembali</button>
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <AlertCircle className="w-10 h-10 text-red-400" />
+        <p className="text-slate-700 font-semibold">Site tidak ditemukan.</p>
+        <p className="text-slate-400 text-sm">Mungkin sudah dihapus atau ID tidak valid.</p>
+        <button
+          onClick={() => navigate('/sites')}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-medium text-sm border border-blue-200"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Kembali ke Sites
+        </button>
       </div>
     );
   }
 
   const patchWO = async (updates: any) => {
+    await connectDB();
     await new Promise(r => setTimeout(r, 300));
     
     const keyMap: Record<string, string> = {
@@ -241,8 +266,12 @@ const AtpWorkPage = () => {
       }
       const dbKeys = Object.keys(dbUpdates);
       if (dbKeys.length > 0) {
-        let setString = dbKeys.map(k => `${k} = $${k}`).join(', ');
-        await db.query(`UPDATE ${localWo.id} SET ${setString}, updated_at = time::now()`, dbUpdates);
+        const mergeData = { ...dbUpdates, updated_at: new Date().toISOString() };
+        const res = await db.query(`UPDATE ${localWo.id} MERGE $data`, { data: mergeData });
+        if (res?.[0] && typeof res[0] === 'object' && ('error' in (res[0] as any) || (res[0] as any).status === 'ERR')) {
+          console.warn("SurrealDB query error:", (res[0] as any).error);
+          return false;
+        }
         console.log(`Saved stage/field update to SurrealDB for ${localWo.id}:`, dbUpdates);
       }
       return true;
@@ -255,7 +284,11 @@ const AtpWorkPage = () => {
   const handleFieldSave = async (field: string, value: any): Promise<boolean> => {
     setSaveStatus('saving');
     try {
-      const ok = await patchWO({ [field]: value });
+      const updates: any = { [field]: value };
+      if (field === 'permit_status' && String(value).includes('Cancelled')) {
+        updates.status = 'inactive';
+      }
+      const ok = await patchWO(updates);
       if (!ok) {
         setSaveStatus('error');
         return false;
@@ -337,7 +370,7 @@ const AtpWorkPage = () => {
 
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
-      showToastMsg(`Sukses: ${fileArray.length} file berhasil diunggah!`);
+      showToastMsg('Berhasil disimpan', 'success');
 
       const filesRes = await db.query('SELECT * FROM site_files WHERE work_order_id = $id', { id: localWo.id });
       if (filesRes?.[0] && Array.isArray(filesRes[0])) {
@@ -350,35 +383,16 @@ const AtpWorkPage = () => {
     } catch (err) {
       console.error('Failed to upload file:', err);
       setSaveStatus('error');
-      showToastMsg('Gagal mengunggah file. Silakan coba kembali!', 'error');
+      showToastMsg('Gagal menyimpan', 'error');
     }
   };
 
   const handleUpdateStage = async (next: string) => {
-    // Gate 1: entering implementation requires permit released
-    const IMPL_ENTRY_STAGES = ['akses_process', 'akses_ready', 'implementasi'];
-    if (IMPL_ENTRY_STAGES.includes(next) || (next === 'implementasi')) {
-      const permitOk = /^[57]/.test(localWo.permit_status || '');
-      if (!permitOk) {
-        showToastMsg('Permit belum Released — status harus "5. Permit Released" sebelum implementasi.', 'error');
-        return;
-      }
-    }
-
-    // Gate 2: advancing to ATP requires RFS (Filter / L2H / Blacksite only)
-    if (next === 'atp' && !isCombat && !isRescoping) {
-      const rfsOk = localWo.rfs_done === true || localWo.implementasi_status === 'RFS';
-      if (!rfsOk) {
-        showToastMsg('RFS belum selesai — centang "RFS Done" atau set status "RFS" sebelum melanjutkan ke ATP.', 'error');
-        return;
-      }
-    }
-
     const success = await handleFieldSave('stage', next);
     if (success) {
-      showToastMsg(`Sukses: Stage berhasil diperbarui ke '${next.toUpperCase()}'!`, 'success');
+      showToastMsg('Berhasil disimpan', 'success');
     } else {
-      showToastMsg(`Gagal: Stage tidak dapat diperbarui ke '${next.toUpperCase()}'!`, 'error');
+      showToastMsg('Gagal menyimpan', 'error');
     }
   };
 
@@ -421,7 +435,22 @@ const AtpWorkPage = () => {
           <ArrowLeft className="w-4 h-4 text-slate-500" />
           Kembali ke Detail Site ({localWo.site_id})
         </button>
-        <SaveIndicator status={saveStatus} />
+        <div className="flex items-center gap-3">
+          {can('export_data') && (
+            <button
+              onClick={() => exportAtpToExcel(
+                localWo,
+                terminPengajuanRecords.filter(t => t.site_id === localWo.site_id),
+                mockSiteFiles.filter(f => f.site_id === (site?.id || localWo.site_id)),
+                `atp-${localWo.atp_number || localWo.id}-report.xlsx`
+              )}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 text-xs font-bold rounded-xl transition-all border border-slate-200/80 hover:border-emerald-300 shadow-sm"
+            >
+              <Download className="w-4 h-4 text-emerald-600" /> Export Report
+            </button>
+          )}
+          <SaveIndicator status={saveStatus} />
+        </div>
       </div>
 
       {/* HEADER */}
@@ -457,7 +486,7 @@ const AtpWorkPage = () => {
           {['operational', 'admin'].includes(currentUser?.role || '') && (
             <button onClick={async () => {
               if (confirm('Yakin ingin reset status survey?')) {
-                await db.query(`UPDATE ${localWo.id} SET stage = 'survey', survey_result = null, survey_nok_reason = null, updated_at = time::now()`);
+                await db.query(`UPDATE ${localWo.id} MERGE $data`, { data: { stage: 'survey', survey_result: null, survey_nok_reason: null, updated_at: new Date().toISOString() } });
                 handleUpdateStage('survey');
               }
             }} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2 shadow-sm">
@@ -592,9 +621,14 @@ const AtpWorkPage = () => {
                     dbRecordId={localWo.id}
                     steps={combatSteps}
                     onUpdate={steps => setCombatSteps(steps)}
-                    onMarkSelesai={() => handleUpdateStage('dokumen_done')}
+                    onMarkSelesai={async () => {
+                      await handleUpdateStage('dokumen_done');
+                      await handleFieldSave('impl_status', 'Selesai');
+                    }}
                     currentStage={localWo.stage || 'imported'}
                     canEdit={canEditFields}
+                    onToast={showToastMsg}
+                    onFileUpload={(cat, files, tag) => handleFileUpload(cat, files, tag)}
                   />
                 </div>
               ) : (
@@ -617,16 +651,37 @@ const AtpWorkPage = () => {
             <div className="max-w-4xl animate-in fade-in">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-black text-slate-800">ATP &amp; Dokumen</h2>
-                <SaveIndicator status={saveStatus} />
+                <div className="flex items-center gap-3">
+                  <SaveIndicator status={saveStatus} />
+                  {canEditFields && (
+                    <button
+                      onClick={() => setAtpEditing(e => !e)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors"
+                      style={atpEditing
+                        ? { background: '#f1f5f9', color: '#64748b', borderColor: '#e2e8f0' }
+                        : { background: '#eff6ff', color: '#2563eb', borderColor: '#bfdbfe' }}
+                    >
+                      {atpEditing ? <Lock className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
+                      {atpEditing ? 'Kunci' : 'Edit'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {!atpEditing && (
+                <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 font-medium">
+                  <Lock className="w-3.5 h-3.5" /> Data tersimpan. Klik <strong>Edit</strong> untuk mengubah.
+                </div>
+              )}
+
               <div className="space-y-0 mb-8">
-                <AutoSaveInput label="ATP Number" value={localWo.atp_number} field="atp_number" onSave={handleFieldSave} locked={!!localWo.atp_number && !canEditFields} />
-                <AutoSaveInput label="PDID" value={localWo.ppid || localWo.pdid} field="pdid" onSave={handleFieldSave} />
-                <AutoSaveInput label="Status ATP" value={localWo.status_atp || localWo.atp_status} field="atp_status" type="select" onSave={handleFieldSave}
+                <AutoSaveInput label="ATP Number" value={localWo.atp_number} field="atp_number" onSave={handleFieldSave} locked={!atpEditing} />
+                <AutoSaveInput label="PDID" value={localWo.ppid || localWo.pdid} field="pdid" onSave={handleFieldSave} locked={!atpEditing} />
+                <AutoSaveInput label="Status ATP" value={localWo.status_atp || localWo.atp_status} field="atp_status" type="select" onSave={handleFieldSave} locked={!atpEditing}
                   options={[{ label: 'REQUEST PDID', value: 'REQUEST PDID' }, { label: 'UPLOAD TAGGING DONE', value: 'UPLOAD TAGGING DONE' }, { label: 'TAGGING N/A', value: 'TAGGING N/A' }, { label: 'HOLD', value: 'HOLD' }]} />
-                <AutoSaveInput label="Note Foto Evidence" value={localWo.note_foto_evidence || localWo.foto_evidence_notes} field="foto_evidence_notes" type="textarea" onSave={handleFieldSave} />
+                <AutoSaveInput label="Note Foto Evidence" value={localWo.note_foto_evidence || localWo.foto_evidence_notes} field="foto_evidence_notes" type="textarea" onSave={handleFieldSave} locked={!atpEditing} />
               </div>
-              
+
               <FileUploadZone
                 label="Upload ATP Documents & Certificate"
                 hint="PDF, DOCX, JPG, PNG — drag & drop atau klik"
@@ -635,10 +690,39 @@ const AtpWorkPage = () => {
                 onUpload={files => handleFileUpload('document', files, `atp_doc`)}
               />
 
-              {canEditFields && (
-                <div className="flex items-center justify-end mt-8 pt-6 border-t border-slate-100">
-                  <button onClick={() => handleUpdateStage('bast')} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2">
-                    Update ATP Stage <ChevronRight className="w-4 h-4" />
+              {canEditFields && atpEditing && (
+                <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
+                  <button
+                    onClick={() => setAtpEditing(false)}
+                    className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={saveStatus === 'saving'}
+                    onClick={async () => {
+                      setSaveStatus('saving');
+                      await patchWO({
+                        atp_number:          localWo.atp_number,
+                        pdid:                localWo.ppid || localWo.pdid,
+                        atp_status:          localWo.status_atp || localWo.atp_status,
+                        foto_evidence_notes: localWo.note_foto_evidence || localWo.foto_evidence_notes,
+                      });
+                      setSaveStatus('saved');
+                      setTimeout(() => setSaveStatus('idle'), 2000);
+                      setAtpEditing(false);
+                      showToastMsg('Berhasil disimpan', 'success');
+                    }}
+                    className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saveStatus === 'saving' ? 'Menyimpan...' : 'Simpan Perubahan'}
+                  </button>
+                  <button
+                    disabled={saveStatus === 'saving'}
+                    onClick={() => { handleUpdateStage('bast'); setAtpEditing(false); }}
+                    className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saveStatus === 'saving' ? 'Menyimpan...' : 'Update ATP Stage'} <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               )}
