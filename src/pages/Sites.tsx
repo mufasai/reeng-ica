@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Search, Filter as FilterIcon, RefreshCw, FileSpreadsheet,
-    Download, History, Layers, Camera, MapPin, CheckCircle2, Clock, AlertCircle as AlertCircleIcon
+    Download, History, Layers, Camera, MapPin, CheckCircle2, Clock
 } from 'lucide-react';
 import clsx from 'clsx';
 import { siteMasterRecords, type ProjectType, getTerminSummary, people, atpWorkOrders, atpTasks, siteTechnicalDetails, type AtpWorkOrder } from '../data/mockData';
@@ -123,10 +123,10 @@ const ActionCard = ({ label, count, subText, dotColor, filterKey, activeFilter, 
 const IMPL_STAGES = ['implementasi', 'rfi_done', 'rfs_done', 'akses_ready'];
 
 const STAGE_BADGE: Record<string, { label: string; cls: string }> = {
-    implementasi:  { label: 'Implementasi', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
-    rfi_done:      { label: 'RFI Done',      cls: 'bg-blue-100 text-blue-700 border-blue-200' },
-    rfs_done:      { label: 'RFS Done',      cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-    akses_ready:   { label: 'Akses Ready',   cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+    implementasi: { label: 'Implementasi', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+    rfi_done: { label: 'RFI Done', cls: 'bg-blue-100 text-blue-700 border-blue-200' },
+    rfs_done: { label: 'RFS Done', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    akses_ready: { label: 'Akses Ready', cls: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 const EngineerSitesView = () => {
@@ -284,6 +284,14 @@ const Sites = () => {
     const { currentUser } = useAuth();
     const { triggerCountRefresh } = useSidebar();
     const hasImportAccess = currentUser ? ['director', 'operational', 'system_admin'].includes(currentUser.role) : false;
+
+    // Simple permission check
+    const can = (permission: string) => {
+        if (!currentUser) return false;
+        const exportRoles = ['director', 'operational', 'system_admin', 'admin', 'management'];
+        if (permission === 'export_data') return exportRoles.includes(currentUser.role);
+        return false;
+    };
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Tab Toggle ('data' | 'history')
@@ -469,9 +477,9 @@ const Sites = () => {
     const filteredTechnicalDetails = useMemo(() => {
         if (!searchTerm) return siteTechnicalDetails;
         const term = searchTerm.toLowerCase();
-        return siteTechnicalDetails.filter(t => 
+        return siteTechnicalDetails.filter(t =>
             t.site_id.toLowerCase().includes(term) ||
-            t.ne_id.toLowerCase().includes(term) ||
+            (t.ne_id && t.ne_id.toLowerCase().includes(term)) ||
             (t.cell_name || '').toLowerCase().includes(term) ||
             (t.tp_name || '').toLowerCase().includes(term)
         );
@@ -603,14 +611,14 @@ const Sites = () => {
                     {can('export_data') && (
                         <>
                             <button
-                                onClick={() => exportSitesToExcel(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.xlsx`)}
+                                onClick={() => exportSitesToExcel(filteredSites, `sites-export-${new Date().toISOString().slice(0, 10)}.xlsx`)}
                                 className="px-3 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
                                 title="Export ke Excel"
                             >
                                 <Download className="w-4 h-4 text-emerald-600" /> Excel
                             </button>
                             <button
-                                onClick={() => exportSitesToCsv(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.csv`)}
+                                onClick={() => exportSitesToCsv(filteredSites, `sites-export-${new Date().toISOString().slice(0, 10)}.csv`)}
                                 className="px-3 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-300 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
                                 title="Export ke CSV"
                             >
@@ -874,8 +882,8 @@ const Sites = () => {
                                                         const ts = getWoLatestTs(site.site_id);
                                                         const rel = fmtRelativeSites(ts || undefined);
                                                         const color = rel.includes('m lalu') || rel === 'Baru saja' ? 'text-emerald-600 font-semibold' :
-                                                                      rel.includes('j lalu') ? 'text-blue-600 font-semibold' :
-                                                                      rel.includes('h lalu') ? 'text-slate-700 font-medium' : 'text-slate-400';
+                                                            rel.includes('j lalu') ? 'text-blue-600 font-semibold' :
+                                                                rel.includes('h lalu') ? 'text-slate-700 font-medium' : 'text-slate-400';
                                                         return <span className={color} title={ts ? new Date(ts).toLocaleString('id-ID') : ''}>{rel}</span>;
                                                     })()}
                                                 </td>
@@ -939,10 +947,10 @@ const Sites = () => {
                                                             <span className={clsx(
                                                                 "px-2 py-0.5 rounded text-[10px] font-bold border",
                                                                 status === 'RFS' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
-                                                                status === 'Cancelled' ? 'text-red-600 bg-red-50 border-red-100' :
-                                                                status === 'On Hold' ? 'text-purple-600 bg-purple-50 border-purple-100' :
-                                                                status === '—' ? 'text-slate-400 bg-slate-50 border-slate-100' :
-                                                                'text-amber-600 bg-amber-50 border-amber-100'
+                                                                    status === 'Cancelled' ? 'text-red-600 bg-red-50 border-red-100' :
+                                                                        status === 'On Hold' ? 'text-purple-600 bg-purple-50 border-purple-100' :
+                                                                            status === '—' ? 'text-slate-400 bg-slate-50 border-slate-100' :
+                                                                                'text-amber-600 bg-amber-50 border-amber-100'
                                                             )}>{status}</span>
                                                         );
                                                     })()}

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { siteMasterRecords, atpWorkOrders } from '../data/mockData';
+import { siteMasterRecords } from '../data/mockData';
 
 interface SidebarContextType {
     collapsed: boolean;
@@ -11,10 +11,10 @@ interface SidebarContextType {
 
 const SidebarContext = createContext<SidebarContextType>({
     collapsed: false,
-    toggle: () => {},
+    toggle: () => { },
     counts: {},
     workOrderCount: 0,
-    triggerCountRefresh: () => {},
+    triggerCountRefresh: () => { },
 });
 
 export const useSidebar = () => useContext(SidebarContext);
