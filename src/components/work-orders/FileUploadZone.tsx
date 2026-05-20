@@ -16,6 +16,7 @@ interface Props {
   onUpload: (files: File[]) => Promise<void>;
   className?: string;
   compact?: boolean;
+  capture?: 'environment' | 'user';
 }
 
 export const FileUploadZone = ({
@@ -27,6 +28,7 @@ export const FileUploadZone = ({
   onUpload,
   className,
   compact = false,
+  capture,
 }: Props) => {
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -92,6 +94,7 @@ export const FileUploadZone = ({
           type="file"
           multiple={multiple}
           accept={accept}
+          capture={capture as any}
           className="hidden"
           onChange={e => addFiles(e.target.files)}
         />

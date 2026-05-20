@@ -1,24 +1,18 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { atpWorkOrders, siteMasterRecords, workOrderLogs, teams, people, teamMembersRecords, terminPengajuanRecords, mockSiteFiles } from '../data/mockData';
+import { atpWorkOrders, siteMasterRecords, workOrderLogs, terminPengajuanRecords, mockSiteFiles } from '../data/mockData';
 import { exportAtpToExcel } from '../utils/exportUtils';
-import { CheckCircle2, ChevronRight, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle, RefreshCw, Pencil, Lock } from 'lucide-react';
+import { CheckCircle2, FileText, Briefcase, FolderCheck, Banknote, ImageIcon, Clock, Download, Paperclip, ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
-import { SaveIndicator, AutoSaveInput } from '../components/work-orders/AtpShared';
-import { PermitSection } from '../components/work-orders/PermitSection';
-import { ImplSection } from '../components/work-orders/ImplSection';
-import { CombatImplChecklist } from '../components/work-orders/CombatImplChecklist';
+import { SaveIndicator } from '../components/work-orders/AtpShared';
 import { PengajuanPembayaran } from '../components/work-orders/PengajuanPembayaran';
-import { RescopingSurveyTab } from '../components/work-orders/RescopingSurveyTab';
-import { RescopingErfinTab } from '../components/work-orders/RescopingErfinTab';
 import { db, cleanRecordId, connectDB } from '../db';
 import { FileUploadZone } from '../components/work-orders/FileUploadZone';
+import { DynamicStageTab } from '../components/work-orders/DynamicStageTab';
+import { type ProjectTypeConfig, loadProjectTypeConfig, SYSTEM_DEFAULTS } from '../config/projectTypeConfig';
 import {
-  COMBAT_STEPPER_NODES,
   RESCOPING_STEPPER_NODES,
-  DEFAULT_COMBAT_IMPL_STEPS,
-  type CombatImplSteps,
 } from '../config/stagePipelines';
 
 type WorkStep = 'survey' | 'erfin' | 'permit' | 'implementasi' | 'atp' | 'penagihan' | 'foto' | 'file' | 'log';
@@ -27,7 +21,7 @@ type WorkStep = 'survey' | 'erfin' | 'permit' | 'implementasi' | 'atp' | 'penagi
 const STAGE_STEPS = ['imported', 'permit', 'implementasi', 'atp', 'bast', 'invoice', 'completed'];
 const STAGE_LABELS = ['1·Imported', '2·Permit', '3·Implementasi', '4·ATP', '5·BAST', '6·Invoice', '7·Selesai'];
 
-const BASE_TABS: { id: WorkStep; label: string; icon: any }[] = [
+const BASE_TABS: { id: WorkStep; label: string; icon: any; disabled?: boolean }[] = [
   { id: 'permit',      label: 'Permit',        icon: FileText },
   { id: 'implementasi',label: 'Implementasi',  icon: Briefcase },
   { id: 'atp',         label: 'ATP & Dokumen', icon: FolderCheck },
@@ -36,6 +30,52 @@ const BASE_TABS: { id: WorkStep; label: string; icon: any }[] = [
   { id: 'file',        label: 'File & Lampiran', icon: Paperclip },
   { id: 'log',         label: 'Log',           icon: Clock },
 ];
+
+const EditableAtpNumber = ({ value, onSave }: {
+  value: string;
+  onSave: (val: string) => Promise<boolean>;
+}) => {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value || '');
+  useEffect(() => setVal(value || ''), [value]);
+
+  const finish = async () => {
+    setEditing(false);
+    const trimmed = val.trim();
+    if (trimmed !== (value || '')) {
+      await onSave(trimmed);
+    }
+  };
+
+  // Show input when editing OR when there's no value yet (encourages user to fill it).
+  if (editing || !value) {
+    return (
+      <input
+        autoFocus={editing}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onFocus={() => setEditing(true)}
+        onBlur={finish}
+        onKeyDown={e => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') { setVal(value || ''); setEditing(false); }
+        }}
+        placeholder="Isi nomor ATP…"
+        className="text-2xl font-black text-slate-800 tracking-tight bg-transparent border-b-2 border-slate-200 focus:border-blue-500 outline-none px-1 -mx-1 placeholder:text-slate-300 placeholder:italic min-w-0 max-w-xs"
+      />
+    );
+  }
+
+  return (
+    <h1
+      onClick={() => setEditing(true)}
+      title="Klik untuk edit"
+      className="text-2xl font-black text-slate-800 tracking-tight cursor-text hover:bg-slate-50 px-1 -mx-1 rounded"
+    >
+      {value}
+    </h1>
+  );
+};
 
 const InlineMetaField = ({ label, value, field, onSave }: any) => {
   const [editing, setEditing] = useState(false);
@@ -79,10 +119,9 @@ const AtpWorkPage = () => {
   }, [isRescopingParam, searchParams]);
 
   const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle');
-  const [atpEditing, setAtpEditing] = useState(false);
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [dbFiles, setDbFiles] = useState<any[]>([]);
-  const [combatSteps, setCombatSteps] = useState<CombatImplSteps>(DEFAULT_COMBAT_IMPL_STEPS);
+  const [typeConfig, setTypeConfig] = useState<ProjectTypeConfig | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
@@ -102,9 +141,9 @@ const AtpWorkPage = () => {
     const cached = atpWorkOrders.find(w => w.id === id);
     if (cached) {
       setLocalWo({ ...cached });
-      if (cached.project_type === 'COMBAT' && (cached as any).combat_impl_steps) {
-        setCombatSteps({ ...DEFAULT_COMBAT_IMPL_STEPS, ...(cached as any).combat_impl_steps });
-      }
+      loadProjectTypeConfig(cached.project_type || '').then(cfg => {
+        setTypeConfig(cfg || SYSTEM_DEFAULTS[0]);
+      });
     }
 
     // Authoritative fetch — overwrites cache with DB truth so refresh never loses data
@@ -123,10 +162,9 @@ const AtpWorkPage = () => {
         // Keep in-memory cache in sync
         const target = atpWorkOrders.find(w => w.id === id) as any;
         if (target) Object.assign(target, { ...fresh, id: freshId });
-        // Load combat steps
-        if (String(fresh.project_type || '').toUpperCase() === 'COMBAT' && fresh.combat_impl_steps) {
-          setCombatSteps({ ...DEFAULT_COMBAT_IMPL_STEPS, ...fresh.combat_impl_steps });
-        }
+        loadProjectTypeConfig(fresh.project_type || '').then(cfg => {
+          setTypeConfig(cfg || SYSTEM_DEFAULTS[0]);
+        });
         setFetchDone(true);
       })
       .catch((e) => {
@@ -163,32 +201,42 @@ const AtpWorkPage = () => {
   const site = useMemo(() => siteMasterRecords.find(s => s.site_id === localWo?.site_id), [localWo?.site_id]);
   const canEditFields = can('site.edit_data');
 
-  const isCombat = localWo?.project_type === 'COMBAT';
-  const isRescoping = localWo?.project_type === 'RE-SCOPING' || localWo?.project_type === 'RESCOPING';
-
-  // Map raw stage to stepper node index
-  const currentStageIdx = isCombat
-    ? COMBAT_STEPPER_NODES.findIndex(n => n.stages.includes(localWo?.stage || 'imported'))
-    : isRescoping
+  const currentStageIdx = isRescopingParam
     ? RESCOPING_STEPPER_NODES.findIndex(n => n.stages.includes(localWo?.stage || 'imported'))
     : STAGE_STEPS.indexOf(localWo?.stage || 'imported');
 
   const tabsToRender = useMemo(() => {
-    if (isRescoping) {
-      return [
+    // Auto tabs (Penagihan/Foto/File/Log) — always appended, never in config
+    const autoTabs = BASE_TABS.slice(3);
+
+    if (typeConfig && typeConfig.stages.length > 0) {
+      // Skip is_auto stages (Imported/BAST/Invoice/Selesai) — they're stepper-only, not tabs
+      const dynamicTabs = typeConfig.stages
+        .filter(stg => !stg.is_auto)
+        .map((stg, i) => ({
+          id: stg.key as WorkStep,
+          label: stg.label,
+          icon: stg.key === 'permit' ? FileText : stg.key === 'implementasi' ? Briefcase : FolderCheck,
+          disabled: currentStageIdx < i + 1,
+        }));
+      return [...dynamicTabs, ...autoTabs];
+    }
+
+    // Fallback when no config is loaded yet
+    const dynamicTabs = [
+      { id: 'permit' as WorkStep, label: 'Permit', icon: FileText, disabled: currentStageIdx < 1 },
+      { id: 'implementasi' as WorkStep, label: 'Implementasi', icon: Briefcase, disabled: currentStageIdx < 2 },
+      { id: 'atp' as WorkStep, label: 'ATP & Dokumen', icon: FolderCheck, disabled: currentStageIdx < 3 },
+    ];
+    if (isRescopingParam) {
+      const rescopingDefaults = [
         { id: 'survey' as WorkStep, label: 'Survey', icon: FolderCheck, disabled: currentStageIdx < 1 && localWo?.stage !== 'assigned' },
         { id: 'erfin' as WorkStep, label: 'ERFIN', icon: FileText, disabled: currentStageIdx < 2 },
-        ...BASE_TABS.map(t => ({
-          ...t,
-          disabled: (t.id === 'permit' && currentStageIdx < 3) || 
-                    (t.id === 'implementasi' && currentStageIdx < 4) ||
-                    (t.id === 'atp' && currentStageIdx < 5) ||
-                    (t.id === 'penagihan' && currentStageIdx < 7)
-        }))
       ];
+      return [...rescopingDefaults, ...dynamicTabs, ...autoTabs];
     }
-    return BASE_TABS.map(t => ({ ...t, disabled: false }));
-  }, [isRescoping, currentStageIdx, localWo?.stage]);
+    return [...dynamicTabs, ...autoTabs];
+  }, [isRescopingParam, currentStageIdx, localWo?.stage, typeConfig]);
 
   if (!localWo || !site) {
     if (!fetchDone) {
@@ -396,15 +444,6 @@ const AtpWorkPage = () => {
     }
   };
 
-  const teamOptions = teams.map(t => ({ label: t.name, value: t.id }));
-  const selectedTeam = teams.find(t => t.id === localWo.team_id);
-  const leaderOptions = selectedTeam
-    ? teamMembersRecords.filter(tm => tm.team_id === selectedTeam.id && tm.role === 'Team Leader').map(tm => {
-        const p = people.find(p => p.id === tm.person_id);
-        return { label: p?.name || tm.person_id, value: tm.person_id };
-      })
-    : [];
-
 
 
   return (
@@ -456,9 +495,17 @@ const AtpWorkPage = () => {
       {/* HEADER */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-6 py-5">
         <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-            {localWo.atp_number || `ATP-${localWo.id.slice(-6).toUpperCase()}`}
-          </h1>
+          <EditableAtpNumber
+            value={localWo.atp_number || ''}
+            onSave={async (val) => {
+              const ok = await handleFieldSave('atp_number', val);
+              showToastMsg(
+                ok ? 'Nomor ATP tersimpan' : 'Gagal menyimpan nomor ATP',
+                ok ? 'success' : 'error',
+              );
+              return ok;
+            }}
+          />
           <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-xs font-bold rounded uppercase tracking-wider">Sektor {localWo.sector}</span>
           <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded uppercase tracking-wider border border-blue-200">{localWo.project_type}</span>
           <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded uppercase tracking-wider border border-emerald-200">
@@ -477,7 +524,7 @@ const AtpWorkPage = () => {
       </div>
 
       {/* SURVEY NOK RED BANNER */}
-      {isRescoping && localWo.stage === 'survey_nok' && (
+      {isRescopingParam && localWo.stage === 'survey_nok' && (
         <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-center justify-between shadow-sm">
           <div>
             <p className="font-bold flex items-center gap-2"><AlertCircle className="w-5 h-5"/> ✗ Survey NOK — Proses Dihentikan</p>
@@ -498,11 +545,11 @@ const AtpWorkPage = () => {
 
       {/* STAGE STEPPER */}
       {(() => {
-        const nodes = isCombat
-          ? COMBAT_STEPPER_NODES.map(n => n.label)
-          : isRescoping
+        const nodes = isRescopingParam
           ? RESCOPING_STEPPER_NODES.map(n => n.label)
-          : STAGE_LABELS.map(l => l.split('·')[1]);
+          : typeConfig && typeConfig.stages.length > 0 
+            ? typeConfig.stages.map(n => n.label)
+            : STAGE_LABELS.map(l => l.split('·')[1]);
         const nodeCount = nodes.length;
         return (
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 flex items-start justify-between relative">
@@ -514,7 +561,7 @@ const AtpWorkPage = () => {
               let isCurrent = idx === currentStageIdx;
 
               let isRed = false;
-              if (isRescoping && label === 'Survey' && localWo.stage === 'survey_nok') {
+              if (isRescopingParam && label === 'Survey' && localWo.stage === 'survey_nok') {
                 isRed = true;
                 isDone = false;
                 isCurrent = false;
@@ -535,7 +582,7 @@ const AtpWorkPage = () => {
                       {label}
                     </span>
                     {isRed && <span className="text-[10px] font-bold text-red-500 mt-0.5">✗ NOK</span>}
-                    {isRescoping && label === 'Survey' && isDone && localWo.survey_date && (
+                    {isRescopingParam && label === 'Survey' && isDone && localWo.survey_date && (
                       <span className="text-[9px] font-medium text-slate-400 mt-0.5">{localWo.survey_date}</span>
                     )}
                   </div>
@@ -567,166 +614,17 @@ const AtpWorkPage = () => {
         </div>
 
         <div className="flex-1 p-8">
-          {activeTab === 'survey' && isRescoping && (
-            <RescopingSurveyTab
+          {/* DYNAMIC STAGES RENDERER */}
+          {typeConfig?.stages.find(s => s.key === activeTab) && (
+            <DynamicStageTab
+              stage={typeConfig.stages.find(s => s.key === activeTab)!}
               localWo={localWo}
-              stageIdx={currentStageIdx}
-              onUpdateStage={handleUpdateStage}
+              handleFieldSave={handleFieldSave}
+              handleUpdateStage={handleUpdateStage}
               saveStatus={saveStatus}
-              onFieldsSaved={(fields: any) => {
-                setLocalWo((prev: any) => ({ ...prev, ...fields }));
-                const target = atpWorkOrders.find(w => w.id === localWo.id) as any;
-                if (target) Object.assign(target, fields);
-              }}
+              canEdit={canEditFields}
+              onFileUpload={handleFileUpload}
             />
-          )}
-
-          {activeTab === 'erfin' && isRescoping && (
-            <RescopingErfinTab
-              localWo={localWo}
-              stageIdx={currentStageIdx}
-              onUpdateStage={handleUpdateStage}
-              saveStatus={saveStatus}
-              onFieldsSaved={(fields: any) => {
-                setLocalWo((prev: any) => ({ ...prev, ...fields }));
-                const target = atpWorkOrders.find(w => w.id === localWo.id) as any;
-                if (target) Object.assign(target, fields);
-              }}
-            />
-          )}
-
-          {activeTab === 'permit' && (
-            <div className="max-w-4xl animate-in fade-in">
-              <PermitSection
-                localWo={localWo}
-                handleFieldSave={handleFieldSave}
-                handleUpdateStage={handleUpdateStage}
-                saveStatus={saveStatus}
-                canEdit={canEditFields}
-                onFileUpload={(cat, files) => handleFileUpload(cat, files, cat === 'photo' ? 'permit_photo' : 'permit_doc')}
-              />
-            </div>
-          )}
-
-          {activeTab === 'implementasi' && (
-            <div className="max-w-4xl animate-in fade-in">
-              {isCombat ? (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-black text-slate-800">Implementasi — Combat</h2>
-                    <SaveIndicator status={saveStatus} />
-                  </div>
-                  <CombatImplChecklist
-                    siteId={localWo.site_id}
-                    dbRecordId={localWo.id}
-                    steps={combatSteps}
-                    onUpdate={steps => setCombatSteps(steps)}
-                    onMarkSelesai={async () => {
-                      await handleUpdateStage('dokumen_done');
-                      await handleFieldSave('impl_status', 'Selesai');
-                    }}
-                    currentStage={localWo.stage || 'imported'}
-                    canEdit={canEditFields}
-                    onToast={showToastMsg}
-                    onFileUpload={(cat, files, tag) => handleFileUpload(cat, files, tag)}
-                  />
-                </div>
-              ) : (
-                <ImplSection
-                  localWo={localWo}
-                  handleFieldSave={handleFieldSave}
-                  handleUpdateStage={handleUpdateStage}
-                  saveStatus={saveStatus}
-                  canEdit={canEditFields}
-                  teamOptions={teamOptions}
-                  leaderOptions={leaderOptions}
-                  isRescoping={isRescoping}
-                  onFileUpload={(cat, files) => handleFileUpload(cat, files, cat === 'photo' ? 'impl_photo' : 'impl_doc')}
-                />
-              )}
-            </div>
-          )}
-
-          {activeTab === 'atp' && (
-            <div className="max-w-4xl animate-in fade-in">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-black text-slate-800">ATP &amp; Dokumen</h2>
-                <div className="flex items-center gap-3">
-                  <SaveIndicator status={saveStatus} />
-                  {canEditFields && (
-                    <button
-                      onClick={() => setAtpEditing(e => !e)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors"
-                      style={atpEditing
-                        ? { background: '#f1f5f9', color: '#64748b', borderColor: '#e2e8f0' }
-                        : { background: '#eff6ff', color: '#2563eb', borderColor: '#bfdbfe' }}
-                    >
-                      {atpEditing ? <Lock className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
-                      {atpEditing ? 'Kunci' : 'Edit'}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {!atpEditing && (
-                <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 font-medium">
-                  <Lock className="w-3.5 h-3.5" /> Data tersimpan. Klik <strong>Edit</strong> untuk mengubah.
-                </div>
-              )}
-
-              <div className="space-y-0 mb-8">
-                <AutoSaveInput label="ATP Number" value={localWo.atp_number} field="atp_number" onSave={handleFieldSave} locked={!atpEditing} />
-                <AutoSaveInput label="PDID" value={localWo.ppid || localWo.pdid} field="pdid" onSave={handleFieldSave} locked={!atpEditing} />
-                <AutoSaveInput label="Status ATP" value={localWo.status_atp || localWo.atp_status} field="atp_status" type="select" onSave={handleFieldSave} locked={!atpEditing}
-                  options={[{ label: 'REQUEST PDID', value: 'REQUEST PDID' }, { label: 'UPLOAD TAGGING DONE', value: 'UPLOAD TAGGING DONE' }, { label: 'TAGGING N/A', value: 'TAGGING N/A' }, { label: 'HOLD', value: 'HOLD' }]} />
-                <AutoSaveInput label="Note Foto Evidence" value={localWo.note_foto_evidence || localWo.foto_evidence_notes} field="foto_evidence_notes" type="textarea" onSave={handleFieldSave} locked={!atpEditing} />
-              </div>
-
-              <FileUploadZone
-                label="Upload ATP Documents & Certificate"
-                hint="PDF, DOCX, JPG, PNG — drag & drop atau klik"
-                accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
-                icon="document"
-                onUpload={files => handleFileUpload('document', files, `atp_doc`)}
-              />
-
-              {canEditFields && atpEditing && (
-                <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
-                  <button
-                    onClick={() => setAtpEditing(false)}
-                    className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    disabled={saveStatus === 'saving'}
-                    onClick={async () => {
-                      setSaveStatus('saving');
-                      await patchWO({
-                        atp_number:          localWo.atp_number,
-                        pdid:                localWo.ppid || localWo.pdid,
-                        atp_status:          localWo.status_atp || localWo.atp_status,
-                        foto_evidence_notes: localWo.note_foto_evidence || localWo.foto_evidence_notes,
-                      });
-                      setSaveStatus('saved');
-                      setTimeout(() => setSaveStatus('idle'), 2000);
-                      setAtpEditing(false);
-                      showToastMsg('Berhasil disimpan', 'success');
-                    }}
-                    className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saveStatus === 'saving' ? 'Menyimpan...' : 'Simpan Perubahan'}
-                  </button>
-                  <button
-                    disabled={saveStatus === 'saving'}
-                    onClick={() => { handleUpdateStage('bast'); setAtpEditing(false); }}
-                    className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saveStatus === 'saving' ? 'Menyimpan...' : 'Update ATP Stage'} <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
           )}
 
           {activeTab === 'penagihan' && (

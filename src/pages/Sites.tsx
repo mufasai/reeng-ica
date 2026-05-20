@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Search, Filter as FilterIcon, RefreshCw, FileSpreadsheet,
-    Download, History, Layers, Camera, MapPin, CheckCircle2, Clock, AlertCircle as AlertCircleIcon
+    Download, History, Layers, Camera, MapPin, CheckCircle2, Clock, List
 } from 'lucide-react';
 import clsx from 'clsx';
 import { siteMasterRecords, type ProjectType, getTerminSummary, people, atpWorkOrders, atpTasks, siteTechnicalDetails, type AtpWorkOrder } from '../data/mockData';
@@ -281,7 +281,7 @@ type DashFilterState = {
 const Sites = () => {
     const navigate = useNavigate();
     const { openTab } = useTabContext();
-    const { currentUser } = useAuth();
+    const { currentUser, can } = useAuth();
     const { triggerCountRefresh } = useSidebar();
     const hasImportAccess = currentUser ? ['director', 'operational', 'system_admin'].includes(currentUser.role) : false;
     const [searchParams, setSearchParams] = useSearchParams();
@@ -299,10 +299,11 @@ const Sites = () => {
 
     // Modals
     const [isBoqOpen, setIsBoqOpen] = useState(false);
-    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isMultiSheetOpen, setIsMultiSheetOpen] = useState(false);
     const [summaryData, setSummaryData] = useState<ImportSummaryData | null>(null);
+    const [showExportMenu, setShowExportMenu] = useState(false);
 
-    // Filters
+    // Initial load from local storage
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState<ProjectType | 'All'>('All');
     const [filterStage, setFilterStage] = useState<string>('All');
@@ -471,7 +472,7 @@ const Sites = () => {
         const term = searchTerm.toLowerCase();
         return siteTechnicalDetails.filter(t => 
             t.site_id.toLowerCase().includes(term) ||
-            t.ne_id.toLowerCase().includes(term) ||
+            (t.ne_id || '').toLowerCase().includes(term) ||
             (t.cell_name || '').toLowerCase().includes(term) ||
             (t.tp_name || '').toLowerCase().includes(term)
         );
@@ -601,27 +602,42 @@ const Sites = () => {
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                     {can('export_data') && (
-                        <>
+                        <div className="relative z-50">
                             <button
-                                onClick={() => exportSitesToExcel(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.xlsx`)}
-                                className="px-3 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
-                                title="Export ke Excel"
+                                onClick={() => setShowExportMenu(m => !m)}
+                                className="px-3 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
+                                title="Export data"
                             >
-                                <Download className="w-4 h-4 text-emerald-600" /> Excel
+                                <Download className="w-4 h-4 text-slate-600" /> Export
                             </button>
-                            <button
-                                onClick={() => exportSitesToCsv(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.csv`)}
-                                className="px-3 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-300 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
-                                title="Export ke CSV"
-                            >
-                                <Download className="w-4 h-4 text-blue-600" /> CSV
-                            </button>
-                        </>
+                            {showExportMenu && (
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                                    <button
+                                        onClick={() => {
+                                            exportSitesToExcel(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.xlsx`);
+                                            setShowExportMenu(false);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-medium flex items-center gap-2"
+                                    >
+                                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Excel (Filtered)
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            exportSitesToCsv(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.csv`);
+                                            setShowExportMenu(false);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-medium flex items-center gap-2"
+                                    >
+                                        <List className="w-4 h-4 text-blue-600" /> CSV
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     )}
                     {hasImportAccess && (
                         <>
                             <button
-                                onClick={() => setIsImportModalOpen(true)}
+                                onClick={() => setIsMultiSheetOpen(true)}
                                 className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
                             >
                                 <FileSpreadsheet className="w-4 h-4 text-slate-500" />
@@ -1023,13 +1039,13 @@ const Sites = () => {
                                                 <td className="px-4 py-3 text-slate-400 font-mono text-[10px]">MBSC_DEFAULT</td>
                                                 <td className="px-4 py-3 text-slate-500 italic truncate max-w-[150px]">{tech.cell_name}_S{tech.sector}</td>
                                                 <td className="px-4 py-3 text-slate-700 font-bold">{tech.site_id}</td>
-                                                <td className="px-4 py-3 font-bold text-slate-600">{tech.province || '—'}</td>
+                                                <td className="px-4 py-3 font-bold text-slate-600">{tech.provinsi || '—'}</td>
                                                 <td className="px-4 py-3 text-slate-400 truncate max-w-[200px]" title={tech.address}>{tech.address || '—'}</td>
                                                 <td className="px-4 py-3 text-slate-500">{tech.kecamatan || '—'}</td>
                                                 <td className="px-4 py-3 text-slate-500">{tech.kabupaten || '—'}</td>
-                                                <td className="px-4 py-3 text-slate-500">{tech.city || '—'}</td>
+                                                <td className="px-4 py-3 text-slate-500">{tech.desa || '—'}</td>
                                                 <td className="px-4 py-3 font-bold text-slate-700">{tech.cluster || '—'}</td>
-                                                <td className="px-4 py-3 text-slate-600 font-semibold">{tech.cluster || '—'}</td>
+                                                <td className="px-4 py-3 text-slate-600 font-semibold">{tech.branch || '—'}</td>
                                                 <td className="px-4 py-3 font-black text-slate-800">{tech.region || '—'}</td>
 
                                                 <td className="px-4 py-3 text-right">
@@ -1131,13 +1147,13 @@ const Sites = () => {
                 onAddManual={() => { setIsBoqOpen(false); }}
             />
             <MultiSheetExcelModal
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
+                isOpen={isMultiSheetOpen}
+                onClose={() => setIsMultiSheetOpen(false)}
                 pageContext="sites"
                 onImportComplete={(summary) => {
                     console.log('Processed Multi-Sheet:', summary);
                     setSummaryData(summary);
-                    setIsImportModalOpen(false);
+                    setIsMultiSheetOpen(false);
                 }}
             />
             <ImportSummaryModal

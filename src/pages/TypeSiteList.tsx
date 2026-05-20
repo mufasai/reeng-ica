@@ -27,7 +27,7 @@ import {
   STAGE_ORDER,
 } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
-import { exportWorkTypeToExcel } from '../utils/exportUtils';
+import { exportTypeExcel } from '../lib/exportExcel';
 
 // ── Compact pipeline strip group definitions ─────────────────────────────────
 const COMPACT_GROUPS_GENERIC = [
@@ -563,7 +563,7 @@ const TypeSiteList = () => {
               </div>
               {can('export_data') && (
                 <button
-                  onClick={() => exportWorkTypeToExcel(displayTickets, upperType, `${upperType.toLowerCase()}-export-${new Date().toISOString().slice(0,10)}.xlsx`)}
+                  onClick={() => exportTypeExcel(upperType)}
                   className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 font-medium rounded-lg text-xs transition-colors shadow-sm flex items-center gap-2"
                   title="Export ke Excel"
                 >

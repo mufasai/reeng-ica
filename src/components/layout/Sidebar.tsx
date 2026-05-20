@@ -1,4 +1,3 @@
-
 import { NavLink, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import {
@@ -12,12 +11,12 @@ import {
   Package,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { USERS, type UserRole, type ProjectType, siteTechnicalDetails, siteMasterRecords } from '../../data/mockData';
+import { type UserRole, type ProjectType, siteTechnicalDetails } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 
 const Sidebar = () => {
-  const { currentUser, switchRole } = useAuth();
+  const { currentUser } = useAuth();
   const { collapsed, toggle, counts: typeCounts, workOrderCount, triggerCountRefresh } = useSidebar();
   const location = useLocation();
 
@@ -152,18 +151,8 @@ const Sidebar = () => {
               <p className="text-xs text-slate-500 mt-3 px-1">Akses terbatas ke site tim Anda.</p>
             </div>
           )}
-          {renderNavLink('/sites', Database, 'Site Saya', undefined, false)}
-          {/* Dev Role Switcher */}
-          {!collapsed && (
-            <div className="mt-4 pt-3 border-t border-[var(--navy-700)] opacity-70 hover:opacity-100 transition-opacity">
-              <label className="text-[10px] uppercase text-amber-500/70 font-bold tracking-wider mb-1 flex items-center gap-1">
-                <Settings className="w-3 h-3" /> Switch Role (Dev)
-              </label>
-              <select className="w-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500/90 rounded px-2 py-1 outline-none" value={currentUser.role} onChange={(e) => switchRole(e.target.value as UserRole)}>
-                {USERS.map(u => (<option key={u.id} value={u.role} className="bg-[var(--navy-800)] text-slate-300">{u.name} ({u.role})</option>))}
-              </select>
-            </div>
-          )}
+          {renderNavLink('/engineer', Database, 'Site Saya', undefined, false)}
+
         </nav>
       </aside>
     );
@@ -220,21 +209,7 @@ const Sidebar = () => {
                 <p className="text-xs text-slate-400 uppercase tracking-wide truncate">{currentUser.role}</p>
               </div>
             </div>
-            {/* Dev Helper: Role Switcher */}
-            <div className="mt-3 pt-3 border-t border-[var(--navy-700)] opacity-70 hover:opacity-100 transition-opacity">
-              <label className="text-[10px] uppercase text-amber-500/70 font-bold tracking-wider mb-1 flex items-center gap-1">
-                <Settings className="w-3 h-3" /> Switch Role (Dev)
-              </label>
-              <select
-                className="w-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500/90 rounded px-2 py-1 outline-none focus:border-amber-500/50"
-                value={currentUser.role}
-                onChange={(e) => switchRole(e.target.value as UserRole)}
-              >
-                {USERS.map(u => (
-                  <option key={u.id} value={u.role} className="bg-[var(--navy-800)] text-slate-300">{u.name} ({u.role})</option>
-                ))}
-              </select>
-            </div>
+
           </div>
         )}
 
@@ -394,6 +369,8 @@ const Sidebar = () => {
             {collapsed && <div className="mx-2 my-2 h-px bg-[var(--navy-700)]" />}
             <div className="px-1 space-y-0.5">
               {renderNavLink('/options/users', Settings, 'Options')}
+              {currentUser.role === 'system_admin' && renderNavLink('/options/project-types', Settings, 'Project Types')}
+              {currentUser.role === 'system_admin' && renderNavLink('/options/qa-checklist', Settings, 'QA Checklist')}
             </div>
           </>
         )}
