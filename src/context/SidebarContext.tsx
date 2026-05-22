@@ -11,10 +11,10 @@ interface SidebarContextType {
 
 const SidebarContext = createContext<SidebarContextType>({
     collapsed: false,
-    toggle: () => {},
+    toggle: () => { },
     counts: {},
     workOrderCount: 0,
-    triggerCountRefresh: () => {},
+    triggerCountRefresh: () => { },
 });
 
 export const useSidebar = () => useContext(SidebarContext);

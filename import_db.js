@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { Surreal, StringRecordId } from 'surrealdb';
+import { Surreal } from 'surrealdb';
 
 async function main() {
   const db = new Surreal();
@@ -11,7 +11,7 @@ async function main() {
       username: 'root',
       password: 'root',
     });
-    await db.use({ namespace: 'test', database: 'test' });
+    await db.use({ namespace: 'yerico', database: 'project_budget' });
     console.log('Connected and signed in successfully!');
 
     console.log('Reading JSON dump...');
