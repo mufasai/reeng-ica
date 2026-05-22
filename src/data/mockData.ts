@@ -2027,10 +2027,12 @@ export interface SiteTechnicalDetail {
     bsc?: string;
     site_name?: string;
     provinsi?: string;
+    province?: string;
     address?: string;
     kecamatan?: string;
     kabupaten?: string;
     desa?: string;
+    city?: string;
     cluster?: string;
     branch?: string;
     region?: string;
