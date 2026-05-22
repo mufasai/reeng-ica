@@ -510,7 +510,7 @@ const Dashboard = () => {
                         <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
                             <h3 className="font-bold text-[14px] text-[#111827] mb-4">Distribusi Implementasi Status</h3>
                             <div className="h-[250px] w-full min-h-[250px] min-w-0">
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                     <PieChart>
                                         <Pie
                                             data={[
@@ -545,7 +545,7 @@ const Dashboard = () => {
                         <div className="bg-white rounded-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden p-5">
                             <h3 className="font-bold text-[14px] text-[#111827] mb-4">Progress per Tipe Pekerjaan</h3>
                             <div className="h-[250px] w-full min-h-[250px] min-w-0">
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                     <BarChart
                                         data={projectTypes.map(t => {
                                             const sum = getTypeSummary(t.id);

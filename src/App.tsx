@@ -23,6 +23,10 @@ import Sites from './pages/Sites';
 import UserManagement from './pages/UserManagement';
 import MaterialMaster from './pages/MaterialMaster';
 import AtpWorkPage from './pages/AtpWorkPage';
+import ProjectTypeConfigPage from './pages/options/ProjectTypeConfig';
+import QaChecklist from './pages/options/QaChecklist';
+import EngineerHome from './pages/EngineerHome';
+import EngineerSiteView from './pages/EngineerSiteView';
 
 // Loading screen while DB initializes
 const DBLoader = ({ onReady }: { onReady: () => void }) => {
@@ -40,22 +44,23 @@ const DBLoader = ({ onReady }: { onReady: () => void }) => {
 
 // Inner app — only rendered when authenticated
 const AppRoutes = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, currentUser } = useAuth();
 
   if (!isAuthenticated) {
     return <LoginPage />;
   }
 
+  const isFieldEngineer = currentUser?.role === 'field_engineer';
+
   return (
     <TabProvider>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={isFieldEngineer ? <Navigate to="/engineer" replace /> : <Dashboard />} />
           <Route path="sites" element={<Sites />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrderDetail />} />
           <Route path="atp/:id" element={<AtpWorkPage />} />
-          <Route path="engineer/upload/:id" element={<EngineerUpload />} />
           <Route path="projects" element={<Navigate to="/" replace />} />
           <Route path="projects/type/:type/sites" element={<TypeSiteList />} />
           <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
@@ -77,6 +82,11 @@ const AppRoutes = () => {
           <Route path="all-sites" element={<Navigate to="/sites" replace />} />
           <Route path="site-master" element={<Navigate to="/sites" replace />} />
           <Route path="options/users" element={<UserManagement />} />
+          <Route path="options/project-types" element={<ProjectTypeConfigPage />} />
+          <Route path="options/qa-checklist" element={<QaChecklist />} />
+          <Route path="engineer" element={<EngineerHome />} />
+          <Route path="engineer/upload/:id" element={<EngineerUpload />} />
+          <Route path="engineer/site/:id" element={<EngineerSiteView />} />
           <Route path="system" element={<Navigate to="/options/users" replace />} />
           <Route path="termin-payment" element={<TerminPayment />} />
         </Route>

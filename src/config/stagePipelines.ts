@@ -49,7 +49,7 @@ export const COMBAT_STEPPER_NODES: { label: string; stages: SiteStage[] }[] = [
   { label: 'Imported',     stages: ['imported'] },
   { label: 'Permit',       stages: ['permit_process', 'permit_ready'] },
   { label: 'Implementasi', stages: ['akses_process', 'akses_ready', 'implementasi'] },
-  { label: 'ATP',          stages: ['dokumen_done'] },
+  { label: 'ATP',          stages: ['atp', 'dokumen_done'] },
   { label: 'BAST',         stages: ['bast'] },
   { label: 'Invoice',      stages: ['invoice'] },
   { label: 'Selesai',      stages: ['completed'] },
@@ -104,7 +104,7 @@ export const RESCOPING_STEPPER_NODES = [
   { label: 'ERFIN',          stages: ['erfin_process', 'erfin_ready'] },
   { label: 'Permit',         stages: ['permit_process', 'permit_ready'] },
   { label: 'Implementasi',   stages: ['akses_process', 'akses_ready', 'implementasi', 'rfi_done'] },
-  { label: 'ATP',            stages: ['dokumen_done'] },
+  { label: 'ATP',            stages: ['atp', 'dokumen_done'] },
   { label: 'BAST',           stages: ['bast'] },
   { label: 'Selesai',        stages: ['invoice', 'completed'] },
 ];
