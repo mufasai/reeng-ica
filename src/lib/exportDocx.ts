@@ -92,7 +92,7 @@ export function normalizePengajuan(raw: any): {
 const CONTENT_W = 9026;
 const HALF_W    = Math.floor(CONTENT_W / 2);  // 4513 DXA per photo column
 // Image max width per cell in EMU (DXA × 914400 / 1440)
-const IMG_W_EMU = Math.floor(HALF_W * 914400 / 1440) - 100000;  // ~2.8 inches, small margin
+// const IMG_W_EMU = Math.floor(HALF_W * 914400 / 1440) - 100000;  // ~2.8 inches, small margin (unused)
 
 const border = { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' };
 const borders = { top: border, bottom: border, left: border, right: border };
@@ -229,7 +229,7 @@ async function buildPhotoTable(photos: any[], sectionLabel?: string): Promise<(P
 
 // ── DOCX: SINGLE ATP ──────────────────────────────────────
 export async function exportAtpDocx(siteId: string) {
-  const { site, pengajuan, stageLog, files, photos, docs } =
+  const { site, pengajuan, photos } =
     await fetchAtpExportData(siteId);
   if (!site) { alert('Data site tidak ditemukan'); return; }
 

@@ -27,11 +27,18 @@ const Sidebar = () => {
 
   // Navigation config per confirmed RBAC matrix
   const ROLE_SIDEBAR_CONFIG: Record<UserRole, string[]> = {
-    system_admin:   ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    director:       ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    operational:    ['dashboard', 'sites', 'workforce', 'materials', 'options'],
-    finance:        ['dashboard', 'sites', 'pembayaran'],
+    system_admin: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    director: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    operational: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    finance: ['dashboard', 'sites', 'pembayaran'],
     field_engineer: ['sites'],
+    field: ['sites'],
+    admin: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    engineer: ['sites'],
+    team_leader: ['dashboard', 'sites', 'workforce'],
+    management: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    backoffice: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
+    backoffice_admin: ['dashboard', 'sites', 'workforce', 'materials', 'options'],
   };
 
   if (!currentUser) return null;
@@ -39,7 +46,7 @@ const Sidebar = () => {
   const allowedSidebarItems = ROLE_SIDEBAR_CONFIG[currentUser.role] || [];
 
   const overviewItems: { icon: any, label: string, path: string, badge?: number }[] = [];
-  
+
   if (allowedSidebarItems.includes('dashboard')) {
     overviewItems.push({ icon: LayoutDashboard, label: 'Dashboard', path: '/' });
   }
@@ -196,7 +203,7 @@ const Sidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar" style={{ paddingTop: '16px', paddingBottom: '16px' }}>
-        
+
         {/* User Profile Summary */}
         {!collapsed && (
           <div className="px-4 mb-5">
