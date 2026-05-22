@@ -1,7 +1,7 @@
 import { type TerminConfig, type RequirementField, type RequirementDocument } from '../../config/terminRequirements';
 import { useAuth } from '../../context/AuthContext';
 import { type TerminDocument } from '../../data/mockData';
-import { 
+import {
     CheckCircle2, Circle, Upload, FileText,
     Lock, CheckSquare, Square, AlertCircle, FileSpreadsheet
 } from 'lucide-react';
@@ -16,20 +16,20 @@ interface TerminDetailPanelProps {
     onSaveField: (fieldId: string, value: string | number) => void;
     onUploadDocument: (docId: string, fileData: { name: string, url: string }) => void; // Simulated upload
     onSubmit: () => void;
-    
+
     // External Validation flags
     isSkpReceived?: boolean; // For Filter 1
     disableSubmitMessage?: string;
 }
 
 const TerminDetailPanel = ({
-    config, formData, documents, isLocked, 
+    config, formData, documents, isLocked,
     onSaveField, onUploadDocument, onSubmit,
     isSkpReceived, disableSubmitMessage
 }: TerminDetailPanelProps) => {
     const { currentUser, can } = useAuth();
     if (!currentUser) return null;
-    
+
     // --- Validation Logic ---
     const getFieldStatus = (field: RequirementField) => {
         if (!field.required) return true;
@@ -42,7 +42,7 @@ const TerminDetailPanel = ({
 
         if (doc.isAutoAttached) {
             if (doc.id === 'spk') return true; // Always true for mock
-            if (doc.id === 'bukti_skp' && isSkpReceived) return true; 
+            if (doc.id === 'bukti_skp' && isSkpReceived) return true;
             return false;
         }
 
@@ -53,14 +53,14 @@ const TerminDetailPanel = ({
         return uploaded.length > 0;
     };
 
-    const engineerDocs = config.documents.filter(d => d.role === 'engineer');
-    const tlDocs = config.documents.filter(d => d.role === 'team_leader');
-    const tlFields = config.fields.filter(f => f.role === 'team_leader');
-    const engineerFields = config.fields.filter(f => f.role === 'engineer');
+    const engineerDocs = config.documents.filter(d => d.role === 'field_engineer');
+    const tlDocs = config.documents.filter(d => d.role === 'operational');
+    const tlFields = config.fields.filter(f => f.role === 'operational');
+    const engineerFields = config.fields.filter(f => f.role === 'field_engineer');
 
     const isEngComplete = engineerDocs.every(getDocStatus) && engineerFields.every(getFieldStatus);
     const isTlComplete = tlDocs.every(getDocStatus) && tlFields.every(getFieldStatus);
-    
+
     const canSubmit = isEngComplete && isTlComplete && !isLocked;
 
     // --- Mock Handlers ---
@@ -83,7 +83,7 @@ const TerminDetailPanel = ({
                     <strong>Perhatian:</strong> Dokumen BAST belum diupload. Management tidak dapat melakukan Approval tanpa BAST.
                 </div>
             )}
-            
+
             {config.requiresSKP && !isSkpReceived && (
                 <div className="bg-amber-50 px-4 py-2 border-b border-amber-200 flex items-center gap-2 text-sm text-amber-700">
                     <AlertCircle className="w-4 h-4 text-amber-500" />
@@ -103,11 +103,11 @@ const TerminDetailPanel = ({
                                     <div key={field.id} className="relative">
                                         <label className="block text-xs font-medium text-slate-700 mb-1 flex justify-between">
                                             <span>{field.label} {field.required && <span className="text-red-500">*</span>}</span>
-                                            {field.role === 'engineer' ? <span className="text-[10px] text-blue-500 uppercase">Eng</span> : <span className="text-[10px] text-emerald-500 uppercase">TL</span>}
+                                            {field.role === 'field_engineer' ? <span className="text-[10px] text-blue-500 uppercase">Eng</span> : <span className="text-[10px] text-emerald-500 uppercase">TL</span>}
                                         </label>
-                                        
+
                                         {field.type === 'textarea' ? (
-                                            <textarea 
+                                            <textarea
                                                 value={formData[field.id] || ''}
                                                 onChange={e => onSaveField(field.id, e.target.value)}
                                                 disabled={isDisabled}
@@ -125,7 +125,7 @@ const TerminDetailPanel = ({
                                                 {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
                                             </select>
                                         ) : (
-                                            <input 
+                                            <input
                                                 type={field.type === 'currency' ? 'number' : field.type}
                                                 value={formData[field.id] || ''}
                                                 onChange={e => onSaveField(field.id, e.target.value)}
@@ -204,21 +204,21 @@ const TerminDetailPanel = ({
                                 {config.documents.map(doc => {
                                     const uploadedCount = documents.filter(d => d.typeId === doc.id).length;
                                     const isComplete = getDocStatus(doc);
-                                    const isEng = doc.role === 'engineer';
-                                    const canUpload = !isLocked && (can('manage_data') || (isEng && currentUser?.role === 'engineer') || (!isEng && currentUser?.role === 'team_leader'));
+                                    const isEng = doc.role === 'field_engineer';
+                                    const canUpload = !isLocked && (can('manage_data') || (isEng && currentUser?.role === 'field_engineer') || (!isEng && currentUser?.role === 'operational'));
 
                                     return (
                                         <tr key={doc.id} className="hover:bg-slate-50/50">
                                             <td className="px-4 py-3">
                                                 <div className="font-medium text-slate-700 flex items-center gap-1.5">
-                                                    {doc.type === 'excel' ? <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500"/> : <FileText className="w-3.5 h-3.5 text-blue-500"/>}
+                                                    {doc.type === 'excel' ? <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> : <FileText className="w-3.5 h-3.5 text-blue-500" />}
                                                     {doc.label}
                                                     {doc.required && <span className="text-red-500">*</span>}
                                                 </div>
                                                 {doc.description && <p className="text-[10px] text-slate-500 mt-0.5">{doc.description}</p>}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={clsx("text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide", 
+                                                <span className={clsx("text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide",
                                                     isEng ? "bg-blue-50 text-blue-600 border border-blue-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100"
                                                 )}>
                                                     {isEng ? 'Eng' : 'TL'}
@@ -256,9 +256,9 @@ const TerminDetailPanel = ({
                                                                     <Upload className="w-3 h-3" />
                                                                     {uploadedCount > 0 ? (doc.minCount ? '+Add' : 'Ganti') : 'Upload'}
                                                                 </button>
-                                                                <input 
-                                                                    type="file" 
-                                                                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" 
+                                                                <input
+                                                                    type="file"
+                                                                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
                                                                     accept={doc.type === 'pdf' ? '.pdf' : doc.type === 'excel' ? '.xlsx,.xls,.csv' : doc.type === 'image' ? 'image/*' : '*'}
                                                                     onChange={(e) => handleFileChange(doc, e)}
                                                                 />

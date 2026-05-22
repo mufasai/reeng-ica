@@ -246,10 +246,10 @@ export async function exportSiteExcel(siteId: string) {
   ) as any[];
   const allPQ = allPQResult[0] || [];
   const normalizedAllPQ = allPQ.map(normalizePengajuan);
-  const totalPaid = normalizedAllPQ.filter(p => p.status === 'paid').reduce((s, p) => s + p.jumlah, 0);
-  const totalApproved = normalizedAllPQ.filter(p => p.status === 'approved').reduce((s, p) => s + p.jumlah, 0);
-  const totalPending = normalizedAllPQ.filter(p => p.status === 'submitted').reduce((s, p) => s + p.jumlah, 0);
-  const totalDiajukan = normalizedAllPQ.reduce((s, p) => s + p.jumlah, 0);
+  const totalPaid = normalizedAllPQ.filter((p: any) => p.status === 'paid').reduce((s: number, p: any) => s + p.jumlah, 0);
+  const totalApproved = normalizedAllPQ.filter((p: any) => p.status === 'approved').reduce((s: number, p: any) => s + p.jumlah, 0);
+  const totalPending = normalizedAllPQ.filter((p: any) => p.status === 'submitted').reduce((s: number, p: any) => s + p.jumlah, 0);
+  const totalDiajukan = normalizedAllPQ.reduce((s: number, p: any) => s + p.jumlah, 0);
   const wsFinance = XLSX.utils.aoa_to_sheet([
     [{ v: 'RINGKASAN KEUANGAN', s: { font: { bold: true, sz: 12 } } }], [''],
     [{ v: 'Total Diajukan', s: LABEL_STYLE }, { v: rupiah(totalDiajukan), s: VALUE_STYLE }],

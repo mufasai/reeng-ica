@@ -292,7 +292,7 @@ export const files: ProjectFile[] = [
     { id: 'f3', projectId: 'p2', title: 'Combat Drill Manual', originalName: 'manual_v1.pdf', size: '5.1 MB', type: 'PDF', uploadedAt: '2024-02-01', uploadedBy: 'u_lead' },
 ];
 
-export type UserRole = 'director' | 'operational' | 'finance' | 'field_engineer' | 'system_admin';
+export type UserRole = 'director' | 'operational' | 'finance' | 'field_engineer' | 'field' | 'system_admin' | 'admin' | 'engineer' | 'team_leader' | 'management' | 'backoffice' | 'backoffice_admin';
 
 export const getVisibleProjects = (projects: Project[], currentUser: User) => {
     if (['director', 'admin', 'finance', 'operational', 'management', 'backoffice', 'backoffice_admin'].includes(currentUser.role)) {
