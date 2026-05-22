@@ -285,13 +285,6 @@ const Sites = () => {
     const { triggerCountRefresh } = useSidebar();
     const hasImportAccess = currentUser ? ['director', 'operational', 'system_admin'].includes(currentUser.role) : false;
 
-    // Simple permission check
-    const can = (permission: string) => {
-        if (!currentUser) return false;
-        const exportRoles = ['director', 'operational', 'system_admin', 'admin', 'management'];
-        if (permission === 'export_data') return exportRoles.includes(currentUser.role);
-        return false;
-    };
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Tab Toggle ('data' | 'history')
@@ -622,7 +615,7 @@ const Sites = () => {
                                 <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
                                     <button
                                         onClick={() => {
-                                            exportSitesToExcel(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.xlsx`);
+                                            exportSitesToExcel(filteredSites, `sites-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
                                             setShowExportMenu(false);
                                         }}
                                         className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-medium flex items-center gap-2"
@@ -631,7 +624,7 @@ const Sites = () => {
                                     </button>
                                     <button
                                         onClick={() => {
-                                            exportSitesToCsv(filteredSites, `sites-export-${new Date().toISOString().slice(0,10)}.csv`);
+                                            exportSitesToCsv(filteredSites, `sites-export-${new Date().toISOString().slice(0, 10)}.csv`);
                                             setShowExportMenu(false);
                                         }}
                                         className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-medium flex items-center gap-2"
